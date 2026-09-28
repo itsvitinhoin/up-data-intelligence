@@ -4,6 +4,20 @@ from typing import Any
 
 # Allowlist, not best-effort regex over exceptions containing arbitrary PII.
 SAFE_FIELDS = {
+    "source_records_read",
+    "raw_pages_written",
+    "core_records_inserted",
+    "core_records_updated",
+    "core_records_failed",
+    "metrics_version",
+    "phase",
+    "job_id",
+    "request_bytes",
+    "payload_bytes",
+    "record_bytes",
+    "budget_bytes",
+    "chunk_index",
+    "raw_record_id",
     "run_id",
     "store_id",
     "resource",

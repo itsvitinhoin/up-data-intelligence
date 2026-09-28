@@ -1,13 +1,13 @@
 import json
 import re
 import sqlite3
-import uuid
 from collections.abc import Iterator, Sequence
 from decimal import Decimal
 from pathlib import Path
 from typing import Any, Protocol
 
 from src.bigquery.catalog import TABLES
+from src.bigquery.writer import AtomicWriter
 from src.domain.models import SafeError
 from src.utils.data import canonical
 
@@ -99,8 +99,9 @@ class SQLiteRepository:
                     )
 
 
-def merge_sql(project: str, table: str) -> str:
+def merge_sql(project: str, table: str, *, staged: bool = False) -> str:
     spec = TABLES[table]
+    source = "_SESSION.write_records" if staged else "UNNEST(@records) item"
     projection = []
     for name, typ in spec.fields.items():
         if typ == "JSON":
@@ -115,9 +116,9 @@ def merge_sql(project: str, table: str) -> str:
     return f"""MERGE `{project}.{spec.dataset}.{table}` T
 USING (SELECT {", ".join(projection)} FROM (
  SELECT JSON_QUERY(PARSE_JSON(item), '$.record') AS record
- FROM UNNEST(@records) item WHERE JSON_VALUE(item, '$.target_table')='{table}'
+ FROM {source} WHERE JSON_VALUE(item, '$.target_table')='{table}'
 )
-QUALIFY ROW_NUMBER() OVER (PARTITION BY JSON_VALUE(record, '$.row_key') ORDER BY JSON_VALUE(record, '$.row_key'))=1) S
+QUALIFY ROW_NUMBER() OVER (PARTITION BY JSON_VALUE(record, '$.store_id'), JSON_VALUE(record, '$.row_key') ORDER BY JSON_VALUE(record, '$.row_key'))=1) S
 ON T.row_key=S.row_key AND T.store_id=S.store_id
 WHEN MATCHED THEN UPDATE SET {updates}
 WHEN NOT MATCHED THEN INSERT ({columns}) VALUES ({", ".join("S.`" + c + "`" for c in spec.fields)});"""
@@ -206,35 +207,26 @@ class BigQueryRepository:
             raise SafeError("bigquery_read_failed") from None
 
     def write(self, tables: dict[str, list[dict[str, Any]]]) -> None:
-        from google.cloud import bigquery
-
-        batch = str(uuid.uuid4())
         records: list[str] = []
         for table, rows in tables.items():
             if table not in TABLES:
                 raise SafeError("invalid_table")
-            for row in {r["row_key"]: r for r in rows}.values():
+            for row in {(r["store_id"], r["row_key"]): r for r in rows}.values():
                 if set(row) - TABLES[table].fields.keys():
                     raise SafeError("unknown_column")
                 records.append(canonical({"target_table": table, "record": row}))
         if not records:
             return
-        if len(canonical(records).encode()) > 8_000_000:
-            raise SafeError("batch_too_large_reduce_page_limit")
-        try:
-            script = (
+
+        def script(staged: bool) -> str:
+            return (
                 "BEGIN TRANSACTION;\n"
                 + "\n".join(
-                    merge_sql(self.project, table) for table, rows in tables.items() if rows
+                    merge_sql(self.project, table, staged=staged)
+                    for table, rows in tables.items()
+                    if rows
                 )
                 + "\nCOMMIT TRANSACTION;"
             )
-            self.client.query(
-                script,
-                job_config=bigquery.QueryJobConfig(
-                    query_parameters=[bigquery.ArrayQueryParameter("records", "STRING", records)]
-                ),
-                job_id="merge_" + batch.replace("-", ""),
-            ).result()
-        except Exception:
-            raise SafeError("bigquery_write_failed") from None
+
+        AtomicWriter(self.client, self.location).write(records, script(False), script(True))

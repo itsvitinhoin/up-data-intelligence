@@ -9,7 +9,9 @@ from src.bigquery.repository import Repository
 from src.config.settings import Settings
 from src.connectors.upzero.client import UpZeroConnector
 from src.domain.models import Batch, SafeError
+from src.ingestion import metrics
 from src.normalization.entities import VERSION, normalize
+from src.observability.logging import event
 from src.quality.rules import purchase_severity, result
 from src.security.sanitization import POLICY_VERSION, sanitize
 from src.utils.data import digest, now, timestamp
@@ -296,6 +298,7 @@ class Engine:
             oldrun[0]
             if oldrun
             else {
+                **metrics.empty(),
                 "row_key": run_id,
                 "store_id": store,
                 "run_id": run_id,
@@ -316,6 +319,10 @@ class Engine:
                 "mode": mode,
             }
         )
+        if run.get("metrics_version") != metrics.VERSION:
+            metrics.upgrade(
+                run, self.repo.iter_find("upzero_" + resource, store, "run_id", [run_id])
+            )
         run.update(status="running", error_summary=None, finished_at=None)
         cp = {
             "row_key": plan,
@@ -334,6 +341,7 @@ class Engine:
             "high_id": cp.get("high_id"),
         }
         self.repo.write({"sync_runs": [run], "sync_checkpoints": [cp]})
+        event("sync_started", run_id=run_id, store_id=store, resource=resource)
 
         def promote(raw: dict[str, Any]) -> bool:
             if raw.get("pagination_error"):
@@ -346,12 +354,7 @@ class Engine:
                 )
                 raise SafeError(raw["pagination_error"])
             batch = self.transform(raw)
-            run["records_read"] += len(raw["payload"]["data"])
-            run["records_written"] += batch.written
-            run["records_updated"] += batch.updated
-            run["records_failed"] += batch.failed
-            run["pages"] += 1
-            run["bytes"] += raw["bytes_read"]
+            metrics.promoted(run, raw, batch)
             ids = [int(s["id"]) for s in raw["payload"]["data"]] if resource == "customers" else []
             if ids:
                 cp["high_id"] = str(max(ids + [int(cp["high_id"] or 0)]))
@@ -366,6 +369,15 @@ class Engine:
             )
             batch.add("sync_runs", run)
             batch.add("sync_checkpoints", cp)
+            event(
+                "page_persistence",
+                phase="core_promotion",
+                run_id=run_id,
+                resource=resource,
+                raw_record_id=raw["raw_record_id"],
+                records=len(raw["payload"]["data"]),
+                payload_bytes=raw["bytes_read"],
+            )
             self.repo.write(batch.rows)
             return done
 
@@ -402,7 +414,19 @@ class Engine:
                         "pagination_error": page.pagination_error,
                     }
                     cp.update(pending_raw_id=raw_id, updated_at=now())
-                    self.repo.write({"upzero_" + resource: [raw], "sync_checkpoints": [cp]})
+                    event(
+                        "page_persistence",
+                        phase="raw_capture",
+                        run_id=run_id,
+                        resource=resource,
+                        raw_record_id=raw_id,
+                        records=len(page.payload["data"]),
+                        payload_bytes=page.bytes_read,
+                    )
+                    metrics.captured(run, raw)
+                    self.repo.write(
+                        {"upzero_" + resource: [raw], "sync_checkpoints": [cp], "sync_runs": [run]}
+                    )
                     done = promote(raw)
                     if done:
                         break
@@ -425,6 +449,8 @@ class Engine:
             return run
         except Exception as exc:
             code = exc.code if isinstance(exc, SafeError) else "internal_failure"
+            if code == "bigquery_write_outcome_unknown":
+                raise SafeError(code) from None
             persisted = self.repo.read("sync_runs", store, [run_id])
             if persisted:
                 run = persisted[0]
@@ -449,6 +475,7 @@ class Engine:
         if first is None:
             raise SafeError("replay_run_not_found")
         report: dict[str, Any] = {
+            **metrics.empty(),
             "row_key": run_id,
             "store_id": store,
             "run_id": run_id,
@@ -469,18 +496,25 @@ class Engine:
             "mode": "replay",
         }
         self.repo.write({"sync_runs": [report]})
-        for raw in chain([first], raws):
-            batch = self.transform({**raw, "run_id": run_id})
-            report["records_read"] += len(raw["payload"]["data"])
-            report["records_written"] += batch.written
-            report["records_updated"] += batch.updated
-            report["records_failed"] += batch.failed
-            report["pages"] += 1
-            batch.add("sync_runs", report)
-            self.repo.write(batch.rows)
-        report.update(
-            status="completed_with_errors" if report["records_failed"] else "completed",
-            finished_at=now(),
-        )
-        self.repo.write({"sync_runs": [report]})
-        return report
+        try:
+            for raw in chain([first], raws):
+                batch = self.transform({**raw, "run_id": run_id})
+                metrics.promoted(report, raw, batch)
+                batch.add("sync_runs", report)
+                self.repo.write(batch.rows)
+            report.update(
+                status="completed_with_errors" if report["records_failed"] else "completed",
+                finished_at=now(),
+            )
+            self.repo.write({"sync_runs": [report]})
+            return report
+        except Exception as exc:
+            code = exc.code if isinstance(exc, SafeError) else "internal_failure"
+            if code == "bigquery_write_outcome_unknown":
+                raise SafeError(code) from None
+            persisted = self.repo.read("sync_runs", store, [run_id])
+            if persisted:
+                report = persisted[0]
+            report.update(status="failed", finished_at=now(), error_summary=code)
+            self.repo.write({"sync_runs": [report]})
+            raise SafeError(code) from None

@@ -99,7 +99,7 @@ RAW possui somente `upzero_customers`, `upzero_orders`, `upzero_analytics_facts`
 
 CORE: stores, source_connections, customers/customers_versions, orders/orders_versions, order_items/order_items_versions, analytics_events/analytics_events_versions, touchpoints, identity_links, event_order_links. OPS: sync_runs, sync_checkpoints, quality_results, source_capabilities.
 
-Persistência cloud usa parâmetros `ARRAY<STRING>` contendo JSON de staging e MERGEs em transação; nenhum payload é interpolado em SQL e não há criação de tabela em runtime. Assim evitamos load job por página e quota de loads por tabela. Limite preventivo de 8 MB por transação; ao exceder, falhar com `batch_too_large_reduce_page_limit` e reduzir page_limit. Não há truncamento ou descarte silencioso. Medir custo de queries, scan de partições e quotas com volume real antes de escalar.
+Persistência cloud usa parâmetros `ARRAY<STRING>` e MERGEs em transação. Requisições acima do orçamento de 8 MB são subdivididas em fragmentos em tabelas TEMP de sessão; somente a transação final promove todos os dados/checkpoints. Não são criadas tabelas permanentes em runtime e não há truncamento. `--page-limit` configura a página da API sem reduzir a janela. O limite conservador por linha lógica é 64 MB. Retry reconcilia o mesmo job_id com job_retry=None; resultado desconhecido mantém o lease da loja para revisão. Consulte [diagnóstico e correção de batches](docs/ANALYTICS_BATCH_FIX.md), incluindo limites, retomada e validação DEV ainda necessária.
 
 RAW particionado por ingested_at; versões por observed_at; facts/touchpoints por occurred_at; pedidos/itens por criação do pedido. Clustering inclui store_id e ID da entidade. Registros pequenos de registry/OPS/checkpoint/links não precisam de partição. `require_partition_filter=false` permite localizar versões antigas por chave em correções que mudam datas; controlar custo com IAM/orçamento e revisão dos planos de consulta.
 
@@ -122,6 +122,10 @@ terraform -chdir=infra/terraform validate
 Há um bucket adicional apenas para mutex por loja, necessário para single-writer distribuído. Lock usa criação condicional `if_generation_match=0`, deleção com geração correspondente e nunca takeover automático. Em crash/timeout abrupto, confirmar que todas as execuções daquela loja terminaram e só então um operador remove o objeto `leases/<hash da loja>` observado; depois reexecutar. Não configurar lifecycle para apagar locks vivos. SQLite usa flock local liberado ao encerrar o processo.
 
 Schedules sync/reconcile/quality são criados pausados por default; timeout de job é 1h, uma task e zero retries automáticos cloud (retomada é controlada). Não habilitar cron enquanto teste dev, credenciais, retenção e quotas não forem aprovados. IAM atual não oferece BI nem isolamento RLS entre usuários finais; para 100+ lojas, revisar identidades por conexão e políticas de consulta antes de expor dados a terceiros.
+
+## Métricas por etapa
+
+`sync_runs.metrics_version=2` distingue captura da API/RAW de promoção CORE: source_records_read, raw_pages_written, core_records_inserted/updated/failed e replay_records_read. Contadores de captura são persistidos atomicamente com RAW; promoção e checkpoint avançado são atômicos. Consulte [semântica, auditoria e migração aditiva necessária](docs/SYNC_RUN_METRICS.md) antes de executar a nova imagem. Nenhuma migração foi executada.
 
 ## Qualidade e segurança
 

@@ -88,5 +88,60 @@
     "name": "bytes",
     "type": "INT64",
     "mode": "NULLABLE"
+  },
+  {
+    "name": "metrics_version",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "source_records_read",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "source_bytes_read",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "raw_pages_written",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "raw_payload_bytes",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "core_records_processed",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "core_records_inserted",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "core_records_updated",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "core_records_failed",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "core_pages_processed",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "replay_records_read",
+    "type": "INT64",
+    "mode": "NULLABLE"
   }
 ]

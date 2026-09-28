@@ -4,6 +4,7 @@ import os
 import sys
 import uuid
 from contextlib import AbstractContextManager
+from dataclasses import replace
 from typing import Any
 
 from src.bigquery.repository import BigQueryRepository, Repository, SQLiteRepository
@@ -36,6 +37,11 @@ def main(default_mode: str = "sync") -> int:
     parser.add_argument("--from", dest="start")
     parser.add_argument("--to", dest="end")
     parser.add_argument("--replay-run")
+    parser.add_argument(
+        "--page-limit",
+        type=int,
+        help="API page size (1..1000 for facts, capped at 200 for commerce).",
+    )
     parser.add_argument("--fixture", default="tests/fixtures/pilot.json")
     parser.add_argument("--live", action="store_true", help="Explicitly allow UP Zero/GCP access.")
     parser.add_argument("--confirm-store", help="Must equal configured store_id for live mode.")
@@ -52,6 +58,8 @@ def main(default_mode: str = "sync") -> int:
             if "UP_CONFIG_JSON" in os.environ
             else Settings.load(args.config)
         )
+        if args.page_limit is not None:
+            cfg = replace(cfg, page_limit=args.page_limit)
         lease: AbstractContextManager[None]
         if args.live:
             if args.confirm_store != cfg.store_id or not all(
@@ -135,8 +143,12 @@ def main(default_mode: str = "sync") -> int:
                     store_id=cfg.store_id,
                     resource=summary["resource"],
                     status=summary["status"],
-                    records=summary["records_read"],
-                    pages=summary["pages"],
+                    source_records_read=summary.get("source_records_read"),
+                    raw_pages_written=summary.get("raw_pages_written"),
+                    core_records_inserted=summary.get("core_records_inserted"),
+                    core_records_updated=summary.get("core_records_updated"),
+                    core_records_failed=summary.get("core_records_failed"),
+                    metrics_version=summary.get("metrics_version"),
                 )
             return int(any(s["status"] != "completed" for s in summaries))
     except Exception as exc:

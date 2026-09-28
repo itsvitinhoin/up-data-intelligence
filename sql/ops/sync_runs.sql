@@ -16,7 +16,18 @@ CREATE TABLE IF NOT EXISTS `${project_id}.up_ops.sync_runs` (
   `records_failed` INT64,
   `pages` INT64,
   `retries` INT64,
-  `bytes` INT64
+  `bytes` INT64,
+  `metrics_version` INT64,
+  `source_records_read` INT64,
+  `source_bytes_read` INT64,
+  `raw_pages_written` INT64,
+  `raw_payload_bytes` INT64,
+  `core_records_processed` INT64,
+  `core_records_inserted` INT64,
+  `core_records_updated` INT64,
+  `core_records_failed` INT64,
+  `core_pages_processed` INT64,
+  `replay_records_read` INT64
 )
 PARTITION BY DATE(started_at)
 CLUSTER BY store_id, resource;

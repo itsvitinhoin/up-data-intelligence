@@ -56,3 +56,14 @@ def test_cloud_lock_contention_safe(monkeypatch):
     with pytest.raises(SafeError, match="store_busy_or_lease_unavailable"):
         with cloud_lease("synthetic", "A"):
             pass
+
+
+def test_unresolved_bigquery_write_retains_cloud_lease(monkeypatch):
+    import google.cloud.storage as storage
+
+    client = Mock()
+    monkeypatch.setattr(storage, "Client", lambda: client)
+    with pytest.raises(SafeError, match="bigquery_write_outcome_unknown"):
+        with cloud_lease("synthetic", "A"):
+            raise SafeError("bigquery_write_outcome_unknown")
+    client.bucket.return_value.blob.return_value.delete.assert_not_called()

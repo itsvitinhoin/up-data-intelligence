@@ -2,6 +2,8 @@
 
 from dataclasses import dataclass
 
+from src.ingestion.metrics import COUNTERS
+
 
 @dataclass(frozen=True)
 class Table:
@@ -142,7 +144,11 @@ TABLES["sync_runs"] = Table(
     | {"started_at": "TIMESTAMP", "finished_at": "TIMESTAMP"}
     | {
         k: "INT64"
-        for k in "records_read records_written records_updated records_failed pages retries bytes".split()
+        for k in [
+            *"records_read records_written records_updated records_failed pages retries bytes".split(),
+            "metrics_version",
+            *COUNTERS,
+        ]
     },
     "started_at",
     ("store_id", "resource"),
