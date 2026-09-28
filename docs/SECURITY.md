@@ -1,5 +1,8 @@
 # Segurança — decisão vigente da Fase 1
 
+> Complemento: [classificação e acesso de identidade](DATA_CLASSIFICATION.md). Nenhuma mudança IAM aplicada; views reduzidas não restringem principais que mantêm leitura direta das tabelas fonte.
+
+
 A instrução aprovada da Fase 1 substitui RAW original por **RAW sanitizado**. Nenhuma camada deve persistir senha/hash de senha, segredo, token de acesso/refresh/recuperação ou headers de autenticação. O OpenAPI original continua intacto como documentação.
 
 ## Sanitização antes da persistência

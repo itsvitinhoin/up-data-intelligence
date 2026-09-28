@@ -93,5 +93,50 @@
     "name": "occurred_at",
     "type": "TIMESTAMP",
     "mode": "NULLABLE"
+  },
+  {
+    "name": "source_entity_type",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "source_entity_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "identifier_type_from",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "identifier_value_from",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "identifier_type_to",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "identifier_value_to",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "confidence_type",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "first_seen_at",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "last_seen_at",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE"
   }
 ]

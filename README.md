@@ -143,3 +143,7 @@ Alertas estão materializados no BigQuery e emitidos como logs operacionais; not
 - Não há contrato que comprove user_id=customer_id, order_item_id em facts, backfill da correção purchase ou identificação de conta Meta por URL.
 - Evidências identity_links são versionadas: consumir somente links cujo source_version_id corresponda à versão corrente do fact para uma visão atual; não fundir identidades transitivamente.
 - A instrumentação original pode ter lacunas. Nenhuma receita atribuída ou métrica financeira final é criada.
+
+## Identity hardening (preparado, não implantado)
+
+Auditoria, normalização aditiva e evidências de identidade: [IDENTITY_HARDENING](docs/IDENTITY_HARDENING.md). A expansão de 31 colunas e a futura separação de Orders exigem revisão: [plano de migração](docs/IDENTITY_MIGRATION_PLAN.md). [Classificação e acesso](docs/DATA_CLASSIFICATION.md). Não executar a nova imagem antes da expansão de schema; Orders ainda preserva os snapshots legados até cutover aprovado.

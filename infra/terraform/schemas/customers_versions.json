@@ -113,5 +113,60 @@
     "name": "wholesale_profile",
     "type": "JSON",
     "mode": "NULLABLE"
+  },
+  {
+    "name": "email_normalized",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "phone_normalized",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "phone_e164",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "cnpj_digits",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "cpf_digits",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "seller_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "state",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "city",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "identity_normalization_version",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "external_ref",
+    "type": "JSON",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "identity_normalization_issues",
+    "type": "JSON",
+    "mode": "NULLABLE"
   }
 ]

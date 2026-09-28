@@ -21,7 +21,18 @@ CREATE TABLE IF NOT EXISTS `${project_id}.up_core.customers_versions` (
   `trade_name` STRING,
   `seller` JSON,
   `retail_profile` JSON,
-  `wholesale_profile` JSON
+  `wholesale_profile` JSON,
+  `email_normalized` STRING,
+  `phone_normalized` STRING,
+  `phone_e164` STRING,
+  `cnpj_digits` STRING,
+  `cpf_digits` STRING,
+  `seller_id` STRING,
+  `state` STRING,
+  `city` STRING,
+  `identity_normalization_version` STRING,
+  `external_ref` JSON,
+  `identity_normalization_issues` JSON
 )
 PARTITION BY DATE(observed_at)
 CLUSTER BY store_id, customer_id;

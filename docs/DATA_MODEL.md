@@ -1,5 +1,8 @@
 # Modelo de dados, identidade e atribuição
 
+> Evolução preparada: [Identity Hardening](IDENTITY_HARDENING.md) distingue o modelo ativo, as adições 1.1.0 e a separação futura dos snapshots. [Migração sem perda](IDENTITY_MIGRATION_PLAN.md).
+
+
 Status: modelo de referência aprovado; subconjunto da Fase 1 implementado. Revisão: 2026-09-28.
 
 **Escopo implementado:** customers/orders/order_items e versões, analytics_events e versões, touchpoints, identity_links e event_order_links. Sessões agregadas, business_links/CNPJ consolidado e todos os cálculos abaixo permanecem futuros. RAW agora é sanitizado por decisão aprovada; [SECURITY](SECURITY.md) e [BIGQUERY_SCHEMA](BIGQUERY_SCHEMA.md) definem o contrato físico vigente.

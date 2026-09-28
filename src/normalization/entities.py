@@ -1,10 +1,12 @@
 from typing import Any
 
 from src.bigquery.catalog import CUSTOMER, EVENT, ITEM, ORDER
+from src.normalization.identity import customer_identity
 from src.normalization.meta_url import parse_meta_url
+from src.security.sanitization import sanitize
 from src.utils.data import identifier, numeric, timestamp
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 
 
 def normalize_json_ids(value: Any) -> Any:
@@ -39,6 +41,7 @@ def typed(value: Any, typ: str) -> Any:
 def normalize(
     resource: str, source: dict[str, Any]
 ) -> tuple[str, dict[str, Any], list[dict[str, Any]] | None]:
+    source = sanitize(source)
     identifier(source.get("id"), True)
     items = None
     if resource == "customers":
@@ -53,6 +56,7 @@ def normalize(
             "cnpj": wholesale.get("cnpj"),
             "company_name": wholesale.get("company_name"),
             "trade_name": wholesale.get("trade_name"),
+            **customer_identity(source),
         }
         fields, table = CUSTOMER, "customers"
     elif resource == "orders":

@@ -1,5 +1,8 @@
 # BigQuery — schema implementado da Fase 1
 
+> Expansão aditiva preparada: 11 colunas em Customers e Customers_versions, 9 em Identity_links; ver [Identity Hardening](IDENTITY_HARDENING.md) e [migração](IDENTITY_MIGRATION_PLAN.md). Catálogo e schemas gerados incluem essas adições; snapshots/Orders v2 permanecem proposta, sem criação de recursos.
+
+
 Fonte de verdade física: [catalog.py](../src/bigquery/catalog.py), JSON em [schemas Terraform](../infra/terraform/tables.json) e SQL gerado. OpenAPI de origem: [upzero-openapi.json](upzero-openapi.json). Nenhum dataset ou tabela foi criado em GCP nesta execução.
 
 ## Camadas

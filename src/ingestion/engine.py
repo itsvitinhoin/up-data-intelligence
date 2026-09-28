@@ -11,6 +11,7 @@ from src.connectors.upzero.client import UpZeroConnector
 from src.domain.models import Batch, SafeError
 from src.ingestion import metrics
 from src.normalization.entities import VERSION, normalize
+from src.normalization.identity import identity_evidence
 from src.observability.logging import event
 from src.quality.rules import purchase_severity, result
 from src.security.sanitization import POLICY_VERSION, sanitize
@@ -167,6 +168,21 @@ class Engine:
                 batch.updated += int(old is not None)
                 batch.written += int(old is None)
                 if resource == "orders":
+                    if row.get("customer_id"):
+                        batch.add(
+                            "identity_links",
+                            identity_evidence(
+                                meta,
+                                entity_type="order",
+                                entity_id=row["order_id"],
+                                left="order_id",
+                                left_id=row["order_id"],
+                                right="customer_id",
+                                right_id=row["customer_id"],
+                                evidence_type="observed_order_customer",
+                                occurred_at=row["created_at"],
+                            ),
+                        )
                     if not row.get("customer_id"):
                         quality("order_without_customer", "warning", key)
                     if items is not None:
@@ -238,23 +254,35 @@ class Engine:
                         ("session_id", "user_id"),
                     ]:
                         if row[left] and row[right]:
-                            lk = digest([version, left, right])
                             batch.add(
                                 "identity_links",
-                                {
-                                    **meta,
-                                    "row_key": lk,
-                                    "link_id": lk,
-                                    "source_fact_id": row["fact_id"],
-                                    "source_version_id": version,
-                                    "left_namespace": left,
-                                    "left_id": row[left],
-                                    "right_namespace": right,
-                                    "right_id": row[right],
-                                    "occurred_at": row["occurred_at"],
-                                    "evidence_type": "observed_cooccurrence",
-                                },
+                                identity_evidence(
+                                    meta,
+                                    entity_type="analytics_fact",
+                                    entity_id=row["fact_id"],
+                                    left=left,
+                                    left_id=row[left],
+                                    right=right,
+                                    right_id=row[right],
+                                    evidence_type="observed_cooccurrence",
+                                    occurred_at=row["occurred_at"],
+                                ),
                             )
+                    if row["order_id"]:
+                        batch.add(
+                            "identity_links",
+                            identity_evidence(
+                                meta,
+                                entity_type="analytics_fact",
+                                entity_id=row["fact_id"],
+                                left="fact_id",
+                                left_id=row["fact_id"],
+                                right="order_id",
+                                right_id=row["order_id"],
+                                evidence_type="observed_fact_order",
+                                occurred_at=row["occurred_at"],
+                            ),
+                        )
             except (ValueError, TypeError, KeyError):
                 quality(
                     "invalid_transformation_or_monetary_value",

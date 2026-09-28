@@ -17,7 +17,16 @@ CREATE TABLE IF NOT EXISTS `${project_id}.up_core.identity_links` (
   `right_namespace` STRING,
   `right_id` STRING,
   `evidence_type` STRING,
-  `occurred_at` TIMESTAMP
+  `occurred_at` TIMESTAMP,
+  `source_entity_type` STRING,
+  `source_entity_id` STRING,
+  `identifier_type_from` STRING,
+  `identifier_value_from` STRING,
+  `identifier_type_to` STRING,
+  `identifier_value_to` STRING,
+  `confidence_type` STRING,
+  `first_seen_at` TIMESTAMP,
+  `last_seen_at` TIMESTAMP
 )
 PARTITION BY DATE(observed_at)
 CLUSTER BY store_id, source_fact_id;

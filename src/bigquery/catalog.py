@@ -28,6 +28,11 @@ CUSTOMER = {
     k: "STRING"
     for k in "customer_id customer_type status name email phone cpf cnpj company_name trade_name".split()
 } | {"seller": "JSON", "retail_profile": "JSON", "wholesale_profile": "JSON"}
+# Additive only: preserve originals and the currently deployed JSON fields.
+CUSTOMER |= {
+    k: "STRING"
+    for k in "email_normalized phone_normalized phone_e164 cnpj_digits cpf_digits seller_id state city identity_normalization_version".split()
+} | {"external_ref": "JSON", "identity_normalization_issues": "JSON"}
 ORDER = (
     {
         k: "STRING"
@@ -105,7 +110,12 @@ TABLES["identity_links"] = Table(
         k: "STRING"
         for k in "link_id source_fact_id source_version_id left_namespace left_id right_namespace right_id evidence_type".split()
     }
-    | {"occurred_at": "TIMESTAMP"},
+    | {"occurred_at": "TIMESTAMP"}
+    | {
+        k: "STRING"
+        for k in "source_entity_type source_entity_id identifier_type_from identifier_value_from identifier_type_to identifier_value_to confidence_type".split()
+    }
+    | {"first_seen_at": "TIMESTAMP", "last_seen_at": "TIMESTAMP"},
     "observed_at",
     ("store_id", "source_fact_id"),
 )
