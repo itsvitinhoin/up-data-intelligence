@@ -1,0 +1,12 @@
+# Allow only runtime source, SQL, the public API contract and hashed dependencies.
+**
+!Dockerfile
+!requirements.lock
+!src/
+!src/**/
+!src/**/*.py
+!sql/
+!sql/**/
+!sql/**/*.sql
+!docs/
+!docs/upzero-openapi.json

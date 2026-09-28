@@ -1,0 +1,158 @@
+{
+  "upzero_customers": {
+    "dataset": "up_raw",
+    "partition": "ingested_at",
+    "cluster": [
+      "store_id",
+      "resource"
+    ]
+  },
+  "upzero_orders": {
+    "dataset": "up_raw",
+    "partition": "ingested_at",
+    "cluster": [
+      "store_id",
+      "resource"
+    ]
+  },
+  "upzero_analytics_facts": {
+    "dataset": "up_raw",
+    "partition": "ingested_at",
+    "cluster": [
+      "store_id",
+      "resource"
+    ]
+  },
+  "customers": {
+    "dataset": "up_core",
+    "partition": null,
+    "cluster": [
+      "store_id",
+      "customer_id"
+    ]
+  },
+  "customers_versions": {
+    "dataset": "up_core",
+    "partition": "observed_at",
+    "cluster": [
+      "store_id",
+      "customer_id"
+    ]
+  },
+  "orders": {
+    "dataset": "up_core",
+    "partition": "created_at",
+    "cluster": [
+      "store_id",
+      "order_id"
+    ]
+  },
+  "orders_versions": {
+    "dataset": "up_core",
+    "partition": "observed_at",
+    "cluster": [
+      "store_id",
+      "order_id"
+    ]
+  },
+  "order_items": {
+    "dataset": "up_core",
+    "partition": "order_created_at",
+    "cluster": [
+      "store_id",
+      "order_id"
+    ]
+  },
+  "order_items_versions": {
+    "dataset": "up_core",
+    "partition": "observed_at",
+    "cluster": [
+      "store_id",
+      "order_id"
+    ]
+  },
+  "analytics_events": {
+    "dataset": "up_core",
+    "partition": "occurred_at",
+    "cluster": [
+      "store_id",
+      "fact_id"
+    ]
+  },
+  "analytics_events_versions": {
+    "dataset": "up_core",
+    "partition": "observed_at",
+    "cluster": [
+      "store_id",
+      "fact_id"
+    ]
+  },
+  "touchpoints": {
+    "dataset": "up_core",
+    "partition": "occurred_at",
+    "cluster": [
+      "store_id",
+      "session_id"
+    ]
+  },
+  "identity_links": {
+    "dataset": "up_core",
+    "partition": "observed_at",
+    "cluster": [
+      "store_id",
+      "source_fact_id"
+    ]
+  },
+  "event_order_links": {
+    "dataset": "up_core",
+    "partition": null,
+    "cluster": [
+      "store_id",
+      "order_id"
+    ]
+  },
+  "stores": {
+    "dataset": "up_core",
+    "partition": null,
+    "cluster": [
+      "store_id"
+    ]
+  },
+  "source_connections": {
+    "dataset": "up_core",
+    "partition": null,
+    "cluster": [
+      "store_id"
+    ]
+  },
+  "sync_runs": {
+    "dataset": "up_ops",
+    "partition": "started_at",
+    "cluster": [
+      "store_id",
+      "resource"
+    ]
+  },
+  "sync_checkpoints": {
+    "dataset": "up_ops",
+    "partition": null,
+    "cluster": [
+      "store_id"
+    ]
+  },
+  "quality_results": {
+    "dataset": "up_ops",
+    "partition": "checked_at",
+    "cluster": [
+      "store_id",
+      "rule_id"
+    ]
+  },
+  "source_capabilities": {
+    "dataset": "up_ops",
+    "partition": null,
+    "cluster": [
+      "store_id"
+    ]
+  }
+}

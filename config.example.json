@@ -1,0 +1,15 @@
+{
+  "store_id": "PILOT_STORE",
+  "store_name": "Loja piloto sintética",
+  "store_slug": "pilot-store",
+  "timezone": "America/Sao_Paulo",
+  "connection_id": "pilot-upzero",
+  "environment": "dev",
+  "initial_from": "2026-09-01T00:00:00+00:00",
+  "state_path": ".local/pilot.sqlite",
+  "secret_resource_name": "",
+  "purchase_order_id_effective_at": null,
+  "facts_lookback_hours": 72,
+  "orders_lookback_days": 30,
+  "stale_after_minutes": 60
+}

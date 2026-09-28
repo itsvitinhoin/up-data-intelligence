@@ -1,0 +1,23 @@
+# Optional build/push only. Requires a separately approved build service account.
+# Pass _PYTHON_BASE with a real base digest and _VERSION with a unique release tag.
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --platform=linux/amd64
+      - --build-arg
+      - PYTHON_BASE=${_PYTHON_BASE}
+      - --tag
+      - southamerica-east1-docker.pkg.dev/up-data-intelligence-dev/up-data-intelligence/foundation:${_VERSION}
+      - .
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - run
+      - --rm
+      - --network=none
+      - southamerica-east1-docker.pkg.dev/up-data-intelligence-dev/up-data-intelligence/foundation:${_VERSION}
+      - --help
+images:
+  - southamerica-east1-docker.pkg.dev/up-data-intelligence-dev/up-data-intelligence/foundation:${_VERSION}
+options:
+  logging: CLOUD_LOGGING_ONLY

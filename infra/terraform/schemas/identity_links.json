@@ -1,0 +1,97 @@
+[
+  {
+    "name": "row_key",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "store_id",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "source_system",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "raw_record_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "run_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "observed_at",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "source_updated_at",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "payload_hash",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "version_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "transform_version",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "link_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "source_fact_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "source_version_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "left_namespace",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "left_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "right_namespace",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "right_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "evidence_type",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "occurred_at",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE"
+  }
+]

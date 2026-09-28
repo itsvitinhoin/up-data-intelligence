@@ -1,0 +1,28 @@
+[project]
+name = "up-data-intelligence"
+version = "0.1.0"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+  "httpx==0.28.1",
+  "google-cloud-bigquery==3.45.2",
+  "google-cloud-secret-manager==2.30.0",
+  "google-cloud-storage==3.15.0",
+]
+[dependency-groups]
+dev = ["pytest==9.1.1", "pytest-cov==7.1.0", "ruff==0.16.9", "mypy==2.3.1", "pip-audit==2.10.1"]
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["E501"]
+[tool.mypy]
+python_version = "3.13"
+strict = true
+ignore_missing_imports = true
+files = ["src"]
+[tool.coverage.run]
+source = ["src"]

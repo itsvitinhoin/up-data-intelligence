@@ -1,0 +1,14 @@
+# Separate allowlist: Docker ignore rules alone do not protect Cloud Build upload.
+**
+!Dockerfile
+!.dockerignore
+!requirements.lock
+!cloudbuild.yaml
+!src/
+!src/**/
+!src/**/*.py
+!sql/
+!sql/**/
+!sql/**/*.sql
+!docs/
+!docs/upzero-openapi.json
