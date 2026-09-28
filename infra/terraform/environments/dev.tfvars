@@ -1,5 +1,5 @@
 # DEV: up-data-intelligence-dev (project number: 876521886531).
-# Image and PILOT_STORE remain placeholders pending deployment preparation.
+# Loja piloto MX Fashion; correção purchase/order_id ainda não confirmada.
 project_id            = "up-data-intelligence-dev"
 environment           = "dev"
 region                = "southamerica-east1"
@@ -11,11 +11,11 @@ secret_id             = "up-intelligence-upzero-pilot-store-api-key"
 scheduler_paused      = true
 raw_retention_days    = 365
 pilot = {
-  store_id                       = "PILOT_STORE"
-  store_name                     = "Loja piloto"
-  store_slug                     = "pilot-store"
+  store_id                       = "mx-fashion"
+  store_name                     = "MX Fashion"
+  store_slug                     = "mx-fashion"
   timezone                       = "America/Sao_Paulo"
-  connection_id                  = "pilot-upzero"
+  connection_id                  = "mx-fashion-upzero"
   initial_from                   = "2026-09-01T00:00:00Z"
   purchase_order_id_effective_at = null
 }
