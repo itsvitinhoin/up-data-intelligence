@@ -11,7 +11,7 @@ Implementação local para uma loja piloto: **UP Zero → ingestão → RAW sani
 - `src/bigquery`: schemas compartilhados, transações MERGE parametrizadas e adaptador SQLite para testes locais.
 - `src/quality` e `sql/quality`: duplicatas, integridade, vigência de purchase/order_id, parser e freshness.
 - `src/jobs`: CLI de sync, backfill, reconciliação, qualidade e replay.
-- `infra/terraform`: datasets/tabelas, IAM, contas de serviço, jobs e schedules pausados; somente referência a secret existente.
+- `infra/terraform`: datasets/tabelas, IAM, contas de serviço, jobs e schedules pausados; container de Secret Manager sem versão ou valor.
 
 ```mermaid
 flowchart LR
@@ -51,7 +51,7 @@ uv run python -m src.jobs.cli --mode quality
 uv run python -m src.jobs.cli --mode sync --to 2026-09-04T00:00:00Z
 ```
 
-Sem `--live`, todas as respostas vêm de `tests/fixtures/pilot.json` via MockTransport; SQLite em `.local/pilot.sqlite` é somente o adaptador local, não o banco cloud. O transporte de fixtures demonstra paginação, mas não simula todos os filtros temporais da API. A CLI não carrega `.env` automaticamente. `.env.example` contém apenas referências; `.env`, `.local`, estados e arquivos `.tfvars` privados ficam ignorados. Somente os dois `dev.tfvars` aprovados (Foundation e registry), sem credenciais e com placeholders, são versionados; nunca adicionar secrets a eles.
+Sem `--live`, todas as respostas vêm de `tests/fixtures/pilot.json` via MockTransport; SQLite em `.local/pilot.sqlite` é somente o adaptador local, não o banco cloud. O transporte de fixtures demonstra paginação, mas não simula todos os filtros temporais da API. A CLI não carrega `.env` automaticamente. `.env.example` contém apenas referências; `.env`, `.local`, estados e arquivos `.tfvars` privados ficam ignorados. Somente os `dev.tfvars` aprovados (Foundation, registry e bootstrap), sem credenciais e com placeholders, são versionados; nunca adicionar secrets a eles.
 
 Datas sem horário na CLI significam meia-noite UTC. Facts usam `[from,to)`; clientes e pedidos convertem janelas para os filtros de data de suas APIs. Pedidos usam timezone da configuração: pode haver sobreposição de datas entre lotes, resolvida por idempotência. Para dias locais exatos, fornecer offsets explícitos.
 
@@ -105,9 +105,9 @@ RAW particionado por ingested_at; versões por observed_at; facts/touchpoints po
 
 ## Terraform e GCP
 
-O [guia de deployment DEV](docs/DEPLOYMENT_DEV.md) descreve o root independente `infra/terraform/registry`, IAM do repositório, autenticação Docker, build Linux amd64, push, obtenção do digest e atualização posterior do tfvars. Há alternativa Cloud Build em `cloudbuild.yaml`. O registry deve ser provisionado antes de construir/publicar a imagem; o placeholder dos Jobs permanece intacto. Os dois roots exigem estados separados.
+O [guia de deployment DEV](docs/DEPLOYMENT_DEV.md) descreve o root independente `infra/terraform/registry`, IAM do repositório, autenticação Docker, build Linux amd64, push, obtenção do digest e atualização posterior do tfvars. Há alternativa Cloud Build em `cloudbuild.yaml`. O registry deve ser provisionado antes de construir/publicar a imagem; o placeholder dos Jobs permanece intacto. Os roots exigem estados separados. O [guia de backend DEV](docs/TERRAFORM_BACKEND_DEV.md) descreve o bootstrap independente do bucket e a migração autorizada futura da Foundation para GCS.
 
-Um projeto GCP por ambiente evita colisão entre datasets com os mesmos nomes. Nenhuma região é default. Exemplos em infra/terraform/environments/*.tfvars.example; configurar backend remoto protegido de Terraform antes de gestão compartilhada. Não commitar tfstate.
+Um projeto GCP por ambiente evita colisão entre datasets com os mesmos nomes. Nenhuma região é default. Exemplos em infra/terraform/environments/*.tfvars.example; o backend GCS DEV está declarado, mas só poderá ser inicializado após provisionar separadamente o bucket pelo bootstrap. Não commitar tfstate.
 
 Validações locais:
 
@@ -117,7 +117,7 @@ terraform -chdir=infra/terraform fmt -check -recursive
 terraform -chdir=infra/terraform validate
 ```
 
-**Não foi executado plan/apply/deploy.** O módulo não cria secret nem valor de secret. Faz binding secretAccessor no secret existente; dataset IAM restringe runtime a RAW/CORE/OPS e não concede acesso ao ANALYTICS. O runtime é único para ingestão+transformação no piloto; scheduler só tem invoker dos jobs. Conta do executor Terraform precisa de permissões de provisionamento separadas, fora do runtime.
+**Plano DEV gerado; nenhum apply/deploy executado.** O módulo cria somente o container de Secret Manager, com réplica na região configurada, deletion_protection e prevent_destroy. Não cria versões nem valores; a API Key será adicionada posteriormente fora do Terraform. O binding secretAccessor depende do container criado; dataset IAM restringe runtime a RAW/CORE/OPS e não concede acesso ao ANALYTICS. O runtime é único para ingestão+transformação no piloto; scheduler só tem invoker dos jobs. Conta do executor Terraform precisa de permissões de provisionamento separadas, fora do runtime.
 
 Há um bucket adicional apenas para mutex por loja, necessário para single-writer distribuído. Lock usa criação condicional `if_generation_match=0`, deleção com geração correspondente e nunca takeover automático. Em crash/timeout abrupto, confirmar que todas as execuções daquela loja terminaram e só então um operador remove o objeto `leases/<hash da loja>` observado; depois reexecutar. Não configurar lifecycle para apagar locks vivos. SQLite usa flock local liberado ao encerrar o processo.
 

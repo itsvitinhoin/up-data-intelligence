@@ -70,3 +70,6 @@ dist/
 *.bak
 *.swp
 .DS_Store
+
+# Approved bootstrap DEV identifiers only; no state/credentials.
+!infra/terraform/bootstrap/environments/dev.tfvars

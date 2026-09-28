@@ -66,12 +66,26 @@ resource "google_bigquery_dataset_iam_member" "writer" {
   role       = google_project_iam_custom_role.data_writer.name
   member     = "serviceAccount:${google_service_account.runtime.email}"
 }
+# Container only. Secret versions are added outside Terraform, after approval.
+resource "google_secret_manager_secret" "key" {
+  project             = var.project_id
+  secret_id           = var.secret_id
+  labels              = { environment = var.environment, application = "up-data-intelligence" }
+  deletion_protection = var.deletion_protection
+  replication {
+    user_managed {
+      replicas { location = var.region }
+    }
+  }
+  lifecycle { prevent_destroy = true }
+  depends_on = [google_project_service.required]
+}
 resource "google_secret_manager_secret_iam_member" "key" {
-  project    = var.project_id
-  secret_id  = var.secret_id
+  project    = google_secret_manager_secret.key.project
+  secret_id  = google_secret_manager_secret.key.secret_id
   role       = "roles/secretmanager.secretAccessor"
   member     = "serviceAccount:${google_service_account.runtime.email}"
-  depends_on = [google_project_service.required]
+  depends_on = [google_secret_manager_secret.key]
 }
 # Technical store-scoped mutex only. No source data, TTL, or automatic stale lock takeover.
 resource "google_storage_bucket" "leases" {

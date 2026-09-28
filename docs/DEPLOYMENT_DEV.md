@@ -4,7 +4,7 @@ Preparação local somente. Os comandos operacionais deste documento são para e
 
 ## Ordem e estados Terraform
 
-Há dois roots independentes. `infra/terraform/registry` gerencia somente a API Artifact Registry, o repositório Docker e seu IAM. `infra/terraform` gerencia a Data Foundation. Cada root precisa de estado próprio, com armazenamento protegido; nunca reutilizar a mesma chave/prefixo de backend. Atualmente ambos usam estado local ignorado pelo Git. Definir backend remoto antes de gestão compartilhada.
+Há dois roots independentes. `infra/terraform/registry` gerencia somente a API Artifact Registry, o repositório Docker e seu IAM. `infra/terraform` gerencia a Data Foundation. Cada root precisa de estado próprio, com armazenamento protegido; nunca reutilizar a mesma chave/prefixo de backend. A Foundation agora declara backend GCS DEV, dependente do bootstrap separado descrito em [TERRAFORM_BACKEND_DEV.md](TERRAFORM_BACKEND_DEV.md); não inicializar/migrar antes de o bucket existir. O registry mantém seu estado separado; não foi migrado.
 
 Isso resolve a dependência inicial: registry → build/push → digest → plano completo dos Jobs. Não usar `-target`, digest fictício ou enfraquecer a validação da imagem. O registry não lê `infra/terraform/environments/dev.tfvars`; possui seu próprio arquivo. O placeholder original, PILOT_STORE e schedules pausados permanecem intactos.
 
@@ -121,7 +121,7 @@ terraform -chdir=infra/terraform fmt environments/dev.tfvars
 terraform -chdir=infra/terraform validate
 ```
 
-Isso não executa apply/deploy. O primeiro plano completo ainda dependerá do secret existente referenciado, permissões e revisão da configuração piloto. Manter scheduler pausado. Não configurar API Key nesta etapa.
+Isso não executa apply/deploy. O módulo principal gerencia o container de Secret Manager com réplica em var.region e proteção contra destruição; o IAM depende desse recurso. Não gerencia versões nem valores. Antes do apply, conferir permissões, estado e eventual container preexistente a importar; a versão real será adicionada posteriormente fora do Terraform, antes da ingestão. Manter scheduler pausado. Não configurar API Key nesta etapa.
 
 ## Alternativa: Google Cloud Build (opcional)
 

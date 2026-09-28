@@ -19,7 +19,7 @@ variable "lease_bucket_name" { type = string }
 variable "lease_bucket_location" { type = string }
 variable "secret_id" {
   type        = string
-  description = "Secret já existente, no mesmo projeto. Este módulo não cria secret nem versão."
+  description = "ID do container de Secret Manager gerenciado neste projeto. Versões e valores são gerenciados fora do Terraform."
 }
 variable "secret_version" {
   type    = string
