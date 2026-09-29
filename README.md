@@ -162,3 +162,13 @@ futuro de Last Paid Touch. [Schemas completos](docs/META_SCHEMAS.md): 16 tabelas
 em `infra/terraform/meta_tables.proposed.json`, **fora do manifesto Terraform ativo**.
 Nenhum CLI/Job/secret Meta está habilitado; DEV.4 e o backfill UP Zero permanecem na
 configuração existente. Testes locais: `.venv/bin/pytest tests/unit/test_meta_foundation.py -q`.
+
+### Analytics / Business Metrics — referência offline
+
+A [fundação analítica](docs/ANALYTICS_FOUNDATION.md) prepara loja/dia, clientes, sequência,
+cohorts, distribuição de recompra, produto/SKU e funil. [Schemas](docs/ANALYTICS_SCHEMAS.md)
+e [catálogo de KPIs](docs/analytics_kpi_catalog.json) explicitam origem, fórmula e limitações.
+`src/analytics` é cálculo puro com fixtures sintéticas; os SQLs são propostas não executadas
+no BigQuery. Sete tabelas estão propostas fora do Terraform ativo. Receita paga permanece
+NULL sem valor liquidado; Meta/atribuição não são presumidos disponíveis. Testes locais:
+`.venv/bin/pytest tests/analytics -q`. Não há job, migration, build ou deploy nesta fase.

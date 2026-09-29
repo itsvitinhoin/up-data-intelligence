@@ -1,0 +1,157 @@
+[
+  {
+    "name": "row_key",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "store_id",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "currency",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "reporting_timezone",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "policy_hash",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "analytics_version",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "calculated_at",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "history_complete",
+    "type": "BOOL",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "order_date",
+    "type": "DATE",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "product_key",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "product_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "asset_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "variant_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "sku",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "reference",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "revenue_basis",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "orders",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "customers",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "impressions",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "clicks",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "first_party_orders_attributed",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "units_requested",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "units_fulfilled",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "revenue_generated",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "revenue_fulfilled",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "revenue_paid",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "average_selling_price",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "cancellation_rate",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "spend",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "first_party_revenue_attributed",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "roas",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  }
+]

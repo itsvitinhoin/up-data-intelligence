@@ -1,0 +1,107 @@
+[
+  {
+    "name": "row_key",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "store_id",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "currency",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "reporting_timezone",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "policy_hash",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "analytics_version",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "calculated_at",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "history_complete",
+    "type": "BOOL",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "customer_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "customer_type",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "order_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "source_order_version_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "customer_classification",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "order_at",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "first_purchase_at",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "order_date",
+    "type": "DATE",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "first_purchase_date",
+    "type": "DATE",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "purchase_number",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "revenue_generated",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "revenue_fulfilled",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "revenue_paid",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  }
+]

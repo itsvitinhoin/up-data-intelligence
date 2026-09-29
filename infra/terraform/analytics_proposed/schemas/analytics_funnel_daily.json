@@ -1,0 +1,137 @@
+[
+  {
+    "name": "row_key",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "store_id",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "currency",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "reporting_timezone",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "policy_hash",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "analytics_version",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "calculated_at",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "history_complete",
+    "type": "BOOL",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "event_date",
+    "type": "DATE",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "sessions",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "product_views",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "add_to_cart",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "checkout_started",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "purchase",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "sessions_with_cart",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "sessions_cart_then_checkout",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "sessions_cart_checkout_purchase",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "sessions_with_purchase",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "events_without_session",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "session_to_cart_rate",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "cart_to_checkout_rate",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "checkout_to_purchase_rate",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "session_conversion_rate",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "cost_per_session",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "cost_per_add_to_cart",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "cost_per_checkout",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "observation_complete",
+    "type": "BOOL",
+    "mode": "NULLABLE"
+  }
+]

@@ -1,0 +1,97 @@
+[
+  {
+    "name": "row_key",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "store_id",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "currency",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "reporting_timezone",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "policy_hash",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "analytics_version",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "calculated_at",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "history_complete",
+    "type": "BOOL",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "cohort_month",
+    "type": "DATE",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "reporting_month",
+    "type": "DATE",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "months_since_first_purchase",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "customers_in_cohort",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "active_customers",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "orders",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "retention_rate",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "observed_retention_rate",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "revenue_generated",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "revenue_paid",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "period_complete",
+    "type": "BOOL",
+    "mode": "NULLABLE"
+  }
+]

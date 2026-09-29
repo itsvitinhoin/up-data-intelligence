@@ -1,0 +1,36 @@
+-- PROPOSTA; NÃO EXECUTADA. Não incluída no Terraform ativo.
+CREATE TABLE IF NOT EXISTS `${project_id}.up_analytics.analytics_products_daily` (
+  `row_key` STRING NOT NULL,
+  `store_id` STRING NOT NULL,
+  `currency` STRING,
+  `reporting_timezone` STRING,
+  `policy_hash` STRING,
+  `analytics_version` STRING,
+  `calculated_at` TIMESTAMP,
+  `history_complete` BOOL,
+  `order_date` DATE,
+  `product_key` STRING,
+  `product_id` STRING,
+  `asset_id` STRING,
+  `variant_id` STRING,
+  `sku` STRING,
+  `reference` STRING,
+  `revenue_basis` STRING,
+  `orders` INT64,
+  `customers` INT64,
+  `impressions` INT64,
+  `clicks` INT64,
+  `first_party_orders_attributed` INT64,
+  `units_requested` NUMERIC,
+  `units_fulfilled` NUMERIC,
+  `revenue_generated` NUMERIC,
+  `revenue_fulfilled` NUMERIC,
+  `revenue_paid` NUMERIC,
+  `average_selling_price` NUMERIC,
+  `cancellation_rate` NUMERIC,
+  `spend` NUMERIC,
+  `first_party_revenue_attributed` NUMERIC,
+  `roas` NUMERIC
+)
+PARTITION BY order_date
+CLUSTER BY store_id, product_key, policy_hash;

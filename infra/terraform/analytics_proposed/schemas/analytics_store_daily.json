@@ -1,0 +1,207 @@
+[
+  {
+    "name": "row_key",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "store_id",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "currency",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "reporting_timezone",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "policy_hash",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "analytics_version",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "calculated_at",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "history_complete",
+    "type": "BOOL",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "order_date",
+    "type": "DATE",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "payment_date",
+    "type": "DATE",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "orders_generated",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "orders_paid",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "orders_cancelled",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "approved_orders",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "new_customers",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "returning_customers",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "purchasing_customers",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "orders_without_customer",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "meta_impressions",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "meta_clicks",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "first_party_new_customers_attributed",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "first_party_orders_attributed",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "revenue_generated",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "revenue_fulfilled",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "revenue_paid",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "revenue_cancelled",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "revenue_unfulfilled",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "approval_rate",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "average_order_value_generated",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "average_order_value_paid",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "items_per_order_generated",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "items_per_order_fulfilled",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "meta_spend",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "meta_reported_purchases",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "meta_reported_purchase_value",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "first_party_revenue_generated_attributed",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "first_party_revenue_paid_attributed",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "new_customer_cac",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "roas_generated",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "roas_paid",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "observation_complete",
+    "type": "BOOL",
+    "mode": "NULLABLE"
+  }
+]

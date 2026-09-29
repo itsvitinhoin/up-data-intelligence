@@ -1,0 +1,448 @@
+{
+  "version": "1.0.0",
+  "status": "offline_proposal",
+  "division_by_zero": "NULL",
+  "strict_sum": "NULL if any required component is absent; empty observed population = zero",
+  "metrics": [
+    {
+      "name": "orders_generated",
+      "classification": "CALCULATED",
+      "formula": "COUNT(order_id)",
+      "source": "orders.order_id",
+      "grain": "store + order_date + policy",
+      "limitations": "Todos os pedidos atuais, inclusive CANCELED."
+    },
+    {
+      "name": "orders_paid",
+      "classification": "CALCULATED",
+      "formula": "COUNTIF(payment_status='paid')",
+      "source": "orders.payment_status",
+      "grain": "store + order_date + policy",
+      "limitations": "Status observado; não transações por data de liquidação."
+    },
+    {
+      "name": "orders_cancelled",
+      "classification": "CALCULATED",
+      "formula": "COUNTIF(order_status='CANCELED')",
+      "source": "orders.order_status",
+      "grain": "store + order_date + policy",
+      "limitations": "Não usar cancelamento de pagamento como cancelamento do pedido."
+    },
+    {
+      "name": "revenue_generated",
+      "classification": "CALCULATED",
+      "formula": "STRICT_SUM(requested_total)",
+      "source": "orders.requested_total",
+      "grain": "store + order_date + policy",
+      "limitations": "Restated conforme snapshot atual; não receita paga."
+    },
+    {
+      "name": "revenue_fulfilled",
+      "classification": "CALCULATED",
+      "formula": "STRICT_SUM(fulfilled_total)",
+      "source": "orders.fulfilled_total",
+      "grain": "store + order_date + policy",
+      "limitations": "Atendido não significa pago."
+    },
+    {
+      "name": "revenue_paid",
+      "classification": "CALCULATED",
+      "formula": "NULL",
+      "source": "Indisponível: sem valor de liquidação/ledger",
+      "grain": "store + order_date + policy",
+      "limitations": "Não estimar com total/payment_status."
+    },
+    {
+      "name": "revenue_cancelled",
+      "classification": "CALCULATED",
+      "formula": "STRICT_SUM(requested_total WHERE order_status='CANCELED')",
+      "source": "orders.requested_total + order_status",
+      "grain": "store + order_date + policy",
+      "limitations": "Solicitado de pedidos cancelados; não reembolso/perda líquida."
+    },
+    {
+      "name": "revenue_unfulfilled",
+      "classification": "CALCULATED",
+      "formula": "generated - fulfilled, somente >=0",
+      "source": "orders requested_total/fulfilled_total",
+      "grain": "store + order_date + policy",
+      "limitations": "Diferença não implica cancelamento."
+    },
+    {
+      "name": "approval_rate",
+      "classification": "CALCULATED",
+      "formula": "qualifying_status_orders / orders_generated",
+      "source": "orders.order_status + explicit purchase_statuses",
+      "grain": "store + order_date + policy",
+      "limitations": "Proxy comercial por status; aprovação bancária indisponível."
+    },
+    {
+      "name": "average_order_value_generated",
+      "classification": "CALCULATED",
+      "formula": "revenue_generated / orders_generated",
+      "source": "orders.requested_total",
+      "grain": "store + order_date + policy",
+      "limitations": "Denominador inclui cancelados."
+    },
+    {
+      "name": "average_order_value_paid",
+      "classification": "CALCULATED",
+      "formula": "NULL until paid revenue is available",
+      "source": "Indisponível",
+      "grain": "store + order_date + policy",
+      "limitations": "Não usar requested_total como pago."
+    },
+    {
+      "name": "items_per_order_generated",
+      "classification": "CALCULATED",
+      "formula": "STRICT_SUM(requested_items_qty) / orders_generated",
+      "source": "orders.requested_items_qty",
+      "grain": "store + order_date + policy",
+      "limitations": ""
+    },
+    {
+      "name": "items_per_order_fulfilled",
+      "classification": "CALCULATED",
+      "formula": "STRICT_SUM(fulfilled_items_qty) / orders_generated",
+      "source": "orders.fulfilled_items_qty",
+      "grain": "store + order_date + policy",
+      "limitations": "Inclui pedidos sem atendimento."
+    },
+    {
+      "name": "new_customers",
+      "classification": "CALCULATED",
+      "formula": "COUNT DISTINCT resolved customers whose first_purchase_date = reporting day",
+      "source": "orders.customer_id → customers.customer_id",
+      "grain": "store + order_date + policy",
+      "limitations": "NULL com history_complete=false."
+    },
+    {
+      "name": "returning_customers",
+      "classification": "CALCULATED",
+      "formula": "COUNT DISTINCT resolved customers whose first_purchase_date < reporting day",
+      "source": "orders/customer exact same-store link",
+      "grain": "store + order_date + policy",
+      "limitations": "Não duplica aquisição com recompra no mesmo dia."
+    },
+    {
+      "name": "purchase_frequency",
+      "classification": "CALCULATED",
+      "formula": "qualifying resolved orders in interval / active resolved customers in interval",
+      "source": "qualifying orders + resolved customers",
+      "grain": "store + explicit local interval + policy",
+      "limitations": "Unidade pedidos/cliente no período explícito."
+    },
+    {
+      "name": "customer_repurchase_rate",
+      "classification": "CALCULATED",
+      "formula": "active customers with >=2 observed purchases before period end / active customers",
+      "source": "qualifying orders + resolved customers",
+      "grain": "store + explicit local interval + policy",
+      "limitations": "NULL sem cobertura histórica completa; inclui primeira compra anterior ao período."
+    },
+    {
+      "name": "customer_retention_rate",
+      "classification": "CALCULATED",
+      "formula": "intersection(current active customers, previous active customers) / previous active customers",
+      "source": "qualifying orders + resolved customers",
+      "grain": "store + explicit local interval + policy",
+      "limitations": "Baseline anterior de igual quantidade de dias locais; NULL sem cobertura completa."
+    },
+    {
+      "name": "ltv_30d",
+      "classification": "CALCULATED",
+      "formula": "STRICT_SUM(requested_total for qualifying purchases in [first_purchase_at, first_purchase_at + 30*24h))",
+      "source": "qualifying orders resolved by customer_id",
+      "grain": "store + customer + policy",
+      "limitations": "Janela imatura NULL; flag complete também exige history_complete; âncora primeira observada."
+    },
+    {
+      "name": "ltv_60d",
+      "classification": "CALCULATED",
+      "formula": "STRICT_SUM(requested_total for qualifying purchases in [first_purchase_at, first_purchase_at + 60*24h))",
+      "source": "qualifying orders resolved by customer_id",
+      "grain": "store + customer + policy",
+      "limitations": "Janela imatura NULL; flag complete também exige history_complete; âncora primeira observada."
+    },
+    {
+      "name": "ltv_90d",
+      "classification": "CALCULATED",
+      "formula": "STRICT_SUM(requested_total for qualifying purchases in [first_purchase_at, first_purchase_at + 90*24h))",
+      "source": "qualifying orders resolved by customer_id",
+      "grain": "store + customer + policy",
+      "limitations": "Janela imatura NULL; flag complete também exige history_complete; âncora primeira observada."
+    },
+    {
+      "name": "ltv_180d",
+      "classification": "CALCULATED",
+      "formula": "STRICT_SUM(requested_total for qualifying purchases in [first_purchase_at, first_purchase_at + 180*24h))",
+      "source": "qualifying orders resolved by customer_id",
+      "grain": "store + customer + policy",
+      "limitations": "Janela imatura NULL; flag complete também exige history_complete; âncora primeira observada."
+    },
+    {
+      "name": "ltv_365d",
+      "classification": "CALCULATED",
+      "formula": "STRICT_SUM(requested_total for qualifying purchases in [first_purchase_at, first_purchase_at + 365*24h))",
+      "source": "qualifying orders resolved by customer_id",
+      "grain": "store + customer + policy",
+      "limitations": "Janela imatura NULL; flag complete também exige history_complete; âncora primeira observada."
+    },
+    {
+      "name": "ltv_lifetime_observed",
+      "classification": "CALCULATED",
+      "formula": "STRICT_SUM(requested_total for all qualifying observed purchases before as_of)",
+      "source": "qualifying orders",
+      "grain": "store + customer + policy",
+      "limitations": "Sem previsão, sem lucro, não toda a vida futura."
+    },
+    {
+      "name": "first_purchase_at",
+      "classification": "CALCULATED",
+      "formula": "order timestamp at purchase_number=1",
+      "source": "orders.created_at/order_id",
+      "grain": "store + customer + policy",
+      "limitations": "Ordem created_at UTC, order_id STRING; ausente NULL."
+    },
+    {
+      "name": "second_purchase_at",
+      "classification": "CALCULATED",
+      "formula": "order timestamp at purchase_number=2",
+      "source": "orders.created_at/order_id",
+      "grain": "store + customer + policy",
+      "limitations": "Ordem created_at UTC, order_id STRING; ausente NULL."
+    },
+    {
+      "name": "third_purchase_at",
+      "classification": "CALCULATED",
+      "formula": "order timestamp at purchase_number=3",
+      "source": "orders.created_at/order_id",
+      "grain": "store + customer + policy",
+      "limitations": "Ordem created_at UTC, order_id STRING; ausente NULL."
+    },
+    {
+      "name": "fourth_purchase_at",
+      "classification": "CALCULATED",
+      "formula": "order timestamp at purchase_number=4",
+      "source": "orders.created_at/order_id",
+      "grain": "store + customer + policy",
+      "limitations": "Ordem created_at UTC, order_id STRING; ausente NULL."
+    },
+    {
+      "name": "days_first_to_second",
+      "classification": "CALCULATED",
+      "formula": "(second_purchase_at - first_purchase_at) / 86400 seconds",
+      "source": "purchase sequence",
+      "grain": "store + customer + policy",
+      "limitations": "Dias decorridos fracionários, não calendário."
+    },
+    {
+      "name": "days_second_to_third",
+      "classification": "CALCULATED",
+      "formula": "(third_purchase_at - second_purchase_at) / 86400 seconds",
+      "source": "purchase sequence",
+      "grain": "store + customer + policy",
+      "limitations": "Dias decorridos fracionários, não calendário."
+    },
+    {
+      "name": "days_third_to_fourth",
+      "classification": "CALCULATED",
+      "formula": "(fourth_purchase_at - third_purchase_at) / 86400 seconds",
+      "source": "purchase sequence",
+      "grain": "store + customer + policy",
+      "limitations": "Dias decorridos fracionários, não calendário."
+    },
+    {
+      "name": "purchase_number",
+      "classification": "CALCULATED",
+      "formula": "ROW_NUMBER ordered by created_at UTC, order_id STRING",
+      "source": "qualifying resolved orders",
+      "grain": "store + order + policy",
+      "limitations": "História incompleta implica ordinal observado, não lifetime comprovado."
+    },
+    {
+      "name": "percentage_of_original_cohort",
+      "classification": "CALCULATED",
+      "formula": "customers reaching purchase bucket / original cohort customers",
+      "source": "purchase sequence",
+      "grain": "store + cohort_month + purchase bucket + policy",
+      "limitations": "Fração 0–1. Bucket 5+ conta cada cliente uma vez; buckets não são aditivos."
+    },
+    {
+      "name": "cohort_retention_rate",
+      "classification": "CALCULATED",
+      "formula": "active_customers in relative calendar month / customers_in_cohort",
+      "source": "purchase sequence",
+      "grain": "store + cohort_month + months_since_first_purchase + policy",
+      "limitations": "NULL para mês aberto/história incompleta; meses fechados sem atividade zero."
+    },
+    {
+      "name": "sessions",
+      "classification": "CALCULATED",
+      "formula": "COUNT DISTINCT nonblank session_id per local event day",
+      "source": "analytics_events.fact_id/session_id/event_name/occurred_at",
+      "grain": "store + local event day + policy",
+      "limitations": "session-day, não sessão única global. Órfãos fora das taxas; taxas NULL se facts_complete=false; ordem de eventos explícita."
+    },
+    {
+      "name": "product_views",
+      "classification": "CALCULATED",
+      "formula": "COUNTIF(event_name='product_view')",
+      "source": "analytics_events.fact_id/session_id/event_name/occurred_at",
+      "grain": "store + local event day + policy",
+      "limitations": "session-day, não sessão única global. Órfãos fora das taxas; taxas NULL se facts_complete=false; ordem de eventos explícita."
+    },
+    {
+      "name": "add_to_cart",
+      "classification": "CALCULATED",
+      "formula": "COUNTIF(event_name='add_to_cart')",
+      "source": "analytics_events.fact_id/session_id/event_name/occurred_at",
+      "grain": "store + local event day + policy",
+      "limitations": "session-day, não sessão única global. Órfãos fora das taxas; taxas NULL se facts_complete=false; ordem de eventos explícita."
+    },
+    {
+      "name": "checkout_started",
+      "classification": "CALCULATED",
+      "formula": "COUNTIF(event_name='checkout_started')",
+      "source": "analytics_events.fact_id/session_id/event_name/occurred_at",
+      "grain": "store + local event day + policy",
+      "limitations": "session-day, não sessão única global. Órfãos fora das taxas; taxas NULL se facts_complete=false; ordem de eventos explícita."
+    },
+    {
+      "name": "purchase",
+      "classification": "CALCULATED",
+      "formula": "COUNTIF(event_name='purchase')",
+      "source": "analytics_events.fact_id/session_id/event_name/occurred_at",
+      "grain": "store + local event day + policy",
+      "limitations": "session-day, não sessão única global. Órfãos fora das taxas; taxas NULL se facts_complete=false; ordem de eventos explícita."
+    },
+    {
+      "name": "session_to_cart_rate",
+      "classification": "CALCULATED",
+      "formula": "sessions_with_cart / sessions",
+      "source": "analytics_events.fact_id/session_id/event_name/occurred_at",
+      "grain": "store + local event day + policy",
+      "limitations": "session-day, não sessão única global. Órfãos fora das taxas; taxas NULL se facts_complete=false; ordem de eventos explícita."
+    },
+    {
+      "name": "cart_to_checkout_rate",
+      "classification": "CALCULATED",
+      "formula": "sessions_cart_then_checkout / sessions_with_cart",
+      "source": "analytics_events.fact_id/session_id/event_name/occurred_at",
+      "grain": "store + local event day + policy",
+      "limitations": "session-day, não sessão única global. Órfãos fora das taxas; taxas NULL se facts_complete=false; ordem de eventos explícita."
+    },
+    {
+      "name": "checkout_to_purchase_rate",
+      "classification": "CALCULATED",
+      "formula": "sessions_cart_checkout_purchase / sessions_cart_then_checkout",
+      "source": "analytics_events.fact_id/session_id/event_name/occurred_at",
+      "grain": "store + local event day + policy",
+      "limitations": "session-day, não sessão única global. Órfãos fora das taxas; taxas NULL se facts_complete=false; ordem de eventos explícita."
+    },
+    {
+      "name": "session_conversion_rate",
+      "classification": "CALCULATED",
+      "formula": "sessions_with_any_purchase / sessions",
+      "source": "analytics_events.fact_id/session_id/event_name/occurred_at",
+      "grain": "store + local event day + policy",
+      "limitations": "session-day, não sessão única global. Órfãos fora das taxas; taxas NULL se facts_complete=false; ordem de eventos explícita."
+    },
+    {
+      "name": "units_requested",
+      "classification": "CALCULATED",
+      "formula": "STRICT_SUM(original_qty)",
+      "source": "current order_items matching parent_order_version_id",
+      "grain": "store + local order day + asset/variant/SKU key + policy",
+      "limitations": "Bruto de linha; sem alocação de desconto/frete/imposto/pagamento/mídia. product_id/reference indisponíveis."
+    },
+    {
+      "name": "units_fulfilled",
+      "classification": "CALCULATED",
+      "formula": "STRICT_SUM(qty for active/attended; 0 for removed)",
+      "source": "current order_items matching parent_order_version_id",
+      "grain": "store + local order day + asset/variant/SKU key + policy",
+      "limitations": "Bruto de linha; sem alocação de desconto/frete/imposto/pagamento/mídia. product_id/reference indisponíveis."
+    },
+    {
+      "name": "product_revenue_generated",
+      "classification": "CALCULATED",
+      "formula": "STRICT_SUM(original_qty * current unit_price)",
+      "source": "current order_items matching parent_order_version_id",
+      "grain": "store + local order day + asset/variant/SKU key + policy",
+      "limitations": "Bruto de linha; sem alocação de desconto/frete/imposto/pagamento/mídia. product_id/reference indisponíveis."
+    },
+    {
+      "name": "product_revenue_fulfilled",
+      "classification": "CALCULATED",
+      "formula": "STRICT_SUM(fulfilled qty * current unit_price)",
+      "source": "current order_items matching parent_order_version_id",
+      "grain": "store + local order day + asset/variant/SKU key + policy",
+      "limitations": "Bruto de linha; sem alocação de desconto/frete/imposto/pagamento/mídia. product_id/reference indisponíveis."
+    },
+    {
+      "name": "average_selling_price",
+      "classification": "CALCULATED",
+      "formula": "line revenue_fulfilled / units_fulfilled",
+      "source": "current order_items matching parent_order_version_id",
+      "grain": "store + local order day + asset/variant/SKU key + policy",
+      "limitations": "Bruto de linha; sem alocação de desconto/frete/imposto/pagamento/mídia. product_id/reference indisponíveis."
+    },
+    {
+      "name": "cancellation_rate",
+      "classification": "CALCULATED",
+      "formula": "STRICT_SUM(original_qty for removed) / units_requested",
+      "source": "current order_items matching parent_order_version_id",
+      "grain": "store + local order day + asset/variant/SKU key + policy",
+      "limitations": "Bruto de linha; sem alocação de desconto/frete/imposto/pagamento/mídia. product_id/reference indisponíveis."
+    },
+    {
+      "name": "new_customer_cac",
+      "classification": "ATTRIBUTED",
+      "formula": "paid_media_spend / first_party_new_customers_attributed",
+      "source": "future Meta spend + explicit first-party attribution evidence",
+      "grain": "identical store/currency/timezone/dates/account-config scope",
+      "limitations": "NULL no build atual. Nunca usar Meta reported purchases como first-party. Sem rateio artificial."
+    },
+    {
+      "name": "roas_generated",
+      "classification": "ATTRIBUTED",
+      "formula": "first_party_revenue_generated_attributed / paid_media_spend",
+      "source": "future Meta spend + explicit first-party attribution evidence",
+      "grain": "identical store/currency/timezone/dates/account-config scope",
+      "limitations": "NULL no build atual. Nunca usar Meta reported purchases como first-party. Sem rateio artificial."
+    },
+    {
+      "name": "roas_paid",
+      "classification": "ATTRIBUTED",
+      "formula": "first_party_revenue_paid_attributed / paid_media_spend",
+      "source": "future Meta spend + explicit first-party attribution evidence",
+      "grain": "identical store/currency/timezone/dates/account-config scope",
+      "limitations": "NULL no build atual. Nunca usar Meta reported purchases como first-party. Sem rateio artificial."
+    },
+    {
+      "name": "cost_per_session",
+      "classification": "ATTRIBUTED",
+      "formula": "paid_media_spend / paid-attributed sessions",
+      "source": "future Meta spend + explicit first-party attribution evidence",
+      "grain": "identical store/currency/timezone/dates/account-config scope",
+      "limitations": "NULL no build atual. Nunca usar Meta reported purchases como first-party. Sem rateio artificial."
+    },
+    {
+      "name": "cost_per_add_to_cart",
+      "classification": "ATTRIBUTED",
+      "formula": "paid_media_spend / paid-attributed add_to_cart",
+      "source": "future Meta spend + explicit first-party attribution evidence",
+      "grain": "identical store/currency/timezone/dates/account-config scope",
+      "limitations": "NULL no build atual. Nunca usar Meta reported purchases como first-party. Sem rateio artificial."
+    },
+    {
+      "name": "cost_per_checkout",
+      "classification": "ATTRIBUTED",
+      "formula": "paid_media_spend / paid-attributed checkout",
+      "source": "future Meta spend + explicit first-party attribution evidence",
+      "grain": "identical store/currency/timezone/dates/account-config scope",
+      "limitations": "NULL no build atual. Nunca usar Meta reported purchases como first-party. Sem rateio artificial."
+    }
+  ]
+}
