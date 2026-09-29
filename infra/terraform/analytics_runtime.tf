@@ -15,6 +15,14 @@ variable "analytics_maximum_bytes_billed" {
     error_message = "Supply a positive integer byte budget approved for Analytics."
   }
 }
+variable "analytics_maximum_total_bytes_billed" {
+  type        = number
+  description = "Approved operational envelope: sum of reserved per-query byte ceilings, including failed jobs."
+  validation {
+    condition     = var.analytics_maximum_total_bytes_billed >= var.analytics_maximum_bytes_billed && floor(var.analytics_maximum_total_bytes_billed) == var.analytics_maximum_total_bytes_billed
+    error_message = "Supply an approved integer execution envelope at least as large as the per-query ceiling."
+  }
+}
 locals {
   analytics_core_read_tables = toset(["customers", "orders", "order_items", "analytics_events"])
   analytics_write_tables = toset([
@@ -76,6 +84,7 @@ resource "google_cloud_run_v2_job" "analytics" {
           "--as-of", "2026-09-28T03:00:00Z",
           "--project", "up-data-intelligence-dev", "--location", "southamerica-east1",
           "--maximum-bytes-billed", tostring(var.analytics_maximum_bytes_billed),
+          "--maximum-total-bytes-billed", tostring(var.analytics_maximum_total_bytes_billed),
           "--timeout-seconds", "300", "--full-refresh", "--confirm-backfill-complete"
         ]
         resources {

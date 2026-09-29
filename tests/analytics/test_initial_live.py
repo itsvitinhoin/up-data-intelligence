@@ -52,6 +52,8 @@ def args():
         LOCATION,
         "--maximum-bytes-billed",
         "1000000000",
+        "--maximum-total-bytes-billed",
+        "100000000000",
         "--timeout-seconds",
         "300",
         "--full-refresh",
@@ -71,6 +73,7 @@ def args():
         ("--to", "2026-09-29"),
         ("--as-of", "2026-09-29T03:00:00Z"),
         ("--maximum-bytes-billed", "0"),
+        ("--maximum-total-bytes-billed", "1"),
     ],
 )
 def test_guards_before_credential_discovery(monkeypatch, flag, value):
@@ -284,3 +287,15 @@ def test_live_exception_does_not_expose_query_payload(monkeypatch, caplog, capsy
     assert "synthetic-sensitive-customer-value" not in caplog.text + capsys.readouterr().err
     assert "analytics_initial_failed" in caplog.text
     client.close.assert_called_once()
+
+
+def test_live_requires_aggregate_budget_before_credentials(monkeypatch):
+    argv = args()
+    index = argv.index("--maximum-total-bytes-billed")
+    del argv[index : index + 2]
+    monkeypatch.setattr("sys.argv", argv)
+    client = Mock()
+    monkeypatch.setattr("google.cloud.bigquery.Client", client)
+    with pytest.raises(SystemExit):
+        main()
+    client.assert_not_called()

@@ -243,3 +243,6 @@ real concorrente continuam pendentes, conforme `ANALYTICS_MATERIALIZATION_READIN
 
 Parado antes de qualquer GCP/build/deploy/migration. Commit/push publica somente
 código e propostas; não é autorização de ativação.
+
+Facts acima de 100 mil: [chunking, fechamento de sessões, benchmark e orçamento](ANALYTICS_FACT_CHUNKING.md).
+O runtime usa dias/prefixos e spool temporário; os limites por transporte permanecem.

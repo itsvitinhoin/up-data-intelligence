@@ -23,6 +23,7 @@ def main() -> None:
     parser.add_argument("--project", required=True)
     parser.add_argument("--location", required=True)
     parser.add_argument("--maximum-bytes-billed", required=True, type=int)
+    parser.add_argument("--maximum-total-bytes-billed", type=int)
     parser.add_argument("--timeout-seconds", type=float, default=300)
     parser.add_argument("--full-refresh", action="store_true")
     parser.add_argument(
@@ -42,6 +43,8 @@ def main() -> None:
         or args.store != STORE
         or args.confirm_store != STORE
         or args.location != LOCATION
+        or args.maximum_total_bytes_billed is None
+        or args.maximum_total_bytes_billed < args.maximum_bytes_billed
         or not args.full_refresh
         or not args.confirm_backfill_complete
     ):
@@ -64,7 +67,12 @@ def main() -> None:
             policy, report_from=args.date_from, report_to=args.date_to, as_of=args.as_of
         )
     config = CloudConfig(
-        args.project, args.location, args.maximum_bytes_billed, args.timeout_seconds, False
+        args.project,
+        args.location,
+        args.maximum_bytes_billed,
+        args.timeout_seconds,
+        False,
+        maximum_total_bytes_billed=args.maximum_total_bytes_billed,
     )
     if args.live:
         # Credential discovery occurs only after every guard and policy validation.
@@ -95,6 +103,10 @@ def main() -> None:
                 "analytics_initial_receipt_mismatch",
                 "analytics_unit_too_large_partition_required",
                 "analytics_staging_row_too_large",
+                "analytics_execution_query_budget_exhausted",
+                "analytics_fact_spool_budget_exceeded",
+                "analytics_fact_chunk_incomplete",
+                "analytics_fact_day_incomplete",
             }
             code = (
                 str(exc)

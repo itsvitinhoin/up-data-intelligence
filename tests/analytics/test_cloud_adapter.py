@@ -1,10 +1,13 @@
 """Contract fakes model atomic publication; they do NOT execute BigQuery SQL."""
 
+import hashlib
 import json
 from copy import deepcopy
 from dataclasses import replace
+from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -37,6 +40,7 @@ class FakeClient:
         self.read_rows = []
         self.read_failure = False
         self.source = {}
+        self.fact_leaves = 0
 
     def query(self, sql, **kwargs):
         self.calls.append((sql, kwargs))
@@ -97,6 +101,49 @@ class FakeClient:
                     }
                     if self.failure == "lost_ack":
                         error = RuntimeError("synthetic lost acknowledgement")
+        elif "/* analytics_facts_" in sql:
+            events = [
+                r
+                for r in self.source.get("analytics_events", [])
+                if r.get("store_id") == get("store")
+                and r.get("source_system") == "upzero"
+                and datetime.fromisoformat(r["occurred_at"])
+                .astimezone(ZoneInfo(get("timezone")))
+                .date()
+                .isoformat()
+                == get("day")
+            ]
+            if "analytics_facts_inventory" in sql:
+                rows = [
+                    {
+                        "n": len(events),
+                        "distinct_n": len(
+                            {r.get("fact_id") for r in events if r.get("fact_id") is not None}
+                        ),
+                        "invalid_n": sum(
+                            not r.get("fact_id") or not r["fact_id"].strip() for r in events
+                        ),
+                    }
+                ]
+            else:
+                selected = [
+                    r
+                    for r in events
+                    if hashlib.sha256(r["fact_id"].encode()).hexdigest().startswith(get("prefix"))
+                ]
+                if "analytics_facts_split" in sql:
+                    grouped = {}
+                    for r in selected:
+                        prefix = hashlib.sha256(r["fact_id"].encode()).hexdigest()[
+                            : int(get("depth"))
+                        ]
+                        grouped[prefix] = grouped.get(prefix, 0) + 1
+                    rows = [{"prefix": k, "n": v} for k, v in grouped.items()]
+                else:
+                    self.fact_leaves += 1
+                    if self.failure == "fact_leaf_2" and self.fact_leaves == 2:
+                        error = RuntimeError("synthetic intermediate Fact query failure")
+                    rows = selected
         elif sql.startswith("SELECT"):
             if self.read_failure:
                 error = RuntimeError("synthetic read failure")

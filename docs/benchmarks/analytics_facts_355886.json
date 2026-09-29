@@ -1,0 +1,58 @@
+[
+  {
+    "mode": "reference",
+    "synthetic_facts": 355886,
+    "days": 27,
+    "transport_batch_rows": null,
+    "peak_rss_bytes": 237551616,
+    "spool_bytes": 0,
+    "rss_plus_spool_bytes_conservative": 237551616,
+    "elapsed_seconds": 2.329,
+    "result_sha256": "7ec76c65e45544168429f5daa1749134fc5993abd3585ea6248af99b91e4b8d7",
+    "python": "3.13.7",
+    "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+    "cloud_executed": false
+  },
+  {
+    "mode": "spool",
+    "synthetic_facts": 355886,
+    "days": 27,
+    "transport_batch_rows": 25000,
+    "peak_rss_bytes": 37912576,
+    "spool_bytes": 182583296,
+    "rss_plus_spool_bytes_conservative": 220495872,
+    "elapsed_seconds": 4.48,
+    "result_sha256": "7ec76c65e45544168429f5daa1749134fc5993abd3585ea6248af99b91e4b8d7",
+    "python": "3.13.7",
+    "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+    "cloud_executed": false
+  },
+  {
+    "mode": "reference",
+    "synthetic_facts": 355886,
+    "days": 1,
+    "transport_batch_rows": null,
+    "peak_rss_bytes": 245776384,
+    "spool_bytes": 0,
+    "rss_plus_spool_bytes_conservative": 245776384,
+    "elapsed_seconds": 1.944,
+    "result_sha256": "0570e155f3e92efd4482f5a37e548559e23dbf234dc234d60fc4a5b7b3e5bba7",
+    "python": "3.13.7",
+    "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+    "cloud_executed": false
+  },
+  {
+    "mode": "spool",
+    "synthetic_facts": 355886,
+    "days": 1,
+    "transport_batch_rows": 25000,
+    "peak_rss_bytes": 43827200,
+    "spool_bytes": 183357440,
+    "rss_plus_spool_bytes_conservative": 227184640,
+    "elapsed_seconds": 2.631,
+    "result_sha256": "0570e155f3e92efd4482f5a37e548559e23dbf234dc234d60fc4a5b7b3e5bba7",
+    "python": "3.13.7",
+    "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+    "cloud_executed": false
+  }
+]

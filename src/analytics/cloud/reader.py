@@ -1,14 +1,17 @@
 """Minimal-column, time-consistent CORE reads with explicit bounded dependencies."""
 
+from collections.abc import Iterator
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
+from typing import Any
 
 from src.analytics.cloud.transport import Transport, array, scalar
 from src.analytics.config import AnalyticsPolicy
 from src.analytics.engine import Row
 from src.analytics.materialization import CoreSnapshot, Plan, plan_changes
 from src.analytics.sql_models import SOURCE_FIELDS
+from src.observability.logging import event
 from src.utils.data import digest, timestamp
 
 
@@ -28,6 +31,9 @@ class BigQueryAnalyticsReader:
     def __init__(self, transport: Transport, policy: AnalyticsPolicy):
         self.transport = transport
         self.policy = policy
+        self.source_chunks = 0
+        self.source_rows_read = 0
+        self.largest_chunk_rows = 0
 
     def read(
         self,
@@ -136,7 +142,12 @@ class BigQueryAnalyticsReader:
         return rows
 
     def snapshot(
-        self, generation: SourceGeneration, plan: Plan, *, full_refresh: bool = False
+        self,
+        generation: SourceGeneration,
+        plan: Plan,
+        *,
+        full_refresh: bool = False,
+        include_events: bool = True,
     ) -> CoreSnapshot:
         if plan.full and not full_refresh:
             raise ValueError("full_refresh_requires_authorization")
@@ -158,7 +169,121 @@ class BigQueryAnalyticsReader:
             self.read("order_items", generation, order_ids=ids),
             self.read(
                 "analytics_events", generation, days=plan.scopes["analytics_funnel_daily"] or set()
-            ),
+            )
+            if include_events
+            else [],
+        )
+
+    def fact_chunks(
+        self, generation: SourceGeneration, days: set[str]
+    ) -> Iterator[tuple[str, list[Row] | None, int]]:
+        """Yield complete transport leaves, then a day-end marker with its exact count.
+
+        Recursive SHA256 prefixes are disjoint/exhaustive; sessions may cross leaves,
+        so no funnel calculation is allowed until the day-end marker is verified.
+        """
+        p = self.policy
+        if any(
+            date.fromisoformat(day).isoformat() != day or day >= p.reference().local_date(p.as_of)
+            for day in days
+        ):
+            raise ValueError("analytics_fact_days_outside_policy")
+        table = f"`{self.transport.config.project}.up_core.analytics_events`"
+        fields = ",".join(f"`{f}`" for f in SOURCE_FIELDS["analytics_events"])
+        hashed = "LOWER(TO_HEX(SHA256(fact_id)))"
+        before = self.transport.bytes_processed
+        for day in sorted(days):
+            params = [
+                scalar("store", "STRING", p.store_id),
+                scalar("snapshot_at", "TIMESTAMP", generation.snapshot_at),
+                scalar("day", "DATE", day),
+                scalar("timezone", "STRING", p.reporting_timezone),
+                scalar("as_of", "TIMESTAMP", p.as_of),
+            ]
+            base = f"FROM {table} FOR SYSTEM_TIME AS OF @snapshot_at WHERE store_id=@store AND source_system='upzero' AND occurred_at>=TIMESTAMP(@day,@timezone) AND occurred_at<TIMESTAMP(DATE_ADD(@day,INTERVAL 1 DAY),@timezone) AND occurred_at<@as_of"
+            counts, _ = self.transport.query(
+                "/* analytics_facts_inventory */ SELECT COUNT(*) AS n, COUNT(DISTINCT fact_id) AS distinct_n, COUNTIF(fact_id IS NULL OR TRIM(fact_id)='') AS invalid_n "
+                + base,
+                params,
+            )
+            if (
+                len(counts) != 1
+                or counts[0]["n"] != counts[0]["distinct_n"]
+                or counts[0]["invalid_n"]
+            ):
+                raise ValueError("duplicate_or_invalid_fact_key")
+            expected = int(counts[0]["n"])
+
+            def leaves(
+                prefix: str, count: int, query_base: str = base, query_params: list[Any] = params
+            ) -> Iterator[list[Row]]:
+                if not count:
+                    return
+                scoped = query_base + f" AND STARTS_WITH({hashed},@prefix)"
+                parameters = query_params + [scalar("prefix", "STRING", prefix)]
+                if count <= self.transport.config.maximum_rows:
+                    try:
+                        rows, _ = self.transport.query(
+                            "/* analytics_facts_leaf */ SELECT " + fields + " " + scoped, parameters
+                        )
+                    except ValueError as exc:
+                        if str(exc) != "analytics_unit_payload_too_large_partition_required":
+                            raise
+                    else:
+                        if len(rows) != count:
+                            raise ValueError("analytics_fact_chunk_incomplete")
+                        for row in rows:
+                            at = row.get("occurred_at")
+                            if isinstance(at, datetime):
+                                row["occurred_at"] = at.isoformat()
+                        self.source_chunks += 1
+                        self.source_rows_read += len(rows)
+                        self.largest_chunk_rows = max(self.largest_chunk_rows, len(rows))
+                        event(
+                            "analytics_source_chunk",
+                            source_chunks=self.source_chunks,
+                            source_rows_read=self.source_rows_read,
+                            chunk_days=1,
+                            largest_chunk_rows=self.largest_chunk_rows,
+                            store_id=p.store_id,
+                            policy_hash=p.policy_hash,
+                        )
+                        yield rows
+                        return
+                if len(prefix) >= 64:
+                    raise ValueError("analytics_unsplittable_fact_transport")
+                children, _ = self.transport.query(
+                    f"/* analytics_facts_split */ SELECT SUBSTR({hashed},1,@depth) AS prefix, COUNT(*) AS n "
+                    + scoped
+                    + " GROUP BY prefix",
+                    parameters + [scalar("depth", "INT64", len(prefix) + 1)],
+                )
+                if sum(int(c["n"]) for c in children) != count or len(
+                    {c["prefix"] for c in children}
+                ) != len(children):
+                    raise ValueError("analytics_fact_split_incomplete")
+                for child in sorted(children, key=lambda c: c["prefix"]):
+                    if len(child["prefix"]) != len(prefix) + 1 or not child["prefix"].startswith(
+                        prefix
+                    ):
+                        raise ValueError("analytics_fact_split_invalid")
+                    yield from leaves(child["prefix"], int(child["n"]))
+
+            for rows in leaves("", expected):
+                yield day, rows, expected
+            yield day, None, expected
+        after = self.transport.bytes_processed
+        event(
+            "analytics_source_finished",
+            source_chunks=self.source_chunks,
+            source_rows_read=self.source_rows_read,
+            chunk_days=len(days),
+            largest_chunk_rows=self.largest_chunk_rows,
+            source_bytes_processed=after - before
+            if after is not None and before is not None
+            else None,
+            store_id=p.store_id,
+            policy_hash=p.policy_hash,
         )
 
 

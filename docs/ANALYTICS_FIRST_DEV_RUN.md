@@ -113,19 +113,19 @@ Entradas Terraform novas e obrigatórias, sem default:
   O var.image/DEV.4 de UP Zero permanece intacto.
 - analytics_maximum_bytes_billed: inteiro positivo aprovado, teto **por query**.
   Não limita o total do Job; preflight, CORE, staging, commit e reconciliação somam.
+- analytics_maximum_total_bytes_billed: soma máxima aprovada dos tetos reservados
+  por query, incluindo tentativas falhas; guard operacional agregado obrigatório.
 
 Sem imagem/digest e orçamento aprovados, não gerar/applicar plan. Não foi colocado
 um digest fictício ou reutilizada DEV.4 no Job novo.
 
 Dimensionamento proposto: 1 task, parallelism=1, 2 vCPU, 4 GiB, timeout 3600s,
-query timeout 300s, max_retries=0. Memória considera objetos Python, snapshots e
-staging; CPU beneficia serialização/cálculos. É proposta conservadora, não benchmark.
-**Limite herdado: 100 mil linhas por leitura/unidade do engine.** Acima disso o
-adapter falha sem truncar nem publicar. Confirmar volume antes da execução real;
-se exceder, preparar processamento por unidades completas, não apenas aumentar
-memória nem remover limites sem teste. Primeira execução de milhões de Facts não
-está comprovada por estes testes. Orçamento, volume e dimensionamento precisam ser
-revisados antes de autorizar o run.
+query timeout 300s, max_retries=0. Facts agora são transportados por dia/prefixo e
+reduzidos em spool temporário, sem juntar toda a janela numa lista. O limite de
+100 mil permanece por transporte; os três inputs comerciais mantêm seus limites
+por leitura e agregado. Benchmark, custos, capacidade e limitações estão em
+[ANALYTICS_FACT_CHUNKING.md](ANALYTICS_FACT_CHUNKING.md). Nenhum teste local garante
+capacidade cloud; revisar memória e ambos os orçamentos antes da execução.
 
 ## Contrato futuro de execução — NÃO executado
 
@@ -143,6 +143,7 @@ python -m src.analytics.job \
   --as-of 2026-09-28T03:00:00Z \
   --project up-data-intelligence-dev --location southamerica-east1 \
   --maximum-bytes-billed "$ANALYTICS_MAXIMUM_BYTES_BILLED" \
+  --maximum-total-bytes-billed "$ANALYTICS_MAXIMUM_TOTAL_BYTES_BILLED" \
   --timeout-seconds 300 --full-refresh --confirm-backfill-complete
 ```
 
@@ -200,5 +201,5 @@ de diagnóstico ainda precisam de validação no ambiente autorizado; paridade 7
 não comprova transações ou DML do writer.
 
 Parado antes de plan/apply/GCP/build/deploy/HEAD/materialização. Próximas decisões:
-orçamento por query, confirmação de volumes abaixo dos limites, nova imagem e
+orçamentos por query/agregado, capacidade dos inputs comerciais e spool, nova imagem e
 autorização separada para provisionamento/run manual.

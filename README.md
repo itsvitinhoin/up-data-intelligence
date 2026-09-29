@@ -197,3 +197,6 @@ O runtime live está preparado com guards para a policy oficial MX Fashion,
 full refresh e confirmação de backfill. [Runbook da primeira execução](docs/ANALYTICS_FIRST_DEV_RUN.md)
 contém IAM/Job novos, comandos futuros de HEAD/run e checks pós-materialização.
 Nenhum build, plan/apply, provisionamento de runtime ou run foi executado nesta etapa.
+
+Facts acima de 100 mil: [chunking, fechamento de sessões, benchmark e orçamento](docs/ANALYTICS_FACT_CHUNKING.md).
+O runtime usa dias/prefixos e spool temporário; os limites por transporte permanecem.
