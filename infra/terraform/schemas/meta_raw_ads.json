@@ -1,0 +1,102 @@
+[
+  {
+    "name": "row_key",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "store_id",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "source_system",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "resource",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "source_connection_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "run_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "request_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "raw_record_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "payload_hash",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "connector_version",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "spec_version",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "spec_sha256",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "sanitization_version",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "ingested_at",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "position",
+    "type": "JSON",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "next_position",
+    "type": "JSON",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "request_filters",
+    "type": "JSON",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "payload",
+    "type": "JSON",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "bytes_read",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "pagination_error",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  }
+]

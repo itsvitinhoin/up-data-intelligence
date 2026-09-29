@@ -195,3 +195,60 @@ TABLES["source_capabilities"] = Table(
         "updated_at": "TIMESTAMP",
     },
 )
+
+# Meta is an additive, separately gated schema proposal. Existing schemas stay unchanged.
+META_ENTITY = {
+    k: "STRING" for k in "account_id api_version name status effective_status".split()
+} | {"created_at": "TIMESTAMP", "updated_at": "TIMESTAMP"}
+META_INSIGHTS = (
+    {
+        k: "STRING"
+        for k in "account_id campaign_id adset_id ad_id api_version account_currency source_timezone configuration_hash purchase_action_type".split()
+    }
+    | {"date_start": "DATE", "date_stop": "DATE"}
+    | {
+        k: "NUMERIC"
+        for k in "spend frequency cpm cpc ctr landing_page_views meta_reported_purchases meta_reported_purchase_value".split()
+    }
+    | {k: "INT64" for k in "impressions reach clicks inline_link_clicks".split()}
+    | {k: "JSON" for k in "actions action_values breakdown_values reporting_configuration".split()}
+)
+META_TABLE_NAMES: set[str] = set()
+for resource, fields, key in [
+    (
+        "accounts",
+        META_ENTITY | {"account_status": "INT64", "currency": "STRING", "timezone_name": "STRING"},
+        "account_id",
+    ),
+    ("campaigns", META_ENTITY | {"campaign_id": "STRING", "objective": "STRING"}, "campaign_id"),
+    ("adsets", META_ENTITY | {"campaign_id": "STRING", "adset_id": "STRING"}, "adset_id"),
+    (
+        "ads",
+        META_ENTITY | {"campaign_id": "STRING", "adset_id": "STRING", "ad_id": "STRING"},
+        "ad_id",
+    ),
+    ("insights", META_INSIGHTS, "ad_id"),
+]:
+    raw_name = "meta_raw_" + resource
+    name = "meta_" + ("insights_daily" if resource == "insights" else resource)
+    TABLES[raw_name] = Table(
+        "up_raw", COMMON | RAW, "ingested_at", ("store_id", "source_connection_id")
+    )
+    cluster = tuple(dict.fromkeys(("store_id", "account_id", key)))
+    TABLES[name] = Table(
+        "up_core", COMMON | META | fields, "date_start" if resource == "insights" else None, cluster
+    )
+    TABLES[name + "_versions"] = Table("up_core", COMMON | META | fields, "observed_at", cluster)
+    META_TABLE_NAMES.update((raw_name, name, name + "_versions"))
+TABLES["meta_account_bindings"] = Table(
+    "up_core",
+    COMMON
+    | {
+        k: "STRING"
+        for k in "account_id connection_id api_version source_timezone currency configuration_hash".split()
+    }
+    | {"configured_at": "TIMESTAMP"},
+    None,
+    ("store_id", "account_id"),
+)
+META_TABLE_NAMES.add("meta_account_bindings")

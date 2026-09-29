@@ -17,7 +17,9 @@ def test_generated_schemas_match_catalog():
         if name != "write_buffer":
             assert "store_id" in spec.fields
     manifest = json.loads(Path("infra/terraform/tables.json").read_text())
-    assert len(manifest) == len(TABLES)
+    proposed = json.loads(Path("infra/terraform/meta_tables.proposed.json").read_text())
+    assert not set(manifest) & set(proposed)
+    assert set(manifest) | set(proposed) == set(TABLES)
     assert not any(s.dataset == "up_analytics" for s in TABLES.values())
 
 

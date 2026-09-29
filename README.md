@@ -153,3 +153,12 @@ Auditoria, normalização aditiva e evidências de identidade: [IDENTITY_HARDENI
 O CLI separa status da ingestão, qualidade do recurso, saúde global e exit code. Ver [política, diagnóstico e windowing](docs/RESOURCE_SCOPED_QUALITY_GATE.md). `--mode quality` também aplica o gate; `--resource all` bloqueia por qualquer alert aplicável. Sem migration de schema; correlação parent/child adicionada aos logs.
 
 Correção de Customers vazios: [causa raiz, auditoria de campos e recuperação por replay](docs/CUSTOMER_OPTIONAL_EMPTY_FIX.md). State/city opcionais em branco viram NULL; IDs obrigatórios continuam estritos. Sem migration.
+
+### Fundação Meta Ads — somente offline
+
+A [proposta Meta e atribuição](docs/META_FOUNDATION.md) adiciona conector GET restrito a
+MockTransport, ingestão RAW → CORE com replay, vínculos determinísticos por IDs e contrato
+futuro de Last Paid Touch. [Schemas completos](docs/META_SCHEMAS.md): 16 tabelas propostas,
+em `infra/terraform/meta_tables.proposed.json`, **fora do manifesto Terraform ativo**.
+Nenhum CLI/Job/secret Meta está habilitado; DEV.4 e o backfill UP Zero permanecem na
+configuração existente. Testes locais: `.venv/bin/pytest tests/unit/test_meta_foundation.py -q`.

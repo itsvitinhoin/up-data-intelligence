@@ -2,14 +2,16 @@
 
 import json
 from pathlib import Path
+from typing import Any
 
-from src.bigquery.catalog import TABLES
+from src.bigquery.catalog import META_TABLE_NAMES, TABLES
 
 
 def generate() -> None:
     folder = Path("infra/terraform/schemas")
     folder.mkdir(parents=True, exist_ok=True)
-    manifest = {}
+    manifest: dict[str, Any] = {}
+    meta_manifest: dict[str, Any] = {}
     for name, spec in TABLES.items():
         fields = [
             {
@@ -20,7 +22,8 @@ def generate() -> None:
             for k, t in spec.fields.items()
         ]
         (folder / (name + ".json")).write_text(json.dumps(fields, indent=2) + "\n")
-        manifest[name] = {
+        target_manifest = meta_manifest if name in META_TABLE_NAMES else manifest
+        target_manifest[name] = {
             "dataset": spec.dataset,
             "partition": spec.partition,
             "cluster": list(spec.cluster),
@@ -34,7 +37,12 @@ def generate() -> None:
             + "\n)"
         )
         if spec.partition:
-            sql += f"\nPARTITION BY DATE({spec.partition})"
+            expression = (
+                spec.partition
+                if spec.fields[spec.partition] == "DATE"
+                else f"DATE({spec.partition})"
+            )
+            sql += f"\nPARTITION BY {expression}"
         if spec.cluster:
             sql += "\nCLUSTER BY " + ", ".join(spec.cluster)
         path = Path(
@@ -47,6 +55,9 @@ def generate() -> None:
         path.mkdir(parents=True, exist_ok=True)
         (path / (name + ".sql")).write_text(sql + ";\n")
     Path("infra/terraform/tables.json").write_text(json.dumps(manifest, indent=2) + "\n")
+    Path("infra/terraform/meta_tables.proposed.json").write_text(
+        json.dumps(meta_manifest, indent=2) + "\n"
+    )
 
 
 if __name__ == "__main__":
