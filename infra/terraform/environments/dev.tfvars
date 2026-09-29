@@ -19,3 +19,7 @@ pilot = {
   initial_from                   = "2026-09-01T00:00:00Z"
   purchase_order_id_effective_at = null
 }
+
+analytics_image                      = "southamerica-east1-docker.pkg.dev/up-data-intelligence-dev/up-data-intelligence/foundation@sha256:ef816b9ae1f63f19b50fba7826d27ebd42482008ae2f17089be037abb10a707e"
+analytics_maximum_bytes_billed       = 1073741824
+analytics_maximum_total_bytes_billed = 137438953472
