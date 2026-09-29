@@ -172,22 +172,33 @@ valida schema, não custo representativo da MX Fashion. Para estimar custo real,
 substituir policy por configuração aprovada e manter fixtures sem dados reais.
 
 ```bash
+git pull --ff-only origin main
+export PYTHON_BIN=python
 export ANALYTICS_FIXTURE=tests/fixtures/analytics_readiness/synthetic.json
-export ANALYTICS_VALIDATION_DIR=/tmp/up-analytics-readiness
-analytics_dry_run() {
-  python -m src.analytics.parity dry-run \
-    --fixture "$ANALYTICS_FIXTURE" --output "$ANALYTICS_VALIDATION_DIR" \
-    --model "$1" --allow-gcp --confirm-project up-data-intelligence-dev \
-    --maximum-bytes-billed 1000000000
-}
-analytics_dry_run analytics_store_daily
-analytics_dry_run analytics_customer_metrics
-analytics_dry_run analytics_customer_purchase_sequence
-analytics_dry_run analytics_cohorts
-analytics_dry_run analytics_purchase_distribution
-analytics_dry_run analytics_products_daily
-analytics_dry_run analytics_funnel_daily
+export ANALYTICS_VALIDATION_DIR="$(mktemp -d /tmp/analytics-dry-runs.XXXXXX)"
+# Processo filho: não usar source. O wrapper executa os sete modelos.
+if bash scripts/analytics_dry_runs.sh; then
+  printf 'Os sete dry-runs passaram.\n'
+else
+  analytics_rc=$?
+  printf 'Dry-runs com falha (exit=%s). Consulte os logs e o resumo.\n' "$analytics_rc"
+fi
+cat "$ANALYTICS_VALIDATION_DIR/dry-run-summary.tsv"
 ```
+
+O wrapper habilita pipefail e captura imediatamente os dois PIPESTATUS depois de
+`python ... 2>&1 | tee ...`. Só marca PASSOU com Python=0 **e** tee=0. Executa todos
+os sete modelos e retorna o primeiro código de falha; logs individuais preservam
+stderr e o TSV registra os códigos de ambos. O bloco `if` acima trata o retorno sem
+encerrar o terminal interativo, mesmo quando o terminal usa errexit. Não considerar
+o exit code do `cat` ou do `tee` como resultado da validação.
+
+Correção do primeiro dry-run real: a CTE purchase_sequence agora separa
+purchase_order (sem frame, usado por ROW_NUMBER) de purchase_first (frame ROWS
+original, usado pelos FIRST_VALUE). Ambas mantêm PARTITION BY resolved_customer_id
+e ORDER BY created_at, order_id. Os seis modelos que incluem essa CTE foram
+regenerados; funnel não usa a CTE e permanece igual. O erro remoto foi informado
+pelo operador; a correção ainda precisa da repetição dos dry-runs no GCP.
 
 O cliente usa explicitamente project=up-data-intelligence-dev,
 location=southamerica-east1, standard SQL, cache desabilitado e dry_run=True.

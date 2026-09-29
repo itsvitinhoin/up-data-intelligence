@@ -16,14 +16,16 @@ commerce AS (SELECT o.*, c.customer_id AS resolved_customer_id, c.customer_type,
 FROM source_orders o LEFT JOIN source_customers c USING (customer_id)),
 purchase_sequence AS (SELECT @store AS store_id, resolved_customer_id AS customer_id, customer_type, order_id,
        version_id AS source_order_version_id, created_at AS order_at, order_date,
-       ROW_NUMBER() OVER w AS purchase_number,
-       FIRST_VALUE(created_at) OVER w AS first_purchase_at,
-       FIRST_VALUE(order_date) OVER w AS first_purchase_date,
+       ROW_NUMBER() OVER purchase_order AS purchase_number,
+       FIRST_VALUE(created_at) OVER purchase_first AS first_purchase_at,
+       FIRST_VALUE(order_date) OVER purchase_first AS first_purchase_date,
        requested_total AS revenue_generated, fulfilled_total AS revenue_fulfilled,
        CAST(NULL AS NUMERIC) AS revenue_paid
 FROM commerce WHERE is_purchase AND resolved_customer_id IS NOT NULL
-WINDOW w AS (PARTITION BY resolved_customer_id ORDER BY created_at, order_id
-             ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)),
+-- Numbering functions cannot use a frame. Navigation retains its explicit frame.
+WINDOW purchase_order AS (PARTITION BY resolved_customer_id ORDER BY created_at, order_id),
+       purchase_first AS (PARTITION BY resolved_customer_id ORDER BY created_at, order_id
+                          ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)),
 customer_metrics AS (SELECT customer_id, ANY_VALUE(customer_type) AS customer_type,
  MIN(first_purchase_at) AS first_purchase_at, MIN(first_purchase_date) AS first_purchase_date,
  MAX(IF(purchase_number=2,order_at,NULL)) AS second_purchase_at,

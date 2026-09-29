@@ -43,14 +43,16 @@ FROM source_orders o LEFT JOIN source_customers c USING (customer_id);
 CREATE TEMP TABLE purchase_sequence AS
 SELECT @store AS store_id, resolved_customer_id AS customer_id, customer_type, order_id,
        version_id AS source_order_version_id, created_at AS order_at, order_date,
-       ROW_NUMBER() OVER w AS purchase_number,
-       FIRST_VALUE(created_at) OVER w AS first_purchase_at,
-       FIRST_VALUE(order_date) OVER w AS first_purchase_date,
+       ROW_NUMBER() OVER purchase_order AS purchase_number,
+       FIRST_VALUE(created_at) OVER purchase_first AS first_purchase_at,
+       FIRST_VALUE(order_date) OVER purchase_first AS first_purchase_date,
        requested_total AS revenue_generated, fulfilled_total AS revenue_fulfilled,
        CAST(NULL AS NUMERIC) AS revenue_paid
 FROM commerce WHERE is_purchase AND resolved_customer_id IS NOT NULL
-WINDOW w AS (PARTITION BY resolved_customer_id ORDER BY created_at, order_id
-             ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW);
+-- Numbering functions cannot use a frame. Navigation retains its explicit frame.
+WINDOW purchase_order AS (PARTITION BY resolved_customer_id ORDER BY created_at, order_id),
+       purchase_first AS (PARTITION BY resolved_customer_id ORDER BY created_at, order_id
+                          ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW);
 
 -- analytics_customer_purchase_sequence: all observed history, not only report interval.
 SELECT *, IF(purchase_number > 1, 'returning_customer',
