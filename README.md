@@ -147,3 +147,9 @@ Alertas estão materializados no BigQuery e emitidos como logs operacionais; not
 ## Identity hardening (preparado, não implantado)
 
 Auditoria, normalização aditiva e evidências de identidade: [IDENTITY_HARDENING](docs/IDENTITY_HARDENING.md). A expansão de 31 colunas e a futura separação de Orders exigem revisão: [plano de migração](docs/IDENTITY_MIGRATION_PLAN.md). [Classificação e acesso](docs/DATA_CLASSIFICATION.md). Não executar a nova imagem antes da expansão de schema; Orders ainda preserva os snapshots legados até cutover aprovado.
+
+## Quality gate por recurso
+
+O CLI separa status da ingestão, qualidade do recurso, saúde global e exit code. Ver [política, diagnóstico e windowing](docs/RESOURCE_SCOPED_QUALITY_GATE.md). `--mode quality` também aplica o gate; `--resource all` bloqueia por qualquer alert aplicável. Sem migration de schema; correlação parent/child adicionada aos logs.
+
+Correção de Customers vazios: [causa raiz, auditoria de campos e recuperação por replay](docs/CUSTOMER_OPTIONAL_EMPTY_FIX.md). State/city opcionais em branco viram NULL; IDs obrigatórios continuam estritos. Sem migration.

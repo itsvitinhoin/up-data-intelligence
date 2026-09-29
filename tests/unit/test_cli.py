@@ -68,6 +68,7 @@ def test_cli_page_limit_configures_api_without_cloud(tmp_path, monkeypatch):
         original(self)
 
     monkeypatch.setattr(Engine, "registry", registry)
-    assert main() == 0
+    # quality/all now reports the blocking freshness failure in an empty store.
+    assert main() == 1
     monkeypatch.setattr(sys, "argv", ["job", "--page-limit", "1001"])
     assert main() == 1

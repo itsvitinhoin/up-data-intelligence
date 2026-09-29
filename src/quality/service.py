@@ -5,11 +5,12 @@ from typing import Any
 from src.bigquery.repository import BigQueryRepository, Repository
 from src.config.settings import Settings
 from src.observability.logging import event
+from src.quality.gate import rule_resource
 from src.quality.rules import purchase_severity, result, stale
 from src.utils.data import now
 
 
-def reconcile(repo: Repository, cfg: Settings, run_id: str) -> None:
+def reconcile(repo: Repository, cfg: Settings, run_id: str) -> list[dict[str, Any]]:
     store, at = cfg.store_id, now()
     checks: list[dict[str, Any]] = []
     if isinstance(repo, BigQueryRepository):
@@ -35,7 +36,7 @@ def reconcile(repo: Repository, cfg: Settings, run_id: str) -> None:
                     result(
                         store,
                         run_id,
-                        "all",
+                        rule_resource(row.rule_id, "all"),
                         row.rule_id,
                         "warning"
                         if row.rule_id
@@ -63,7 +64,7 @@ def reconcile(repo: Repository, cfg: Settings, run_id: str) -> None:
             result(
                 store,
                 run_id,
-                "all",
+                "analytics_facts",
                 "order_id_without_order",
                 "warning",
                 failed=sum(r["link_status"] == "pending" for r in links),
@@ -76,12 +77,15 @@ def reconcile(repo: Repository, cfg: Settings, run_id: str) -> None:
             ("customers", "customers"),
         ]:
             rows = repo.read(table, store)
-            counts = Counter(r["row_key"] for r in rows)
+            key = {"analytics_events": "fact_id", "orders": "order_id", "customers": "customer_id"}[
+                table
+            ]
+            counts = Counter(r[key] for r in rows)
             checks.append(
                 result(
                     store,
                     run_id,
-                    table,
+                    rule_resource("duplicate_" + name, table),
                     "duplicate_" + name,
                     "alert",
                     failed=sum(n - 1 for n in counts.values()),
@@ -166,3 +170,4 @@ def reconcile(repo: Repository, cfg: Settings, run_id: str) -> None:
                 failed_count=check["failed_count"],
                 checked_count=check["checked_count"],
             )
+    return checks

@@ -1,5 +1,7 @@
 # Data Quality — Fase 1
 
+> Política do CLI atualizada: [Quality Gate por recurso](RESOURCE_SCOPED_QUALITY_GATE.md). Severidade global permanece visível e não equivale a falha da ingestão de outro recurso.
+
 Implementada em [rules.py](../src/quality/rules.py), [engine.py](../src/ingestion/engine.py) e [reconcile.sql](../sql/quality/reconcile.sql). Qualidade não apaga RAW sanitizado. Nenhuma validação foi feita contra dados reais.
 
 | Regra | Tratamento |

@@ -3,9 +3,10 @@
 import re
 from typing import Any
 
+from src.normalization.optional import optional_value
 from src.utils.data import identifier
 
-VERSION = "1.0.0"
+VERSION = "1.0.1"
 
 
 def customer_identity(source: dict[str, Any]) -> dict[str, Any]:
@@ -14,6 +15,7 @@ def customer_identity(source: dict[str, Any]) -> dict[str, Any]:
     issues: dict[str, str] = {}
 
     def digits(value: Any, field: str) -> str | None:
+        value = optional_value(value)
         if value is None:
             return None
         if not isinstance(value, str) or not re.fullmatch(r"[0-9.\-/\s]+", value):
@@ -32,7 +34,7 @@ def customer_identity(source: dict[str, Any]) -> dict[str, Any]:
         or any(not part for part in email_normalized.split("@"))
     ):
         issues["email"] = "invalid_format_not_for_automatic_matching"
-    phone = source.get("phone")
+    phone = optional_value(source.get("phone"))
     phone_normalized, phone_e164 = None, None
     if phone is not None:
         if isinstance(phone, str) and re.fullmatch(r"\+?[0-9() .\-\s]+", phone.strip()):
@@ -61,10 +63,10 @@ def customer_identity(source: dict[str, Any]) -> dict[str, Any]:
         "phone_e164": phone_e164,
         "cnpj_digits": digits(wholesale.get("cnpj"), "cnpj"),
         "cpf_digits": digits(retail.get("cpf"), "cpf"),
-        "seller_id": identifier(seller.get("id")),
-        "state": profile.get("address_state"),
-        "city": profile.get("address_city"),
-        "external_ref": source.get("external_ref"),
+        "seller_id": identifier(optional_value(seller.get("id"))),
+        "state": optional_value(profile.get("address_state")),
+        "city": optional_value(profile.get("address_city")),
+        "external_ref": optional_value(source.get("external_ref")),
         "identity_normalization_version": VERSION,
         "identity_normalization_issues": issues,
     }

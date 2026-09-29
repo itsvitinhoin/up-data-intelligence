@@ -3,10 +3,11 @@ from typing import Any
 from src.bigquery.catalog import CUSTOMER, EVENT, ITEM, ORDER
 from src.normalization.identity import customer_identity
 from src.normalization.meta_url import parse_meta_url
+from src.normalization.optional import optional_value
 from src.security.sanitization import sanitize
 from src.utils.data import identifier, numeric, timestamp
 
-VERSION = "1.1.0"
+VERSION = "1.1.1"
 
 
 def normalize_json_ids(value: Any) -> Any:
@@ -58,7 +59,40 @@ def normalize(
             "trade_name": wholesale.get("trade_name"),
             **customer_identity(source),
         }
-        fields, table = CUSTOMER, "customers"
+        # Customer optional scalar projections only. Required customer_id still
+        # passes identifier(..., True) above; generic typed()/identifier() stay strict.
+        optional_fields = {
+            "customer_type",
+            "status",
+            "name",
+            "email",
+            "phone",
+            "cpf",
+            "cnpj",
+            "company_name",
+            "trade_name",
+            "seller_id",
+            "state",
+            "city",
+            "email_normalized",
+            "phone_normalized",
+            "phone_e164",
+            "cnpj_digits",
+            "cpf_digits",
+        }
+        originals = {"seller", "retail_profile", "wholesale_profile", "external_ref"}
+        return (
+            "customers",
+            {
+                k: data.get(k)
+                if k in originals
+                else typed(
+                    optional_value(data.get(k)) if k in optional_fields else data.get(k), typ
+                )
+                for k, typ in CUSTOMER.items()
+            },
+            None,
+        )
     elif resource == "orders":
         data = {
             **source,

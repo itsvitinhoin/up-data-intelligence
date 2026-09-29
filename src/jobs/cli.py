@@ -14,7 +14,8 @@ from src.connectors.upzero.fixtures import transport
 from src.domain.models import SafeError
 from src.ingestion.engine import Engine
 from src.ingestion.planning import incremental, open_order_windows, windows
-from src.observability.logging import configure, event
+from src.observability.logging import configure, event, execution_id
+from src.quality.gate import evaluate
 from src.quality.service import reconcile
 from src.security.lease import cloud_lease, local_lease
 from src.security.secrets import resolve_secret
@@ -50,6 +51,9 @@ def main(default_mode: str = "sync") -> int:
     )
     args = parser.parse_args()
     configure()
+    context_token = execution_id.set(str(uuid.uuid4()))
+    summaries: list[dict[str, Any]] = []
+    ingestion_status = "failed"
     client: UpZeroConnector | None = None
     repo: Repository | None = None
     try:
@@ -84,21 +88,48 @@ def main(default_mode: str = "sync") -> int:
             )
             engine = Engine(cfg, repo, client)
             engine.registry()
+            event("execution_started", store_id=cfg.store_id, resource=args.resource)
             if args.mode == "quality":
-                reconcile(repo, cfg, str(uuid.uuid4()))
-                return 0
+                checks = reconcile(repo, cfg, str(uuid.uuid4()))
+                decision = evaluate(args.resource, [], checks, [], quality_only=True)
+                event(
+                    "execution_finished", store_id=cfg.store_id, resource=args.resource, **decision
+                )
+                return int(decision["exit_code"])
             resources = (
                 ["customers", "orders", "analytics_facts"]
                 if args.resource == "all"
                 else [args.resource]
             )
             at = args.end or now()
-            summaries: list[dict[str, Any]] = []
+
+            def record(summary: dict[str, Any]) -> None:
+                summaries.append(summary)
+                event(
+                    "sync_finished",
+                    run_id=summary["run_id"],
+                    store_id=cfg.store_id,
+                    resource=summary["resource"],
+                    status=summary["status"],
+                    **{
+                        k: summary.get(k)
+                        for k in (
+                            "source_records_read",
+                            "raw_pages_written",
+                            "core_records_processed",
+                            "core_records_inserted",
+                            "core_records_updated",
+                            "core_records_failed",
+                            "metrics_version",
+                        )
+                    },
+                )
+
             for resource in resources:
                 if args.mode == "replay":
                     if not args.replay_run:
                         raise SafeError("replay_run_required")
-                    summaries.append(engine.replay(resource, args.replay_run))
+                    record(engine.replay(resource, args.replay_run))
                 elif args.mode == "sync":
                     pending = [
                         c
@@ -109,25 +140,23 @@ def main(default_mode: str = "sync") -> int:
                     ]
                     if pending:
                         plan = min(pending, key=lambda c: c["updated_at"])
-                        summaries.append(engine.run(resource, plan["filters"], mode="incremental"))
+                        record(engine.run(resource, plan["filters"], mode="incremental"))
                     filters, stop = incremental(repo, cfg, resource, at)
-                    summaries.append(
+                    record(
                         engine.run(
                             resource, filters, mode="incremental", refresh=True, stop_at_id=stop
                         )
                     )
                     if resource == "orders":
                         for filters in open_order_windows(repo, cfg):
-                            summaries.append(
-                                engine.run(resource, filters, mode="open_orders", refresh=True)
-                            )
+                            record(engine.run(resource, filters, mode="open_orders", refresh=True))
                 else:
                     start = args.start or cfg.initial_from
                     if resource == "customers" and args.mode == "reconcile":
-                        summaries.append(engine.run(resource, {}, mode="reconcile", refresh=True))
+                        record(engine.run(resource, {}, mode="reconcile", refresh=True))
                     else:
                         for filters in windows(resource, start, at, cfg.timezone):
-                            summaries.append(
+                            record(
                                 engine.run(
                                     resource,
                                     filters,
@@ -135,29 +164,54 @@ def main(default_mode: str = "sync") -> int:
                                     refresh=args.refresh or args.mode == "reconcile",
                                 )
                             )
-            reconcile(repo, cfg, str(uuid.uuid4()))
-            for summary in summaries:
-                event(
-                    "sync_finished",
-                    run_id=summary["run_id"],
-                    store_id=cfg.store_id,
-                    resource=summary["resource"],
-                    status=summary["status"],
-                    source_records_read=summary.get("source_records_read"),
-                    raw_pages_written=summary.get("raw_pages_written"),
-                    core_records_inserted=summary.get("core_records_inserted"),
-                    core_records_updated=summary.get("core_records_updated"),
-                    core_records_failed=summary.get("core_records_failed"),
-                    metrics_version=summary.get("metrics_version"),
-                )
-            return int(any(s["status"] != "completed" for s in summaries))
+            ingestion_status = (
+                "completed"
+                if summaries and all(s["status"] == "completed" for s in summaries)
+                else "failed"
+            )
+            checks = reconcile(repo, cfg, str(uuid.uuid4()))
+            unique = {s["run_id"]: s for s in summaries}
+            child_checks = (
+                repo.find("quality_results", cfg.store_id, "run_id", list(unique)) if unique else []
+            )
+            decision = evaluate(args.resource, summaries, checks, child_checks)
+            event(
+                "execution_finished",
+                store_id=cfg.store_id,
+                resource=args.resource,
+                child_runs=len(unique),
+                metrics_scope="cumulative_unique_child_runs",
+                **{
+                    k: sum(s.get(k, 0) or 0 for s in unique.values())
+                    for k in (
+                        "source_records_read",
+                        "raw_pages_written",
+                        "core_records_processed",
+                        "core_records_inserted",
+                        "core_records_updated",
+                        "core_records_failed",
+                    )
+                },
+                **decision,
+            )
+            return int(decision["exit_code"])
     except Exception as exc:
         event(
             "job_failed",
             code=exc.code if isinstance(exc, SafeError) else "configuration_or_internal_failure",
         )
+        event(
+            "execution_finished",
+            resource=args.resource,
+            ingestion_status=ingestion_status,
+            resource_quality_status="unknown",
+            global_quality_status="unknown",
+            exit_code=1,
+            child_runs=len({s["run_id"] for s in summaries}),
+        )
         return 1
     finally:
+        execution_id.reset(context_token)
         if client:
             client.close()
         if isinstance(repo, SQLiteRepository):

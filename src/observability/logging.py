@@ -1,9 +1,21 @@
 import json
 import logging
+from contextvars import ContextVar
 from typing import Any
+
+execution_id: ContextVar[str | None] = ContextVar("execution_id", default=None)
 
 # Allowlist, not best-effort regex over exceptions containing arbitrary PII.
 SAFE_FIELDS = {
+    "parent_execution_id",
+    "ingestion_status",
+    "resource_quality_status",
+    "global_quality_status",
+    "blocking_for_requested_resource",
+    "exit_code",
+    "child_runs",
+    "metrics_scope",
+    "core_records_processed",
     "source_records_read",
     "raw_pages_written",
     "core_records_inserted",
@@ -42,6 +54,8 @@ def configure() -> None:
 
 
 def event(name: str, **fields: Any) -> None:
+    if execution_id.get():
+        fields["parent_execution_id"] = execution_id.get()
     logging.getLogger("upzero").info(
         json.dumps({"event": name, **{k: v for k, v in fields.items() if k in SAFE_FIELDS}})
     )
