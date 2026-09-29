@@ -12,3 +12,6 @@
 !sql/**/*.sql
 !docs/
 !docs/upzero-openapi.json
+!config/
+!config/analytics/
+!config/analytics/mx-fashion.dev.json
