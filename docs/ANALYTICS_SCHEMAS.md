@@ -253,3 +253,9 @@ Partição: event_date. Clustering: store_id, policy_hash.
 | cost_per_add_to_cart | NUMERIC | Contrato futuro Meta/ATTRIBUTED; NULL no build atual |
 | cost_per_checkout | NUMERIC | Contrato futuro Meta/ATTRIBUTED; NULL no build atual |
 | observation_complete | BOOL | Configuração/cobertura explícita, não inferida da API |
+
+## Materialization readiness (offline)
+
+Contrato de policy, cobertura, runner transacional local, incrementalidade e os sete
+comandos futuros de dry-run estão em [Analytics Materialization Readiness](ANALYTICS_MATERIALIZATION_READINESS.md).
+SQL ainda não validado no BigQuery; nenhuma tabela analytics foi criada.

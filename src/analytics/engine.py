@@ -411,6 +411,14 @@ def distribution_rows(policy: Policy, customers: dict[str, list[Row]]) -> list[R
     return rows
 
 
+def product_key(item: Row) -> str:
+    identifiers = [item.get("asset_id"), item.get("variant_id"), item.get("sku")]
+    if not item.get("variant_id") and not item.get("sku"):
+        # Asset alone does not prove colour/size. Keep unresolved lines separate.
+        identifiers += [item.get("order_id"), item.get("item_id")]
+    return digest(identifiers)
+
+
 def product_rows(
     policy: Policy, orders: list[Row], items: list[Row], findings: list[Row]
 ) -> list[Row]:
@@ -431,7 +439,9 @@ def product_rows(
         if item.get("status") not in {"active", "attended", "removed"}:
             findings.append(issue("unsupported_item_status"))
             continue
-        key = digest([item.get("asset_id"), item.get("variant_id"), item.get("sku")])
+        key = product_key(item)
+        if not item.get("variant_id") and not item.get("sku"):
+            findings.append(issue("product_variant_unknown"))
         grouped[(order["order_date"], key)].append(
             {**item, "customer": order["resolved_customer_id"]}
         )

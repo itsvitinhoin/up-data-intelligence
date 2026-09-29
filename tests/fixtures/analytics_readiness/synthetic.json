@@ -1,0 +1,185 @@
+{
+  "policy": {
+    "store_id": "synthetic-store",
+    "policy_version": "synthetic-v1",
+    "reporting_timezone": "America/Sao_Paulo",
+    "currency": "BRL",
+    "qualifying_order_statuses": [
+      "CONFIRMED",
+      "SHIPPED"
+    ],
+    "history_complete": false,
+    "facts_complete": false,
+    "as_of": "2026-04-02T12:00:00Z",
+    "report_from": "2026-03-01",
+    "report_to": "2026-03-03",
+    "history_from": "2026-01-01T00:00:00Z"
+  },
+  "core": {
+    "orders": [
+      {
+        "store_id": "synthetic-store",
+        "source_system": "upzero",
+        "order_id": "o1",
+        "customer_id": "c1",
+        "created_at": "2026-03-01T10:00:00Z",
+        "order_status": "CONFIRMED",
+        "payment_status": "unpaid",
+        "requested_total": "100",
+        "fulfilled_total": "80",
+        "total": "80",
+        "requested_items_qty": 5,
+        "fulfilled_items_qty": 4,
+        "version_id": "v-o1"
+      },
+      {
+        "store_id": "synthetic-store",
+        "source_system": "upzero",
+        "order_id": "o2",
+        "customer_id": "c1",
+        "created_at": "2026-03-02T10:00:00Z",
+        "order_status": "CONFIRMED",
+        "payment_status": "paid",
+        "requested_total": "100",
+        "fulfilled_total": "80",
+        "total": "80",
+        "requested_items_qty": 5,
+        "fulfilled_items_qty": 4,
+        "version_id": "v-o2"
+      },
+      {
+        "store_id": "synthetic-store",
+        "source_system": "upzero",
+        "order_id": "o3",
+        "customer_id": "c2",
+        "created_at": "2026-03-01T11:00:00Z",
+        "order_status": "CONFIRMED",
+        "payment_status": "unpaid",
+        "requested_total": "100",
+        "fulfilled_total": "80",
+        "total": "80",
+        "requested_items_qty": 5,
+        "fulfilled_items_qty": 4,
+        "version_id": "v-o3"
+      }
+    ],
+    "customers": [
+      {
+        "store_id": "synthetic-store",
+        "source_system": "upzero",
+        "customer_id": "c1",
+        "customer_type": "WHOLESALE"
+      },
+      {
+        "store_id": "synthetic-store",
+        "source_system": "upzero",
+        "customer_id": "c2",
+        "customer_type": "WHOLESALE"
+      }
+    ],
+    "items": [
+      {
+        "store_id": "synthetic-store",
+        "source_system": "upzero",
+        "order_id": "o1",
+        "item_id": "i1",
+        "parent_order_version_id": "v-o1",
+        "present_in_latest_snapshot": true,
+        "asset_id": "asset-1",
+        "variant_id": "variant-1",
+        "sku": "SYNTHETIC-SKU",
+        "original_qty": 5,
+        "qty": "3",
+        "unit_price": "12.50",
+        "status": "active",
+        "order_created_at": "2026-03-01T10:00:00Z"
+      },
+      {
+        "store_id": "synthetic-store",
+        "source_system": "upzero",
+        "order_id": "o1",
+        "item_id": "i2",
+        "parent_order_version_id": "v-o1",
+        "present_in_latest_snapshot": true,
+        "asset_id": "asset-1",
+        "variant_id": "variant-red-M",
+        "sku": "SYNTHETIC-RED-M",
+        "original_qty": 5,
+        "qty": "3",
+        "unit_price": "12.50",
+        "status": "active",
+        "order_created_at": "2026-03-01T10:00:00Z"
+      },
+      {
+        "store_id": "synthetic-store",
+        "source_system": "upzero",
+        "order_id": "o1",
+        "item_id": "i3",
+        "parent_order_version_id": "v-o1",
+        "present_in_latest_snapshot": true,
+        "asset_id": "asset-1",
+        "variant_id": null,
+        "sku": null,
+        "original_qty": 5,
+        "qty": "3",
+        "unit_price": "12.50",
+        "status": "active",
+        "order_created_at": "2026-03-01T10:00:00Z"
+      },
+      {
+        "store_id": "synthetic-store",
+        "source_system": "upzero",
+        "order_id": "o1",
+        "item_id": "i4",
+        "parent_order_version_id": "v-o1",
+        "present_in_latest_snapshot": true,
+        "asset_id": "asset-1",
+        "variant_id": null,
+        "sku": null,
+        "original_qty": 5,
+        "qty": "3",
+        "unit_price": "12.50",
+        "status": "active",
+        "order_created_at": "2026-03-01T10:00:00Z"
+      }
+    ],
+    "events": [
+      {
+        "store_id": "synthetic-store",
+        "source_system": "upzero",
+        "fact_id": "0",
+        "event_id": "e-0",
+        "event_name": "product_view",
+        "occurred_at": "2026-03-01T10:00:00Z",
+        "session_id": "s1"
+      },
+      {
+        "store_id": "synthetic-store",
+        "source_system": "upzero",
+        "fact_id": "1",
+        "event_id": "e-1",
+        "event_name": "add_to_cart",
+        "occurred_at": "2026-03-01T10:01:00Z",
+        "session_id": "s1"
+      },
+      {
+        "store_id": "synthetic-store",
+        "source_system": "upzero",
+        "fact_id": "2",
+        "event_id": "e-2",
+        "event_name": "checkout_started",
+        "occurred_at": "2026-03-01T10:02:00Z",
+        "session_id": "s1"
+      },
+      {
+        "store_id": "synthetic-store",
+        "source_system": "upzero",
+        "fact_id": "3",
+        "event_id": "e-3",
+        "event_name": "purchase",
+        "occurred_at": "2026-03-01T10:03:00Z",
+        "session_id": "s1"
+      }
+    ]
+  }
+}

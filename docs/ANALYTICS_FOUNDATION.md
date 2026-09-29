@@ -302,3 +302,9 @@ novo necessário para cálculo sobre CORE; nenhum API Key/configuração foi adi
 
 A definição de cada KPI também está em `analytics_kpi_catalog.json`; a especificação exata
 de colunas e tipos está em `ANALYTICS_SCHEMAS.md`. Nenhum dado real foi usado como fixture.
+
+## Materialization readiness (offline)
+
+Contrato de policy, cobertura, runner transacional local, incrementalidade e os sete
+comandos futuros de dry-run estão em [Analytics Materialization Readiness](ANALYTICS_MATERIALIZATION_READINESS.md).
+SQL ainda não validado no BigQuery; nenhuma tabela analytics foi criada.

@@ -172,3 +172,9 @@ e [catálogo de KPIs](docs/analytics_kpi_catalog.json) explicitam origem, fórmu
 no BigQuery. Sete tabelas estão propostas fora do Terraform ativo. Receita paga permanece
 NULL sem valor liquidado; Meta/atribuição não são presumidos disponíveis. Testes locais:
 `.venv/bin/pytest tests/analytics -q`. Não há job, migration, build ou deploy nesta fase.
+
+## Materialization readiness (offline)
+
+Contrato de policy, cobertura, runner transacional local, incrementalidade e os sete
+comandos futuros de dry-run estão em [Analytics Materialization Readiness](docs/ANALYTICS_MATERIALIZATION_READINESS.md).
+SQL ainda não validado no BigQuery; nenhuma tabela analytics foi criada.

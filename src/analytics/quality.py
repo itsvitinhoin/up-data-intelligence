@@ -17,6 +17,13 @@ GRAINS = {
     "analytics_funnel_daily": ("event_date",),
 }
 RULES = {
+    "policy_missing": "blocking",
+    "policy_hash_mismatch": "blocking",
+    "history_coverage_unknown": "warning_if_incomplete_blocking_if_claimed_complete",
+    "currency_missing": "warning_if_explicit_local_only_otherwise_blocking",
+    "analytics_model_stale": "blocking",
+    "analytics_materialization_duplicate_key": "blocking",
+    "analytics_parity_failure": "blocking",
     "negative_revenue": "blocking",
     "paid_revenue_greater_than_generated": "blocking_if_no_overpayment_allowed",
     "order_without_customer": "warning",

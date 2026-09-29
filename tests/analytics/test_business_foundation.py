@@ -15,7 +15,7 @@ from src.analytics.media import (
     PaidMedia,
     media_metrics,
 )
-from src.analytics.policy import Policy
+from src.analytics.policy import HistoryCoverage, Policy
 from src.analytics.quality import AnalyticsQualityError, validate_outputs
 from src.analytics.schema import SCHEMAS
 
@@ -29,6 +29,15 @@ POLICY = Policy(
     True,
     True,
     ("CONFIRMED", "PROCESSING", "INVOICED", "SHIPPED"),
+    history_coverage=HistoryCoverage(
+        "synthetic-store",
+        "2020-01-01T00:00:00Z",
+        "2029-01-01T00:00:00Z",
+        "synthetic-origin-audit",
+        "synthetic-reviewer",
+        True,
+        True,
+    ),
 )
 
 
