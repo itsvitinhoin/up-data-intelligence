@@ -190,3 +190,10 @@ Nenhuma operação cloud foi realizada; geração incremental e validação real
 A primeira policy MX Fashion e **somente as oito tabelas** foram promovidas para
 configuração versionada/Terraform ativo. Veja [escopo e expectativa do plan](docs/ANALYTICS_TABLES_DEV.md).
 Nenhum provisionamento foi executado; Job, Scheduler, IAM Analytics e HEAD continuam inativos.
+
+## Primeira materialização Analytics DEV manual
+
+O runtime live está preparado com guards para a policy oficial MX Fashion,
+full refresh e confirmação de backfill. [Runbook da primeira execução](docs/ANALYTICS_FIRST_DEV_RUN.md)
+contém IAM/Job novos, comandos futuros de HEAD/run e checks pós-materialização.
+Nenhum build, plan/apply, provisionamento de runtime ou run foi executado nesta etapa.

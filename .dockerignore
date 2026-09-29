@@ -10,3 +10,8 @@
 !sql/**/*.sql
 !docs/
 !docs/upzero-openapi.json
+
+# Only the approved non-secret Analytics policy.
+!config/
+!config/analytics/
+!config/analytics/mx-fashion.dev.json

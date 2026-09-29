@@ -11,6 +11,7 @@ RUN python -m pip install --no-cache-dir --require-hashes --only-binary=:all: -r
     && useradd --uid 10001 --gid 10001 --create-home --shell /usr/sbin/nologin worker
 COPY src ./src
 COPY sql ./sql
+COPY config/analytics/mx-fashion.dev.json ./config/analytics/mx-fashion.dev.json
 COPY docs/upzero-openapi.json ./docs/upzero-openapi.json
 USER 10001:10001
 ENTRYPOINT ["python", "-m", "src.jobs.cli"]

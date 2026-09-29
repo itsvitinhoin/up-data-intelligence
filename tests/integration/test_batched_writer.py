@@ -565,4 +565,5 @@ def test_diagnostic_only_emits_metadata_not_raw_content(tmp_path, monkeypatch):
     assert report["reconstructed_core_batch_rows"]["analytics_events"] == len(rows)
     text = json.dumps(report)
     assert "https://example.invalid" not in text and "next-opaque" not in text
-    assert rows[0]["anonymous_id"] not in text
+    # Match the JSON value, not an accidental short substring inside a random UUID.
+    assert json.dumps(rows[0]["anonymous_id"]) not in text

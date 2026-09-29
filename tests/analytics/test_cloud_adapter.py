@@ -307,7 +307,7 @@ def test_sql_no_global_delete_no_core_write_and_receipt_atomic():
     assert sql.index("SELECT 'RECEIPT'") < sql.index("COMMIT TRANSACTION")
 
 
-def test_cli_live_blocked_before_client_or_policy_read(tmp_path, monkeypatch):
+def test_cli_unapproved_live_blocked_before_client_or_policy_read(tmp_path, monkeypatch):
     from src.analytics.job import main
 
     monkeypatch.setattr(
