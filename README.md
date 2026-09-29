@@ -200,3 +200,8 @@ Nenhum build, plan/apply, provisionamento de runtime ou run foi executado nesta 
 
 Facts acima de 100 mil: [chunking, fechamento de sessões, benchmark e orçamento](docs/ANALYTICS_FACT_CHUNKING.md).
 O runtime usa dias/prefixos e spool temporário; os limites por transporte permanecem.
+
+CHANGE #03: [proposta multi-store, auditoria e rollout](docs/scale/CHANGE_03.md),
+[comparações técnicas de escala/custo](docs/scale/ESTIMATES.md).
+Simulador offline: `python -m scripts.estimate_scale_cost --preset 100-stores --compare`.
+Os modelos de `src/scale` não estão conectados ao runtime; piloto e Terraform ativo preservados.
