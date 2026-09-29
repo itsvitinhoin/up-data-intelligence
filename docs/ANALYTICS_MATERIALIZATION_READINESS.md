@@ -264,3 +264,9 @@ As regras existentes e o quality gate da ingestão permanecem preservados.
 9. Só então autorizar migration/build/deploy/materialização; verificar freshness,
    isolamento por store/policy, custos e reconciliação. Meta e métricas pagas permanecem
    bloqueadas até suas próprias evidências/contratos.
+
+## Cloud adapter — offline readiness
+
+Adapters BigQuery com clientes injetados, staging/publicação transacional, CLI bloqueado
+e Terraform independente estão descritos em [Cloud Adapter](ANALYTICS_CLOUD_ADAPTER.md).
+Nenhuma operação cloud foi realizada; geração incremental e validação real permanecem gates de ativação.

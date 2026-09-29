@@ -7,6 +7,8 @@ execution_id: ContextVar[str | None] = ContextVar("execution_id", default=None)
 
 # Allowlist, not best-effort regex over exceptions containing arbitrary PII.
 SAFE_FIELDS = {
+    "publication_id",
+    "affected_scope_count",
     "model",
     "policy_hash",
     "report_from",

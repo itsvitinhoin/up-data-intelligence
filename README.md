@@ -178,3 +178,9 @@ NULL sem valor liquidado; Meta/atribuição não são presumidos disponíveis. T
 Contrato de policy, cobertura, runner transacional local, incrementalidade e os sete
 comandos futuros de dry-run estão em [Analytics Materialization Readiness](docs/ANALYTICS_MATERIALIZATION_READINESS.md).
 SQL ainda não validado no BigQuery; nenhuma tabela analytics foi criada.
+
+## Cloud adapter — offline readiness
+
+Adapters BigQuery com clientes injetados, staging/publicação transacional, CLI bloqueado
+e Terraform independente estão descritos em [Cloud Adapter](docs/ANALYTICS_CLOUD_ADAPTER.md).
+Nenhuma operação cloud foi realizada; geração incremental e validação real permanecem gates de ativação.
