@@ -1,4 +1,4 @@
-"""Analytics schema proposal only. Not registered with runtime Repository/Terraform."""
+"""Reviewed analytics schemas. Terraform activation is separate from ingestion runtime."""
 
 import json
 from pathlib import Path

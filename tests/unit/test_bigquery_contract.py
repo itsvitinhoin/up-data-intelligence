@@ -5,6 +5,7 @@ from unittest.mock import Mock
 
 import pytest
 
+from src.analytics.provisioning import ACTIVE_ANALYTICS_TABLES
 from src.bigquery.catalog import TABLES
 from src.bigquery.repository import BigQueryRepository, merge_sql
 from src.domain.models import SafeError
@@ -19,7 +20,7 @@ def test_generated_schemas_match_catalog():
     manifest = json.loads(Path("infra/terraform/tables.json").read_text())
     proposed = json.loads(Path("infra/terraform/meta_tables.proposed.json").read_text())
     assert not set(manifest) & set(proposed)
-    assert set(manifest) | set(proposed) == set(TABLES)
+    assert set(manifest) | set(proposed) == set(TABLES) | ACTIVE_ANALYTICS_TABLES
     assert not any(s.dataset == "up_analytics" for s in TABLES.values())
 
 

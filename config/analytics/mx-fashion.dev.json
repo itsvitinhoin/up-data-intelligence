@@ -1,0 +1,21 @@
+{
+  "store_id": "mx-fashion",
+  "policy_version": "1.0.0",
+  "reporting_timezone": "America/Sao_Paulo",
+  "currency": "BRL",
+  "qualifying_order_statuses": [
+    "RESERVED",
+    "CONFIRMED",
+    "PROCESSING",
+    "INVOICED",
+    "SHIPPED"
+  ],
+  "history_complete": false,
+  "facts_complete": true,
+  "history_from": "2026-09-01T00:00:00Z",
+  "report_from": "2026-09-01",
+  "report_to": "2026-09-28",
+  "as_of": "2026-09-28T03:00:00Z",
+  "history_coverage": null,
+  "allow_unknown_currency_local": false
+}

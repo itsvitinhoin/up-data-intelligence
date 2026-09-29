@@ -499,7 +499,7 @@ def test_invalid_purchase_sequence_checks():
     assert {"purchase_sequence_gap", "invalid_first_purchase"} <= rules
 
 
-def test_schemas_cover_actual_results_and_are_not_active_terraform():
+def test_schemas_cover_actual_results_and_are_active_tables_only():
     import json
 
     output = run([order()], [customer()], [item()])
@@ -511,7 +511,7 @@ def test_schemas_cover_actual_results_and_are_not_active_terraform():
         )
         assert {f["name"]: f["type"] for f in saved} == SCHEMAS[table].fields
     active = json.loads(Path("infra/terraform/tables.json").read_text())
-    assert not set(active) & set(SCHEMAS)
+    assert set(SCHEMAS) <= set(active)
 
 
 def test_sql_pruning_no_meta_dependency_and_no_persistent_writes():

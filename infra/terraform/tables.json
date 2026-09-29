@@ -154,5 +154,75 @@
     "cluster": [
       "store_id"
     ]
+  },
+  "analytics_store_daily": {
+    "dataset": "up_analytics",
+    "partition": "order_date",
+    "cluster": [
+      "store_id",
+      "policy_hash"
+    ]
+  },
+  "analytics_customer_metrics": {
+    "dataset": "up_analytics",
+    "partition": null,
+    "cluster": [
+      "store_id",
+      "customer_id",
+      "policy_hash"
+    ]
+  },
+  "analytics_customer_purchase_sequence": {
+    "dataset": "up_analytics",
+    "partition": "order_date",
+    "cluster": [
+      "store_id",
+      "customer_id",
+      "policy_hash"
+    ]
+  },
+  "analytics_cohorts": {
+    "dataset": "up_analytics",
+    "partition": "cohort_month",
+    "cluster": [
+      "store_id",
+      "months_since_first_purchase",
+      "policy_hash"
+    ]
+  },
+  "analytics_purchase_distribution": {
+    "dataset": "up_analytics",
+    "partition": "cohort_month",
+    "cluster": [
+      "store_id",
+      "purchase_bucket",
+      "policy_hash"
+    ]
+  },
+  "analytics_products_daily": {
+    "dataset": "up_analytics",
+    "partition": "order_date",
+    "cluster": [
+      "store_id",
+      "product_key",
+      "policy_hash"
+    ]
+  },
+  "analytics_funnel_daily": {
+    "dataset": "up_analytics",
+    "partition": "event_date",
+    "cluster": [
+      "store_id",
+      "policy_hash"
+    ]
+  },
+  "analytics_publications": {
+    "dataset": "up_analytics",
+    "partition": null,
+    "cluster": [
+      "store_id",
+      "policy_hash",
+      "record_kind"
+    ]
   }
 }

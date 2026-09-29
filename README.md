@@ -184,3 +184,9 @@ SQL ainda não validado no BigQuery; nenhuma tabela analytics foi criada.
 Adapters BigQuery com clientes injetados, staging/publicação transacional, CLI bloqueado
 e Terraform independente estão descritos em [Cloud Adapter](docs/ANALYTICS_CLOUD_ADAPTER.md).
 Nenhuma operação cloud foi realizada; geração incremental e validação real permanecem gates de ativação.
+
+## Analytics DEV — tabelas e policy aprovadas
+
+A primeira policy MX Fashion e **somente as oito tabelas** foram promovidas para
+configuração versionada/Terraform ativo. Veja [escopo e expectativa do plan](docs/ANALYTICS_TABLES_DEV.md).
+Nenhum provisionamento foi executado; Job, Scheduler, IAM Analytics e HEAD continuam inativos.

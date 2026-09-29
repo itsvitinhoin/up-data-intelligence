@@ -1,0 +1,92 @@
+[
+  {
+    "name": "record_kind",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "publication_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "store_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "policy_hash",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "generation",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "as_of",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "report_from",
+    "type": "DATE",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "report_to",
+    "type": "DATE",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "started_at",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "finished_at",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "status",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "analytics_version",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "source_watermark",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "models",
+    "type": "JSON",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "row_counts",
+    "type": "JSON",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "bytes_processed",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "bytes_processed_before_commit",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "commit_job_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  }
+]

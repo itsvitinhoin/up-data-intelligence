@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from src.analytics.provisioning import promote_tables
 from src.bigquery.catalog import META_TABLE_NAMES, TABLES
 
 
@@ -54,6 +55,7 @@ def generate() -> None:
         )
         path.mkdir(parents=True, exist_ok=True)
         (path / (name + ".sql")).write_text(sql + ";\n")
+    manifest.update(promote_tables())
     Path("infra/terraform/tables.json").write_text(json.dumps(manifest, indent=2) + "\n")
     Path("infra/terraform/meta_tables.proposed.json").write_text(
         json.dumps(meta_manifest, indent=2) + "\n"
