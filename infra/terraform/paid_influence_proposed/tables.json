@@ -1,0 +1,42 @@
+{
+  "analytics_paid_touchpoints": {
+    "dataset": "up_analytics",
+    "partition": "occurred_at",
+    "cluster": [
+      "store_id",
+      "campaign_id",
+      "fact_id"
+    ],
+    "deletion_protection": true
+  },
+  "analytics_customer_paid_influence": {
+    "dataset": "up_analytics",
+    "partition": null,
+    "cluster": [
+      "store_id",
+      "customer_id"
+    ],
+    "deletion_protection": true
+  },
+  "analytics_order_paid_influence": {
+    "dataset": "up_analytics",
+    "partition": null,
+    "cluster": [
+      "store_id",
+      "customer_id",
+      "order_id",
+      "campaign_id"
+    ],
+    "deletion_protection": true
+  },
+  "analytics_customer_timeline": {
+    "dataset": "up_analytics",
+    "partition": "occurred_at",
+    "cluster": [
+      "store_id",
+      "customer_id",
+      "order_id"
+    ],
+    "deletion_protection": true
+  }
+}

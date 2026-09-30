@@ -1,0 +1,466 @@
+"use client";
+import { PageExport, PrintContext } from "@/components/exports";
+import { PeriodFilter } from "@/components/period-filter";
+import { useState, useEffect } from "react";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import {
+  Menu,
+  ChevronDown,
+  ChevronRight,
+  Search,
+  LogOut,
+  Bell,
+  ArrowUpRight,
+  Plug,
+  UserCog,
+} from "lucide-react";
+import { navigation } from "@/config/navigation";
+import { defaultFilters } from "@/config/tenants";
+import { useWorkspace } from "@/features/providers";
+import { useResource } from "@/hooks/use-resource";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Sheet,
+  SheetContent,
+  SheetTitle,
+  SheetDescription,
+  SheetTrigger,
+} from "@/components/ui/sheet";
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogTrigger,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { Choice, Empty } from "@/components/ui-kit";
+import { Login, OperationPicker } from "@/features/auth";
+import { authorizedTenants } from "@/services/api";
+import { AdminShell, CompaniesPage } from "@/features/admin";
+function Redirect({ to }: { to: string }) {
+  const router = useRouter();
+  useEffect(() => {
+    router.replace(to);
+  }, [router, to]);
+  return null;
+}
+export function Access({ children }: { children: React.ReactNode }) {
+  const { session, scope } = useWorkspace();
+  const pathname = usePathname();
+  if (!session) return <Login />;
+  if (pathname === "/" || pathname === "/login") {
+    if (session.role === "ADMIN") return <Redirect to="/admin" />;
+    if (!scope) return <OperationPicker />;
+    return <Redirect to={"/" + scope.operation.toLowerCase()} />;
+  }
+  if (pathname.startsWith("/admin")) {
+    if (session.role !== "ADMIN")
+      return (
+        <main className="workspace-screen">
+          <h1>Acesso restrito</h1>
+          <p>Área exclusiva da UP.</p>
+          <Link href="/">Voltar à sua marca</Link>
+        </main>
+      );
+    return (
+      <AdminShell>
+        {pathname === "/admin" ? <CompaniesPage /> : children}
+      </AdminShell>
+    );
+  }
+  if (!scope)
+    return session.role === "ADMIN" ? (
+      <Redirect to="/admin" />
+    ) : (
+      <OperationPicker />
+    );
+  if (pathname === "/settings" && session.role !== "ADMIN")
+    return <Redirect to={"/" + scope.operation.toLowerCase()} />;
+  const required = pathname.startsWith("/b2b")
+    ? "B2B"
+    : pathname.startsWith("/b2c")
+      ? "B2C"
+      : undefined;
+  if (required && scope.operation !== required) {
+    const available = authorizedTenants(session).some((t) =>
+      t.brands.some((b) => b.operations.some((o) => o.type === required)),
+    );
+    return available ? (
+      <OperationPicker required={required} />
+    ) : (
+      <Redirect to={"/" + scope.operation.toLowerCase()} />
+    );
+  }
+  return <Shell>{children}</Shell>;
+}
+function Navigation({ close }: { close?: () => void }) {
+  const path = usePathname();
+  const { scope, session, select } = useWorkspace();
+  const [expanded, setExpanded] = useState<string[]>([
+    ...(path.startsWith("/erp") ? ["ERP"] : []),
+    ...(path.startsWith("/campaigns") ? ["Campanhas"] : []),
+  ]);
+  const tenant = (session ? authorizedTenants(session) : []).find(
+    (t) => t.id === scope?.tenant_id,
+  );
+  const brand = tenant?.brands.find((b) =>
+    b.operations.some((o) => o.id === scope?.store_id),
+  );
+  function follow(href: string) {
+    const target = href.startsWith("/b2c")
+      ? "B2C"
+      : href.startsWith("/b2b")
+        ? "B2B"
+        : null;
+    if (target && target !== scope?.operation) {
+      const op = brand?.operations.find((o) => o.type === target);
+      if (op && scope)
+        select({ ...scope, store_id: op.id, operation: op.type });
+    }
+    close?.();
+  }
+  return (
+    <>
+      <div className="brand">
+        <div className="brand-mark">UP</div>
+        <div>
+          <div className="brand-name">UP Data Intelligence</div>
+          <div className="brand-sub">Inteligência comercial</div>
+        </div>
+      </div>
+      <nav className="nav" aria-label="Principal">
+        <div>
+          <div className="nav-label">Workspace</div>
+          <ul>
+            {navigation
+              .filter(
+                (item) =>
+                  (item.label !== "Configurações" ||
+                    session?.role === "ADMIN") &&
+                  (!item.operation ||
+                    (scope?.operation === item.operation &&
+                      brand?.operations.some(
+                        (o) => o.type === item.operation,
+                      ))),
+              )
+              .map((item) => (
+                <li key={item.href}>
+                  {item.children ? (
+                    <>
+                      <button
+                        className="nav-item"
+                        aria-expanded={expanded.includes(item.label)}
+                        onClick={() =>
+                          setExpanded((e) =>
+                            e.includes(item.label)
+                              ? e.filter((v) => v !== item.label)
+                              : [...e, item.label],
+                          )
+                        }
+                      >
+                        <item.icon />
+                        <span className="grow">{item.label}</span>
+                        <ChevronDown className="chev" />
+                      </button>
+                      <div
+                        className="nav-sub"
+                        hidden={!expanded.includes(item.label)}
+                      >
+                        <ul>
+                          {item.children.map(([label, href]) => (
+                            <li key={href}>
+                              <Link
+                                href={href}
+                                onClick={() => follow(href)}
+                                aria-current={
+                                  path === href ? "page" : undefined
+                                }
+                              >
+                                {label}
+                              </Link>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </>
+                  ) : (
+                    <Link
+                      className="nav-item"
+                      href={item.href}
+                      onClick={() => follow(item.href)}
+                      aria-current={path === item.href ? "page" : undefined}
+                    >
+                      <item.icon />
+                      <span className="grow">{item.label}</span>
+                    </Link>
+                  )}
+                </li>
+              ))}
+          </ul>
+        </div>
+        {session?.role === "ADMIN" && (
+          <div>
+            <div className="nav-label">Administração</div>
+            <ul>
+              {[
+                ["Marcas", "/admin", Plug],
+                ["Usuários", "/admin/users", UserCog],
+              ].map(([label, href, Icon]) => (
+                <li key={String(href)}>
+                  <Link
+                    className="nav-item"
+                    href={String(href)}
+                    onClick={close}
+                    aria-current={path === href ? "page" : undefined}
+                  >
+                    {typeof Icon !== "string" && <Icon />}
+                    {String(label)}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </nav>
+    </>
+  );
+}
+function SearchDialog() {
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState("");
+  const data = useResource("customers");
+  const matches =
+    data.data?.filter((c) =>
+      c.name.toLowerCase().includes(text.toLowerCase()),
+    ) ?? [];
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <button className="search glass">
+          <Search />
+          <span>Buscar cliente...</span>
+          <kbd>⌕</kbd>
+        </button>
+      </DialogTrigger>
+      <DialogContent className="glass">
+        <DialogTitle>Encontre um cliente</DialogTitle>
+        <DialogDescription>Busca na operação selecionada.</DialogDescription>
+        <Input
+          aria-label="Buscar cliente pelo nome"
+          placeholder="Nome da empresa"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+        />
+        <div className="search-results">
+          {matches.map((c) => (
+            <Link
+              onClick={() => setOpen(false)}
+              key={c.id}
+              href={`/customers/${c.id}`}
+            >
+              <span>
+                {c.name}
+                <small>
+                  {c.city} · {c.state}
+                </small>
+              </span>
+              <ArrowUpRight size={16} />
+            </Link>
+          ))}
+          {!matches.length && <Empty />}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+export function Shell({ children }: { children: React.ReactNode }) {
+  const { session, scope, select, logout } = useWorkspace();
+  const router = useRouter();
+  const path = usePathname();
+  const [menu, setMenu] = useState(false);
+  const [notifications, setNotifications] = useState(true);
+  const options = (session ? authorizedTenants(session) : [])
+    .filter((t) => session?.tenant_ids.includes(t.id))
+    .flatMap((t) =>
+      t.brands.flatMap((b) =>
+        b.operations.map((o) => ({
+          value: o.id,
+          label: `${b.name} · ${o.type}`,
+          tenant: t.id,
+          operation: o.type,
+        })),
+      ),
+    );
+  const selected = options.find((o) => o.value === scope?.store_id);
+  return (
+    <div className="app">
+      <aside className="sidebar">
+        <Navigation />
+        <div className="side-foot glass">
+          <span className="avatar">UP</span>
+          <div className="who">
+            {session?.name}
+            <small>{session?.role.toLowerCase()} · Demo</small>
+          </div>
+          <Button
+            size="icon"
+            variant="ghost"
+            aria-label="Sair"
+            onClick={logout}
+          >
+            <LogOut size={15} />
+          </Button>
+        </div>
+      </aside>
+      <main className="main" id="main">
+        <PrintContext />
+        <div className="topbar">
+          <Sheet open={menu} onOpenChange={setMenu}>
+            <SheetTrigger asChild>
+              <Button
+                className="icon-btn menu-btn"
+                aria-label="Abrir navegação"
+              >
+                <Menu />
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="left" className="mobile-navigation">
+              <SheetTitle className="sr-only">Navegação</SheetTitle>
+              <SheetDescription className="sr-only">
+                Módulos disponíveis para a operação selecionada.
+              </SheetDescription>
+              <Navigation close={() => setMenu(false)} />
+            </SheetContent>
+          </Sheet>
+          <div className="crumbs">
+            Workspace <ChevronRight size={13} />
+            <b>{scope?.operation}</b>
+          </div>
+          <div className="spacer" />
+          <SearchDialog />
+          {path !== "/b2c/stock" && <PeriodFilter />}
+          <PageExport />
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Encerrar sessão"
+            onClick={logout}
+          >
+            <LogOut size={15} />
+          </Button>
+          <Choice
+            label={
+              session?.role === "ADMIN"
+                ? "Marca e operação"
+                : "Operação da marca"
+            }
+            value={scope?.store_id ?? ""}
+            options={options}
+            onChange={(id) => {
+              const o = options.find((x) => x.value === id);
+              if (o) {
+                select({
+                  tenant_id: o.tenant,
+                  store_id: o.value,
+                  operation: o.operation,
+                });
+                router.push("/" + o.operation.toLowerCase());
+              }
+            }}
+          />
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button
+                variant="ghost"
+                className="icon-btn"
+                aria-label="Notificações"
+              >
+                <Bell />
+                {notifications && <span className="notification-dot" />}
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="glass">
+              <DialogTitle>Seu workspace</DialogTitle>
+              <DialogDescription>
+                Notificações demonstrativas.
+              </DialogDescription>
+              {notifications ? (
+                <>
+                  <p>Seu ambiente de demonstração está pronto para explorar.</p>
+                  <Button
+                    onClick={() => setNotifications(false)}
+                    className="btn"
+                  >
+                    Marcar como lida
+                  </Button>
+                </>
+              ) : (
+                <Empty
+                  title="Tudo em dia"
+                  description="Você não tem notificações pendentes."
+                />
+              )}
+            </DialogContent>
+          </Dialog>
+        </div>
+        <div className="workspace-strip">
+          <span>
+            {selected?.label}{" "}
+            <span className="muted">
+              /{" "}
+              {path.startsWith("/admin")
+                ? "Administração"
+                : "Inteligência comercial"}
+            </span>
+          </span>
+          <span className="badge badge--up">Dados demonstrativos</span>
+        </div>
+        {children}
+        <footer className="note">
+          UP Data Intelligence · Ambiente demonstrativo · Nenhuma integração
+          real conectada
+        </footer>
+      </main>
+    </div>
+  );
+}
+export function FiltersBar({ showChannel = true }: { showChannel?: boolean }) {
+  const { filters, setFilters } = useWorkspace();
+  return (
+    <section className="filters glass" aria-label="Filtros globais">
+      {showChannel && (
+        <Choice
+          label="Canal"
+          value={filters.channel}
+          onChange={(channel) => setFilters({ ...filters, channel })}
+          options={[
+            { value: "all", label: "Todos os canais" },
+            { value: "meta", label: "Meta Ads" },
+            { value: "google", label: "Google Ads" },
+          ]}
+        />
+      )}
+      <Choice
+        label="Coleção"
+        value={filters.collection}
+        onChange={(collection) => setFilters({ ...filters, collection })}
+        options={[
+          { value: "all", label: "Todas as coleções" },
+          { value: "primavera", label: "Primavera 26" },
+          { value: "verao", label: "Alto Verão 27" },
+        ]}
+      />
+      <div className="push">
+        <Button
+          variant="ghost"
+          className="btn-ghost"
+          onClick={() => setFilters(defaultFilters)}
+        >
+          Limpar filtros
+        </Button>
+      </div>
+    </section>
+  );
+}

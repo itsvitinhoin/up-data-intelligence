@@ -1,0 +1,1824 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "UP Customer Intelligence \u2014 OFFLINE CONTRACT",
+    "version": "0.1.0",
+    "description": "No deployed server. HTTP authentication integration is future work. Trusted Principal required offline; store_id is not authorization."
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "paths": {
+    "/v1/customers": {
+      "get": {
+        "parameters": [
+          {
+            "name": "store_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "customer_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "city",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "paid_media_influenced",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "has_repurchase",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "first_purchase_date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "last_purchase_date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "min_requested_revenue",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "max_requested_revenue",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 20,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Request rejected without sensitive details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Request rejected without sensitive details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request rejected without sensitive details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request rejected without sensitive details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Request rejected without sensitive details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Materialized-only response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerListItemPage"
+                }
+              }
+            }
+          }
+        },
+        "x-implementation-status": "offline-in-process"
+      }
+    },
+    "/v1/customers/{customer_id}": {
+      "get": {
+        "parameters": [
+          {
+            "name": "store_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 20,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "orders_page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "products_page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "orders_cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "products_cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "customer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Request rejected without sensitive details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Request rejected without sensitive details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request rejected without sensitive details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request rejected without sensitive details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Request rejected without sensitive details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Materialized-only response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerDetail"
+                }
+              }
+            }
+          }
+        },
+        "x-implementation-status": "offline-in-process"
+      }
+    },
+    "/v1/customers/{customer_id}/timeline": {
+      "get": {
+        "parameters": [
+          {
+            "name": "store_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 20,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "customer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Request rejected without sensitive details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Request rejected without sensitive details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request rejected without sensitive details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request rejected without sensitive details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Request rejected without sensitive details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Materialized-only response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimelineEventPage"
+                }
+              }
+            }
+          }
+        },
+        "x-implementation-status": "offline-in-process"
+      }
+    },
+    "/v1/orders/influenced": {
+      "get": {
+        "parameters": [
+          {
+            "name": "store_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "campaign_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "customer_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "date_from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "date_to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "min_requested_revenue",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "max_requested_revenue",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "influence_scope",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "LIFETIME",
+                "ACQUISITION",
+                "REPEAT_PURCHASE"
+              ]
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 20,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Request rejected without sensitive details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Request rejected without sensitive details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request rejected without sensitive details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request rejected without sensitive details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Request rejected without sensitive details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Materialized-only response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderPage"
+                }
+              }
+            }
+          }
+        },
+        "x-implementation-status": "offline-in-process"
+      }
+    },
+    "/v1/campaigns/{campaign_id}/customers": {
+      "get": {
+        "x-implementation-status": "future",
+        "description": "Future customer/order/requested/fulfilled campaign participation contract; currently returns501. No exclusive credit.",
+        "parameters": [
+          {
+            "name": "store_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "campaign_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "501": {
+            "description": "Not implemented in the offline adapter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Future verified authentication; never trust request-supplied stores/role."
+      }
+    },
+    "schemas": {
+      "Profile": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "customer_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "customer_type": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "company_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "trade_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "state": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "city": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "first_order_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "last_purchase_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "total_orders": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "total_requested_revenue": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^-?[0-9]+(?:\\.[0-9]+)?$",
+            "description": "Exact decimal; never a binary floating-point amount."
+          },
+          "total_fulfilled_revenue": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^-?[0-9]+(?:\\.[0-9]+)?$",
+            "description": "Exact decimal; never a binary floating-point amount."
+          },
+          "total_requested_quantity": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^-?[0-9]+(?:\\.[0-9]+)?$",
+            "description": "Exact decimal; never a binary floating-point amount."
+          },
+          "total_fulfilled_quantity": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^-?[0-9]+(?:\\.[0-9]+)?$",
+            "description": "Exact decimal; never a binary floating-point amount."
+          },
+          "first_purchase_requested_revenue": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^-?[0-9]+(?:\\.[0-9]+)?$",
+            "description": "Exact decimal; never a binary floating-point amount."
+          },
+          "first_purchase_fulfilled_revenue": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^-?[0-9]+(?:\\.[0-9]+)?$",
+            "description": "Exact decimal; never a binary floating-point amount."
+          },
+          "purchase_count": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "has_repurchase": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "days_since_last_purchase": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "ltv_observed": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^-?[0-9]+(?:\\.[0-9]+)?$",
+            "description": "Exact decimal; never a binary floating-point amount."
+          },
+          "ltv_basis": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "history_complete": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "customer_id",
+          "customer_type",
+          "company_name",
+          "trade_name",
+          "state",
+          "city",
+          "first_order_at",
+          "last_purchase_at",
+          "total_orders",
+          "total_requested_revenue",
+          "total_fulfilled_revenue",
+          "total_requested_quantity",
+          "total_fulfilled_quantity",
+          "first_purchase_requested_revenue",
+          "first_purchase_fulfilled_revenue",
+          "purchase_count",
+          "has_repurchase",
+          "days_since_last_purchase",
+          "ltv_observed",
+          "ltv_basis",
+          "history_complete"
+        ]
+      },
+      "CustomerListItem": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "customer_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "customer_type": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "company_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "trade_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "state": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "city": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "first_order_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "last_purchase_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "total_orders": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "total_requested_revenue": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^-?[0-9]+(?:\\.[0-9]+)?$",
+            "description": "Exact decimal; never a binary floating-point amount."
+          },
+          "total_fulfilled_revenue": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^-?[0-9]+(?:\\.[0-9]+)?$",
+            "description": "Exact decimal; never a binary floating-point amount."
+          },
+          "total_requested_quantity": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^-?[0-9]+(?:\\.[0-9]+)?$",
+            "description": "Exact decimal; never a binary floating-point amount."
+          },
+          "total_fulfilled_quantity": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^-?[0-9]+(?:\\.[0-9]+)?$",
+            "description": "Exact decimal; never a binary floating-point amount."
+          },
+          "first_purchase_requested_revenue": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^-?[0-9]+(?:\\.[0-9]+)?$",
+            "description": "Exact decimal; never a binary floating-point amount."
+          },
+          "first_purchase_fulfilled_revenue": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^-?[0-9]+(?:\\.[0-9]+)?$",
+            "description": "Exact decimal; never a binary floating-point amount."
+          },
+          "purchase_count": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "has_repurchase": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "days_since_last_purchase": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "ltv_observed": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^-?[0-9]+(?:\\.[0-9]+)?$",
+            "description": "Exact decimal; never a binary floating-point amount."
+          },
+          "ltv_basis": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "history_complete": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "paid_media_influenced": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "acquisition_influenced": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "repeat_purchase_influenced": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "customer_id",
+          "customer_type",
+          "company_name",
+          "trade_name",
+          "state",
+          "city",
+          "first_order_at",
+          "last_purchase_at",
+          "total_orders",
+          "total_requested_revenue",
+          "total_fulfilled_revenue",
+          "total_requested_quantity",
+          "total_fulfilled_quantity",
+          "first_purchase_requested_revenue",
+          "first_purchase_fulfilled_revenue",
+          "purchase_count",
+          "has_repurchase",
+          "days_since_last_purchase",
+          "ltv_observed",
+          "ltv_basis",
+          "history_complete",
+          "paid_media_influenced",
+          "acquisition_influenced",
+          "repeat_purchase_influenced"
+        ]
+      },
+      "Order": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "customer_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "order_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "purchase_number": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "created_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "order_status": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "requested_total": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^-?[0-9]+(?:\\.[0-9]+)?$",
+            "description": "Exact decimal; never a binary floating-point amount."
+          },
+          "fulfilled_total": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^-?[0-9]+(?:\\.[0-9]+)?$",
+            "description": "Exact decimal; never a binary floating-point amount."
+          },
+          "requested_items_qty": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^-?[0-9]+(?:\\.[0-9]+)?$",
+            "description": "Exact decimal; never a binary floating-point amount."
+          },
+          "fulfilled_items_qty": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^-?[0-9]+(?:\\.[0-9]+)?$",
+            "description": "Exact decimal; never a binary floating-point amount."
+          },
+          "paid_media_influenced": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "campaigns": {
+            "type": [
+              "object",
+              "array",
+              "null"
+            ]
+          },
+          "campaign_count": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "first_campaign_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "last_campaign_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "evidence_type": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "influence_scope": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "influence_by_scope": {
+            "type": [
+              "object",
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "customer_id",
+          "order_id",
+          "purchase_number",
+          "created_at",
+          "order_status",
+          "requested_total",
+          "fulfilled_total",
+          "requested_items_qty",
+          "fulfilled_items_qty",
+          "paid_media_influenced",
+          "campaigns",
+          "campaign_count",
+          "first_campaign_id",
+          "last_campaign_id",
+          "evidence_type",
+          "influence_scope",
+          "influence_by_scope"
+        ]
+      },
+      "Product": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "product_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "product_key": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "variant_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sku": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "resolution_status": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "orders_count": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "requested_quantity": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^-?[0-9]+(?:\\.[0-9]+)?$",
+            "description": "Exact decimal; never a binary floating-point amount."
+          },
+          "fulfilled_quantity": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^-?[0-9]+(?:\\.[0-9]+)?$",
+            "description": "Exact decimal; never a binary floating-point amount."
+          },
+          "requested_revenue": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^-?[0-9]+(?:\\.[0-9]+)?$",
+            "description": "Exact decimal; never a binary floating-point amount."
+          },
+          "fulfilled_revenue": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^-?[0-9]+(?:\\.[0-9]+)?$",
+            "description": "Exact decimal; never a binary floating-point amount."
+          },
+          "first_purchase_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "last_purchase_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "revenue_basis": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "product_id",
+          "product_key",
+          "variant_id",
+          "sku",
+          "resolution_status",
+          "orders_count",
+          "requested_quantity",
+          "fulfilled_quantity",
+          "requested_revenue",
+          "fulfilled_revenue",
+          "first_purchase_at",
+          "last_purchase_at",
+          "revenue_basis"
+        ]
+      },
+      "Journey": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "first_touch_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "first_paid_touch_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "last_paid_touch_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "first_campaign_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "last_campaign_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "total_events": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "total_sessions": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "total_products_viewed": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "total_cart_events": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "total_checkout_events": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "timeline_start": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "timeline_end": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "first_touch_at",
+          "first_paid_touch_at",
+          "last_paid_touch_at",
+          "first_campaign_id",
+          "last_campaign_id",
+          "total_events",
+          "total_sessions",
+          "total_products_viewed",
+          "total_cart_events",
+          "total_checkout_events",
+          "timeline_start",
+          "timeline_end"
+        ]
+      },
+      "TimelineEvent": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "event_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "occurred_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "channel": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "campaign_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "adset_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "ad_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "product_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "variant_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "order_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "value": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^-?[0-9]+(?:\\.[0-9]+)?$",
+            "description": "Exact decimal; never a binary floating-point amount."
+          },
+          "quantity": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^-?[0-9]+(?:\\.[0-9]+)?$",
+            "description": "Exact decimal; never a binary floating-point amount."
+          },
+          "record_type": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "order_status": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "requested_total": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^-?[0-9]+(?:\\.[0-9]+)?$",
+            "description": "Exact decimal; never a binary floating-point amount."
+          },
+          "fulfilled_total": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^-?[0-9]+(?:\\.[0-9]+)?$",
+            "description": "Exact decimal; never a binary floating-point amount."
+          },
+          "requested_items_qty": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^-?[0-9]+(?:\\.[0-9]+)?$",
+            "description": "Exact decimal; never a binary floating-point amount."
+          },
+          "fulfilled_items_qty": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^-?[0-9]+(?:\\.[0-9]+)?$",
+            "description": "Exact decimal; never a binary floating-point amount."
+          },
+          "confidence_type": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "event_name",
+          "occurred_at",
+          "channel",
+          "campaign_id",
+          "adset_id",
+          "ad_id",
+          "product_id",
+          "variant_id",
+          "order_id",
+          "value",
+          "quantity",
+          "record_type",
+          "order_status",
+          "requested_total",
+          "fulfilled_total",
+          "requested_items_qty",
+          "fulfilled_items_qty",
+          "confidence_type"
+        ]
+      },
+      "Commercial": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "total_orders": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "purchase_count": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "total_requested_revenue": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^-?[0-9]+(?:\\.[0-9]+)?$",
+            "description": "Exact decimal; never a binary floating-point amount."
+          },
+          "total_fulfilled_revenue": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^-?[0-9]+(?:\\.[0-9]+)?$",
+            "description": "Exact decimal; never a binary floating-point amount."
+          },
+          "total_requested_quantity": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^-?[0-9]+(?:\\.[0-9]+)?$",
+            "description": "Exact decimal; never a binary floating-point amount."
+          },
+          "total_fulfilled_quantity": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^-?[0-9]+(?:\\.[0-9]+)?$",
+            "description": "Exact decimal; never a binary floating-point amount."
+          },
+          "ltv_observed": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^-?[0-9]+(?:\\.[0-9]+)?$",
+            "description": "Exact decimal; never a binary floating-point amount."
+          },
+          "ltv_basis": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "total_orders",
+          "purchase_count",
+          "total_requested_revenue",
+          "total_fulfilled_revenue",
+          "total_requested_quantity",
+          "total_fulfilled_quantity",
+          "ltv_observed",
+          "ltv_basis"
+        ]
+      },
+      "Error": {
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "object",
+            "required": [
+              "code"
+            ],
+            "properties": {
+              "code": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "Metadata": {
+        "type": "object",
+        "required": [
+          "store_id",
+          "generation",
+          "policy_hash",
+          "as_of",
+          "calculated_at",
+          "timezone",
+          "report_from",
+          "report_to"
+        ],
+        "properties": {
+          "store_id": {
+            "type": "string"
+          },
+          "generation": {
+            "type": "string"
+          },
+          "policy_hash": {
+            "type": "string"
+          },
+          "as_of": {
+            "type": "string"
+          },
+          "calculated_at": {
+            "type": "string"
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "report_from": {
+            "type": "string"
+          },
+          "report_to": {
+            "type": "string"
+          }
+        }
+      },
+      "Pagination": {
+        "type": "object",
+        "required": [
+          "page",
+          "page_size",
+          "cursor"
+        ],
+        "properties": {
+          "page": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "page_size": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "cursor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Signed next-page cursor; null at end."
+          }
+        }
+      },
+      "CustomerListItemPage": {
+        "type": "object",
+        "required": [
+          "data",
+          "pagination",
+          "metadata"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/CustomerListItem"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/Pagination"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/Metadata"
+          }
+        }
+      },
+      "OrderPage": {
+        "type": "object",
+        "required": [
+          "data",
+          "pagination",
+          "metadata"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/Order"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/Pagination"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/Metadata"
+          }
+        }
+      },
+      "ProductPage": {
+        "type": "object",
+        "required": [
+          "data",
+          "pagination",
+          "metadata"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/Product"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/Pagination"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/Metadata"
+          }
+        }
+      },
+      "TimelineEventPage": {
+        "type": "object",
+        "required": [
+          "data",
+          "pagination",
+          "metadata"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/TimelineEvent"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/Pagination"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/Metadata"
+          }
+        }
+      },
+      "CustomerDetail": {
+        "type": "object",
+        "required": [
+          "profile",
+          "commercial",
+          "journey",
+          "marketing",
+          "orders",
+          "products",
+          "metadata"
+        ],
+        "properties": {
+          "profile": {
+            "$ref": "#/components/schemas/Profile"
+          },
+          "commercial": {
+            "$ref": "#/components/schemas/Commercial"
+          },
+          "journey": {
+            "$ref": "#/components/schemas/Journey"
+          },
+          "orders": {
+            "$ref": "#/components/schemas/OrderPage"
+          },
+          "products": {
+            "$ref": "#/components/schemas/ProductPage"
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/Metadata"
+          },
+          "marketing": {
+            "type": "object",
+            "required": [
+              "paid_media_influenced",
+              "acquisition_influenced",
+              "repeat_purchase_influenced",
+              "campaigns",
+              "campaigns_truncated"
+            ],
+            "properties": {
+              "paid_media_influenced": {
+                "type": "boolean"
+              },
+              "acquisition_influenced": {
+                "type": "boolean"
+              },
+              "repeat_purchase_influenced": {
+                "type": "boolean"
+              },
+              "campaigns_truncated": {
+                "type": "boolean"
+              },
+              "campaigns": {
+                "type": "array",
+                "maxItems": 100,
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

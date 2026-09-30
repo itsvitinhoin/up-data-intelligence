@@ -248,3 +248,180 @@ def transform(raw: dict[str, Any], repo: Repository) -> Batch:
         batch.written += int(old is None)
         batch.updated += int(old is not None)
     return batch
+
+
+def normalize_foundation(
+    resource: str,
+    source: dict[str, Any],
+    account: Account,
+    insights: Insights | None,
+    *,
+    observed_at: str,
+    level: str = "ad",
+) -> dict[str, Any]:
+    """CHANGE #13 pure projection into separate proposed schemas, no Repository IO."""
+    from decimal import ROUND_HALF_EVEN, localcontext
+
+    from src.connectors.meta.foundation_schema import SCHEMAS
+    from src.quality.meta import validate_foundation
+
+    if resource not in CORE or not isinstance(source, dict):
+        raise SafeError("invalid_meta_resource_configuration")
+    base: dict[str, Any] = {
+        "store_id": account.store_id,
+        "account_id": account.account_id,
+        "api_version": account.api_version,
+        "contract_version": "1.0.0",
+        "observed_at": timestamp(observed_at),
+        "source_updated_at": None,
+    }
+    if resource != "insights":
+        key, entity = normalize(resource, source, account, None)
+        base.update(row_key=key, source_updated_at=entity.get("updated_at"))
+        if resource == "accounts":
+            base.update(
+                meta_account_id=account.account_id,
+                account_name=entity["name"],
+                currency=entity["currency"],
+                timezone=entity["timezone_name"],
+                status=str(entity["account_status"])
+                if entity["account_status"] is not None
+                else None,
+                created_time=entity["created_at"],
+                updated_time=entity["updated_at"],
+            )
+        elif resource == "campaigns":
+            base.update(
+                campaign_id=entity["campaign_id"],
+                campaign_name=entity["name"],
+                objective=entity["objective"],
+                status=entity["status"],
+                effective_status=entity["effective_status"],
+                created_time=entity["created_at"],
+                updated_time=entity["updated_at"],
+            )
+        elif resource == "adsets":
+            targeting = source.get("targeting")
+            if targeting is not None and not isinstance(targeting, dict):
+                raise SafeError("invalid_meta_targeting")
+            # Summary exposes only present field names, never audience IDs or location payloads.
+            base.update(
+                adset_id=entity["adset_id"],
+                campaign_id=entity["campaign_id"],
+                adset_name=entity["name"],
+                optimization_goal=optional_text(source.get("optimization_goal")),
+                billing_event=optional_text(source.get("billing_event")),
+                targeting_summary={"fields_present": sorted(targeting)}
+                if targeting is not None
+                else None,
+                status=entity["status"],
+                effective_status=entity["effective_status"],
+            )
+        else:
+            creative = source.get("creative")
+            if creative is not None and not isinstance(creative, dict):
+                raise SafeError("invalid_meta_creative")
+            base.update(
+                ad_id=entity["ad_id"],
+                adset_id=entity["adset_id"],
+                campaign_id=entity["campaign_id"],
+                ad_name=entity["name"],
+                creative_id=meta_id(creative["id"]) if creative is not None else None,
+                status=entity["status"],
+                effective_status=entity["effective_status"],
+            )
+    else:
+        if insights is None or level not in {"campaign", "adset", "ad"}:
+            raise SafeError("invalid_meta_resource_configuration")
+        if meta_id(source.get("account_id")) != account.account_id:
+            raise SafeError("meta_account_mismatch")
+        if source.get("account_currency") != account.currency:
+            raise SafeError("meta_currency_mismatch")
+        start, stop = source.get("date_start"), source.get("date_stop")
+        if (
+            not isinstance(start, str)
+            or not isinstance(stop, str)
+            or date.fromisoformat(start).isoformat() != start
+            or start != stop
+            or not insights.since <= start <= insights.until
+        ):
+            raise SafeError("invalid_insights_date")
+        selected = {
+            "campaign": ("campaign_id",),
+            "adset": ("campaign_id", "adset_id"),
+            "ad": ("campaign_id", "adset_id", "ad_id"),
+        }[level]
+        ids = {
+            field: meta_id(source.get(field)) if field in selected else None
+            for field in ("campaign_id", "adset_id", "ad_id")
+        }
+        if any(source.get(field) is not None for field in ids if field not in selected):
+            raise SafeError("meta_level_mismatch")
+        dimensions = {field: source.get(field) for field in insights.breakdowns}
+        if any(not isinstance(v, str) or not v.strip() for v in dimensions.values()):
+            raise SafeError("missing_meta_breakdown")
+        if any(
+            field in source and field not in dimensions
+            for field in ("age", "gender", "country", "publisher_platform", "platform_position")
+        ):
+            raise SafeError("unexpected_meta_breakdown")
+        reporting = {**insights.definition(), "level": level}
+        config = digest(
+            {
+                "api_version": account.api_version,
+                "currency": account.currency,
+                "timezone": account.timezone,
+                **reporting,
+            }
+        )
+        spend = numeric(source.get("spend"))
+        if spend is None or Decimal(spend) < 0:
+            raise SafeError("invalid_meta_spend")
+        counts = {
+            field: count(source.get(field))
+            for field in ("impressions", "reach", "clicks", "inline_link_clicks")
+        }
+        lpv = action_value(source.get("actions"), "landing_page_view")
+        if lpv is not None and Decimal(lpv) < 0:
+            raise SafeError("invalid_meta_metric")
+
+        def metric(
+            numerator: str | int | None, denominator: int | None, multiplier: int = 1
+        ) -> str | None:
+            if numerator is None or denominator is None or denominator == 0:
+                return None
+            with localcontext() as ctx:
+                ctx.prec = 78
+                return numeric(
+                    (Decimal(numerator) * multiplier / Decimal(denominator)).quantize(
+                        Decimal("0.000000001"), rounding=ROUND_HALF_EVEN
+                    )
+                )
+
+        base.update(
+            **ids,
+            level=level,
+            date_start=start,
+            date_stop=stop,
+            spend=spend,
+            currency=account.currency,
+            timezone=account.timezone,
+            configuration_hash=config,
+            reporting_configuration=reporting,
+            breakdown_values=dimensions,
+            impressions=counts["impressions"],
+            reach=counts["reach"],
+            clicks=counts["clicks"],
+            link_clicks=counts["inline_link_clicks"],
+            landing_page_views=lpv,
+            cpm=metric(spend, counts["impressions"], 1000),
+            cpc=metric(spend, counts["clicks"]),
+            ctr=metric(counts["clicks"], counts["impressions"], 100),
+        )
+        base["row_key"] = digest(
+            [account.store_id, account.account_id, level, ids, start, config, dimensions]
+        )
+    if set(base) != set(SCHEMAS[CORE[resource]]):
+        raise SafeError("meta_foundation_schema_mismatch")
+    validate_foundation(resource, [base], account)
+    return base

@@ -1,0 +1,249 @@
+{
+  "contract_version": "1.0.0",
+  "status": "offline_only",
+  "entity_key": [
+    "store_id",
+    "customer_id"
+  ],
+  "identity_fields": [
+    "customer_id",
+    "store_id",
+    "customer_type",
+    "company_name",
+    "trade_name",
+    "state",
+    "city"
+  ],
+  "components": [
+    "Identity",
+    "Commercial",
+    "Marketing",
+    "Journey",
+    "Retention",
+    "Health"
+  ],
+  "commercial": {
+    "orders_count": "COUNT distinct order_id, all statuses, before as_of",
+    "first_order_at": "MIN created_at, all statuses",
+    "last_order_at": "MAX created_at, all statuses",
+    "purchase_count": "COUNT distinct qualifying order_id, approved AnalyticsPolicy",
+    "requested_revenue": "SUM requested_total, all statuses",
+    "fulfilled_revenue": "SUM fulfilled_total, all statuses",
+    "requested_quantity": "SUM requested_items_qty, all statuses",
+    "fulfilled_quantity": "SUM fulfilled_items_qty, all statuses",
+    "fulfillment_rate": "fulfilled_revenue / requested_revenue",
+    "quantity_fulfillment_rate": "fulfilled_quantity / requested_quantity",
+    "revenue_gap": "requested_revenue - fulfilled_revenue",
+    "quantity_gap": "requested_quantity - fulfilled_quantity"
+  },
+  "null_rules": {
+    "unknown_component": "propagate_null",
+    "empty_sum": "0",
+    "zero_denominator": null,
+    "ratio_precision": 9,
+    "ratio_rounding": "HALF_EVEN",
+    "clamp_rates": false
+  },
+  "marketing": {
+    "paid_media_influenced_lifetime": "any resolved paid touch in observed history; not an alias of report-window order influence",
+    "paid_media_influenced_acquisition": "paid participation before first observed qualifying purchase",
+    "paid_media_influenced_repeat": "paid participation since previous qualifying purchase and before purchase 2+"
+  },
+  "campaign_fields": [
+    "campaigns_participated",
+    "first_campaign_id",
+    "last_campaign_id",
+    "campaign_touch_count"
+  ],
+  "event_groups": {
+    "MARKETING": [
+      "paid_touch",
+      "campaign_interaction",
+      "page_view",
+      "product_view"
+    ],
+    "IDENTITY": [
+      "register_submitted",
+      "register_approved",
+      "login"
+    ],
+    "COMMERCIAL": [
+      "cart_created",
+      "checkout_started",
+      "purchase",
+      "order_created",
+      "order_updated"
+    ],
+    "RETENTION": [
+      "repeat_purchase",
+      "reactivation"
+    ]
+  },
+  "event_fields": [
+    "event_key",
+    "store_id",
+    "customer_id",
+    "event_type",
+    "occurred_at",
+    "order_id",
+    "campaign_id",
+    "evidence_type"
+  ],
+  "evidence_levels": [
+    "DIRECT",
+    "CUSTOMER_JOURNEY",
+    "SUPPORTED"
+  ],
+  "segments": {
+    "NEW_CUSTOMER": {
+      "rule": "purchase_count == 1",
+      "basis": "observed"
+    },
+    "REPEAT_CUSTOMER": {
+      "rule": "purchase_count > 1",
+      "basis": "observed"
+    },
+    "PAID_ACQUIRED": {
+      "rule": "paid_media_influenced_acquisition == true",
+      "basis": "observed"
+    },
+    "ACTIVE_CUSTOMER": {
+      "rule": null,
+      "pending": [
+        "activity definition",
+        "recency window"
+      ]
+    },
+    "HIGH_VALUE_CUSTOMER": {
+      "rule": null,
+      "pending": [
+        "requested threshold",
+        "fulfilled threshold",
+        "frequency threshold",
+        "AND/OR policy"
+      ]
+    },
+    "AT_RISK": {
+      "rule": null,
+      "pending": [
+        "historical eligibility",
+        "inactivity window",
+        "activity definition"
+      ]
+    }
+  },
+  "health": {
+    "health_score": null,
+    "health_status": null,
+    "status": "NOT_DEFINED",
+    "future_factors": [
+      "recency",
+      "frequency",
+      "requested_revenue",
+      "fulfilled_revenue",
+      "repurchase",
+      "paid_influence",
+      "fulfillment"
+    ]
+  },
+  "classifications": {
+    "INTERNAL": [
+      "customer_id",
+      "technical_ids",
+      "evidence_refs"
+    ],
+    "ANALYTICS": [
+      "company_name",
+      "trade_name",
+      "city",
+      "state",
+      "metrics"
+    ],
+    "RESTRICTED": [
+      "cpf",
+      "cnpj",
+      "phone",
+      "email"
+    ]
+  },
+  "api": {
+    "status": "future_contract_not_runtime_change",
+    "required_context": [
+      "store_id",
+      "authenticated_principal",
+      "authorized_stores",
+      "generation",
+      "policy_hash",
+      "as_of",
+      "history_complete",
+      "facts_complete"
+    ],
+    "pagination": {
+      "page_min": 1,
+      "page_size_default": 20,
+      "page_size_max": 100,
+      "cursor_required_after_first_page": true
+    },
+    "filters": [
+      "store_id",
+      "customer_type",
+      "state",
+      "city",
+      "paid_media_influenced",
+      "has_repurchase",
+      "first_purchase_date",
+      "last_purchase_date",
+      "min_requested_revenue",
+      "max_requested_revenue"
+    ],
+    "paths": {
+      "/customers/{customer_id}": [
+        "profile",
+        "commercial",
+        "marketing",
+        "timeline_summary",
+        "orders_summary",
+        "products_summary",
+        "segmentation",
+        "health",
+        "metadata"
+      ],
+      "/customers": [
+        "data",
+        "pagination",
+        "metadata"
+      ],
+      "/customers/{customer_id}/timeline": [
+        "data",
+        "pagination",
+        "metadata"
+      ],
+      "/customers/{customer_id}/orders": [
+        "data",
+        "pagination",
+        "metadata"
+      ],
+      "/orders/influenced": [
+        "data",
+        "pagination",
+        "metadata"
+      ]
+    },
+    "response_metadata": [
+      "contract_version",
+      "store_id",
+      "generation",
+      "policy_hash",
+      "currency",
+      "reporting_timezone",
+      "as_of",
+      "calculated_at",
+      "history_from",
+      "report_from",
+      "report_to",
+      "history_complete",
+      "facts_complete",
+      "limitations"
+    ]
+  }
+}

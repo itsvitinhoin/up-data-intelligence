@@ -1,0 +1,72 @@
+[
+  {
+    "name": "row_key",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "store_id",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "account_id",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "api_version",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "contract_version",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "observed_at",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "source_updated_at",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "ad_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "adset_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "campaign_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "ad_name",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "creative_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "status",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "effective_status",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  }
+]

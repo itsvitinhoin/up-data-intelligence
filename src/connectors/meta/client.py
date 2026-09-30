@@ -23,6 +23,9 @@ FIELDS = {
 
 
 class MetaConnector:
+    fields = FIELDS
+    insights_level = "ad"
+
     def __init__(
         self,
         account: Account,
@@ -53,10 +56,10 @@ class MetaConnector:
     ) -> Iterator[Page]:
         if resource not in RESOURCES or (resource == "insights" and insights is None):
             raise SafeError("invalid_meta_resource_configuration")
-        params: dict[str, str] = {"fields": FIELDS[resource], "limit": str(self.page_limit)}
+        params: dict[str, str] = {"fields": self.fields[resource], "limit": str(self.page_limit)}
         if insights and resource == "insights":
             params.update(
-                level="ad",
+                level=self.insights_level,
                 time_increment="1",
                 time_range=canonical({"since": insights.since, "until": insights.until}),
                 action_report_time=insights.action_report_time,

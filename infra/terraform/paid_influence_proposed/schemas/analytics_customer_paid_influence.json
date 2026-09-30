@@ -1,0 +1,132 @@
+[
+  {
+    "name": "row_key",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "store_id",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "policy_hash",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "currency",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "calculated_at",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "as_of",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "history_complete",
+    "type": "BOOL",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "facts_complete",
+    "type": "BOOL",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "customer_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "first_campaign_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "last_campaign_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "evidence_type",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "influence_scope",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "paid_media_influenced",
+    "type": "BOOL",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "identity_path",
+    "type": "JSON",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "first_paid_touch_at",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "last_paid_touch_at",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "paid_touch_count",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "campaign_count",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "adset_count",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "ad_count",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "influenced_orders",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "requested_revenue_influenced",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "fulfilled_revenue_influenced",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "requested_quantity_influenced",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "fulfilled_quantity_influenced",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  }
+]

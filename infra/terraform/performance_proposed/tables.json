@@ -1,0 +1,38 @@
+{
+  "analytics_campaign_performance_daily": {
+    "dataset": "up_analytics",
+    "partition": "date",
+    "cluster": [
+      "store_id",
+      "account_id"
+    ],
+    "deletion_protection": true
+  },
+  "analytics_campaign_customer_performance": {
+    "dataset": "up_analytics",
+    "partition": "period_start",
+    "cluster": [
+      "store_id",
+      "account_id"
+    ],
+    "deletion_protection": true
+  },
+  "analytics_campaign_order_performance": {
+    "dataset": "up_analytics",
+    "partition": "period_start",
+    "cluster": [
+      "store_id",
+      "account_id"
+    ],
+    "deletion_protection": true
+  },
+  "analytics_performance_summary": {
+    "dataset": "up_analytics",
+    "partition": "period_start",
+    "cluster": [
+      "store_id",
+      "account_id"
+    ],
+    "deletion_protection": true
+  }
+}

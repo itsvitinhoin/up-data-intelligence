@@ -1,0 +1,40 @@
+{
+  "analytics_customer_360_profile": {
+    "dataset": "up_analytics",
+    "partition": null,
+    "cluster": [
+      "store_id",
+      "customer_id"
+    ],
+    "deletion_protection": true
+  },
+  "analytics_customer_journey_summary": {
+    "dataset": "up_analytics",
+    "partition": null,
+    "cluster": [
+      "store_id",
+      "customer_id"
+    ],
+    "deletion_protection": true
+  },
+  "analytics_customer_orders_summary": {
+    "dataset": "up_analytics",
+    "partition": "created_at",
+    "cluster": [
+      "store_id",
+      "customer_id",
+      "order_id"
+    ],
+    "deletion_protection": true
+  },
+  "analytics_customer_products_summary": {
+    "dataset": "up_analytics",
+    "partition": null,
+    "cluster": [
+      "store_id",
+      "customer_id",
+      "product_key"
+    ],
+    "deletion_protection": true
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "meta_accounts": {
+    "dataset": "up_core",
+    "partition": null,
+    "cluster": [
+      "store_id",
+      "account_id"
+    ],
+    "deletion_protection": true
+  },
+  "meta_campaigns": {
+    "dataset": "up_core",
+    "partition": null,
+    "cluster": [
+      "store_id",
+      "account_id"
+    ],
+    "deletion_protection": true
+  },
+  "meta_adsets": {
+    "dataset": "up_core",
+    "partition": null,
+    "cluster": [
+      "store_id",
+      "account_id"
+    ],
+    "deletion_protection": true
+  },
+  "meta_ads": {
+    "dataset": "up_core",
+    "partition": null,
+    "cluster": [
+      "store_id",
+      "account_id"
+    ],
+    "deletion_protection": true
+  },
+  "meta_insights_daily": {
+    "dataset": "up_core",
+    "partition": "date_start",
+    "cluster": [
+      "store_id",
+      "account_id"
+    ],
+    "deletion_protection": true
+  }
+}

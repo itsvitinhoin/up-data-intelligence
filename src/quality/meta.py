@@ -49,3 +49,94 @@ def duplicate_current_rows(
         for key, count in counts.items()
         if count > 1
     ]
+
+
+def validate_foundation(resource: str, rows: list[dict[str, Any]], account: Any) -> None:
+    """Strict proposed output contract; duplicates always block publication."""
+    from datetime import date
+    from decimal import Decimal
+
+    from src.connectors.meta.config import meta_id
+    from src.connectors.meta.foundation_schema import SCHEMAS
+    from src.domain.models import SafeError
+    from src.utils.data import numeric, timestamp
+
+    schema = SCHEMAS.get(CORE.get(resource, ""))
+    if schema is None:
+        raise SafeError("invalid_meta_resource_configuration")
+    seen = set()
+    for row in rows:
+        if set(row) != set(schema):
+            raise SafeError("meta_foundation_schema_mismatch")
+        if row["store_id"] != account.store_id or row["account_id"] != account.account_id:
+            raise SafeError("meta_account_mismatch")
+        if row["row_key"] in seen:
+            raise SafeError("duplicate_meta_foundation_row")
+        seen.add(row["row_key"])
+        if any(
+            not isinstance(row[k], str) or not row[k].strip()
+            for k in ("row_key", "store_id", "account_id")
+        ):
+            raise SafeError("meta_foundation_schema_mismatch")
+        required = {
+            "accounts": ["meta_account_id"],
+            "campaigns": ["campaign_id"],
+            "adsets": ["campaign_id", "adset_id"],
+            "ads": ["campaign_id", "adset_id", "ad_id"],
+        }
+        if resource == "insights":
+            level = row["level"]
+            if level not in {"campaign", "adset", "ad"}:
+                raise SafeError("invalid_meta_level")
+            mandatory = {
+                "campaign": ["campaign_id"],
+                "adset": ["campaign_id", "adset_id"],
+                "ad": ["campaign_id", "adset_id", "ad_id"],
+            }[level]
+            if any(
+                row[k] is not None
+                for k in ("campaign_id", "adset_id", "ad_id")
+                if k not in mandatory
+            ):
+                raise SafeError("meta_level_mismatch")
+        else:
+            mandatory = required[resource]
+        for name in mandatory:
+            meta_id(row[name])
+        for field, typ in schema.items():
+            value = row[field]
+            if value is None:
+                continue
+            if typ == "STRING" and not isinstance(value, str):
+                raise SafeError("meta_foundation_schema_mismatch")
+            if field in {
+                "account_id",
+                "meta_account_id",
+                "campaign_id",
+                "adset_id",
+                "ad_id",
+                "creative_id",
+            }:
+                meta_id(value)
+            if typ == "INT64" and (
+                isinstance(value, bool) or not isinstance(value, int) or not 0 <= value < 2**63
+            ):
+                raise SafeError("invalid_meta_metric")
+            if typ == "NUMERIC":
+                if not isinstance(value, str) or numeric(value) is None or Decimal(value) < 0:
+                    raise SafeError("invalid_meta_metric")
+            if typ == "DATE" and (
+                not isinstance(value, str) or date.fromisoformat(value).isoformat() != value
+            ):
+                raise SafeError("invalid_insights_date")
+            if typ == "TIMESTAMP":
+                timestamp(value)
+            if typ == "JSON" and not isinstance(value, dict):
+                raise SafeError("meta_foundation_schema_mismatch")
+        if "currency" in row and row["currency"] != account.currency:
+            raise SafeError("meta_currency_mismatch")
+        if "timezone" in row and row["timezone"] != account.timezone:
+            raise SafeError("meta_timezone_mismatch")
+        if resource == "insights":
+            if row["date_start"] != row["date_stop"] or row["spend"] is None:
+                raise SafeError("invalid_insights_date_or_spend")

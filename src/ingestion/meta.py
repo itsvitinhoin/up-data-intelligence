@@ -262,3 +262,63 @@ class MetaEngine:
                 return run
             except Exception as exc:
                 self._fail(run, exc)
+
+
+def extract_foundation_offline(
+    connector: MetaConnector,
+    resource: str,
+    insights: Insights | None = None,
+    *,
+    observed_at: str,
+    max_records: int = 100000,
+) -> dict[str, Any]:
+    """Bounded, memory-only extraction: sanitized RAW pages before proposed projection.
+
+    No repository, cloud client, checkpoint or persistence. Nothing returned on failure.
+    The existing MetaEngine remains the separate durable offline reference.
+    """
+    from src.connectors.meta.foundation import MetaFoundationConnector
+    from src.normalization.meta import normalize_foundation
+    from src.quality.meta import validate_foundation
+
+    if not isinstance(connector, MetaFoundationConnector) or max_records < 1:
+        raise SafeError("meta_foundation_mock_connector_required")
+    raw: list[dict[str, Any]] = []
+    rows: list[dict[str, Any]] = []
+    for page in connector.pages(resource, insights):
+        if page.pagination_error:
+            raise SafeError(page.pagination_error)
+        raw.append(
+            {
+                "store_id": connector.account.store_id,
+                "account_id": connector.account.account_id,
+                "observed_at": observed_at,
+                "position": page.position,
+                "next_position": page.next_position,
+                "payload": page.payload,
+                "resource": resource,
+                "configuration": {
+                    "account": connector.account.snapshot(),
+                    "insights": (
+                        {**insights.snapshot(), "level": connector.insights_level}
+                        if insights
+                        else None
+                    ),
+                },
+            }
+        )
+        if len(rows) + len(page.payload["data"]) > max_records:
+            raise SafeError("meta_offline_record_budget_exceeded")
+        rows.extend(
+            normalize_foundation(
+                resource,
+                source,
+                connector.account,
+                insights,
+                observed_at=observed_at,
+                level=connector.insights_level,
+            )
+            for source in page.payload["data"]
+        )
+    validate_foundation(resource, rows, connector.account)
+    return {"raw_pages": raw, "table": CORE[resource], "rows": rows, "status": "completed_offline"}

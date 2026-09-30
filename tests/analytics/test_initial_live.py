@@ -262,13 +262,19 @@ def test_container_and_terraform_contract():
 
 
 def test_head_initialization_sql_no_overwrite_or_receipt():
+    import re
+
     sql = Path("sql/analytics/cloud_proposed/initialize_head.sql").read_text()
     executable = "\n".join(line for line in sql.splitlines() if not line.startswith("--"))
-    assert "<=1 AS" in executable and "=1 AS" in executable
+    assert re.search(r"\)\s*<=\s*1\s+AS", executable)
+    assert re.search(r"\)\s*=\s*1\s+AS", executable)
     assert "WHERE NOT EXISTS" in executable
     assert "UPDATE " not in executable and "DELETE " not in executable
     assert "'RECEIPT'" not in executable
-    assert "SELECT 'HEAD',@store,@policy,0,'initialized'" in executable
+    assert re.search(
+        r"SELECT\s+'HEAD'\s*,\s*@store\s*,\s*@policy\s*,\s*0\s*,\s*'initialized'",
+        executable,
+    )
 
 
 def test_live_exception_does_not_expose_query_payload(monkeypatch, caplog, capsys):
