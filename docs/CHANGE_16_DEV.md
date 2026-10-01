@@ -188,9 +188,16 @@ Timezone usa ZoneInfo; currencies têm allowlist inicial explícita no modelo
 Outras currencies exigem extensão revisada da allowlist, não aceitação silenciosa.
 Ao menos uma operação B2B/B2C é obrigatória no cadastro. Meta/UP Zero podem ser
 habilitados independentemente; Analytics/Intelligence usam **o contrato B2B atual**,
-não inventam materialização B2C. Stores B2C/mistas podem cadastrar e usar fontes, mas
-não ativam Analytics/Intelligence enquanto não existir contrato de seleção por operação;
-esses modelos não têm discriminador de operação hoje. Histórico parcial permanece parcial.
+não inventam materialização B2C. Conforme CHANGE #16.1.1, stores mistas B2B+B2C
+podem ativar Analytics/Intelligence quando as dependências forem válidas: apenas
+`operation_b2b=true` autoriza o contrato atual. `operation_b2c=true` permanece no
+registry como capacidade real, sem ampliar o escopo dos workers ou disparar pipeline
+B2C. Stores exclusivamente B2C continuam bloqueadas com
+`b2b_analytics_contract_required` ao habilitar Analytics/Intelligence. O dispatcher
+continua selecionando ACTIVE + sync_enabled + pipeline_enabled; os workers revalidam
+as dependências e geram a mesma policy B2B. Intelligence mantém o grant explícito
+`B2B`. Não há queries B2C novas nem mudanças no frontend: MX Fashion B2B permanece
+real e MX Fashion B2C demo. Histórico parcial permanece parcial.
 
 ### Dispatcher e workers compartilhados
 

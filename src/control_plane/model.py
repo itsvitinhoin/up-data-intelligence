@@ -167,11 +167,10 @@ class StoreConfig:
         ):
             raise SafeError("meta_binding_required")
         if self.analytics_enabled or self.intelligence_enabled:
-            if self.operation_b2c:
-                raise SafeError("b2c_or_mixed_analytics_contract_not_available")
+            if not self.operation_b2b:
+                raise SafeError("b2b_analytics_contract_required")
             if (
-                not self.operation_b2b
-                or not self.upzero_enabled
+                not self.upzero_enabled
                 or not self.policy_version
                 or not self.qualifying_order_statuses
             ):
@@ -200,6 +199,7 @@ class StoreConfig:
         )
 
     def policy(self, window: Window) -> AnalyticsPolicy:
+        """Build the current B2B contract; B2C capability does not extend its scope."""
         self.ready()
         if not self.operation_b2b or not self.policy_version or not self.qualifying_order_statuses:
             raise SafeError("analytics_policy_required")

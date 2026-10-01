@@ -982,16 +982,164 @@ def test_run_gateway_accepts_only_explicit_same_project_numeric_canonical_names(
             gateway.get(execution.replace("123456", "999999"), "executions", "up-meta-worker")
 
 
-@pytest.mark.parametrize("b2b", [True, False])
-def test_no_implicit_b2b_materialization_for_b2c_or_mixed_store(b2b):
-    c = replace(
-        config(upzero_enabled=True, upzero_connection_id="up-one", analytics_enabled=True),
-        operation_b2b=b2b,
-        operation_b2c=True,
+def intelligence_config(**kwargs):
+    return config(
+        upzero_enabled=True,
+        upzero_connection_id="up-one",
+        analytics_enabled=True,
+        intelligence_enabled=True,
+        meta_enabled=True,
+        meta_connection_id="meta-one",
+        meta_account_id="100",
+        meta_api_version="v24.0",
+        **kwargs,
     )
-    with pytest.raises(SafeError, match="b2c_or_mixed_analytics_contract_not_available"):
+
+
+@pytest.mark.parametrize("b2c", [False, True])
+@pytest.mark.parametrize("pipeline", ["analytics", "intelligence"])
+def test_b2b_and_mixed_stores_allow_b2b_pipelines_and_preserve_capabilities(b2c, pipeline):
+    c = replace(
+        intelligence_config(), operation_b2c=b2c, intelligence_enabled=pipeline == "intelligence"
+    )
+    c.ready()
+    restored = StoreConfig.from_row(c.row())
+    assert restored.operation_b2b is True and restored.operation_b2c is b2c
+    assert (
+        restored.policy(WINDOW).to_dict()
+        == replace(c, operation_b2c=False).policy(WINDOW).to_dict()
+    )
+    assert (
+        restored.policy(WINDOW).policy_hash
+        == replace(c, operation_b2c=False).policy(WINDOW).policy_hash
+    )
+
+
+@pytest.mark.parametrize("pipeline", ["analytics", "intelligence"])
+def test_b2c_only_cannot_enable_b2b_pipelines(pipeline):
+    c = replace(
+        intelligence_config(),
+        operation_b2b=False,
+        operation_b2c=True,
+        intelligence_enabled=pipeline == "intelligence",
+    )
+    with pytest.raises(SafeError, match="^b2b_analytics_contract_required$"):
         c.ready()
-    replace(c, analytics_enabled=False).ready()
+    with pytest.raises(SafeError, match="^b2b_analytics_contract_required$"):
+        c.policy(WINDOW)
+    sources_only = replace(c, analytics_enabled=False, intelligence_enabled=False)
+    sources_only.ready()
+    with pytest.raises(SafeError, match="^analytics_policy_required$"):
+        sources_only.policy(WINDOW)
+
+
+@pytest.mark.parametrize(
+    "changes,error",
+    [
+        ({"upzero_enabled": False}, "analytics_policy_and_b2b_sources_required"),
+        ({"policy_version": None}, "analytics_policy_and_b2b_sources_required"),
+        ({"qualifying_order_statuses": ()}, "analytics_policy_and_b2b_sources_required"),
+        ({"meta_enabled": False}, "intelligence_dependencies_disabled"),
+        ({"analytics_enabled": False}, "intelligence_dependencies_disabled"),
+    ],
+)
+def test_mixed_store_still_requires_valid_dependencies(changes, error):
+    with pytest.raises(SafeError, match=error):
+        replace(intelligence_config(operation_b2c=True), **changes).ready()
+
+
+@pytest.mark.parametrize("pipeline", ["analytics", "intelligence"])
+def test_mixed_store_dispatches_only_requested_enabled_pipeline(pipeline):
+    c = intelligence_config(operation_b2c=True, status="ACTIVE", sync_enabled=True)
+    stores = [
+        c,
+        replace(c, store_id="disabled", **{pipeline + "_enabled": False}),
+        replace(c, store_id="paused", status="PAUSED"),
+        replace(c, store_id="no-sync", sync_enabled=False),
+        replace(c, store_id="b2b-only", operation_b2c=False),
+    ]
+    gateway = Mock()
+    gateway.run_and_wait.return_value = True
+    worker_action = Mock()
+    registry = MemoryRegistry(stores)
+    worker = StoreWorker(
+        registry, lambda cfg, *_: cfg.ready(), lambda _: nullcontext(), worker_action, lambda: {}
+    )
+
+    def execute(selected_pipeline, cfg, window):
+        worker.execute(cfg.store_id, cfg.revision, selected_pipeline, window)
+        return True
+
+    gateway.run_and_wait.side_effect = execute
+    result = Dispatcher(
+        registry, gateway, lambda cfg, *_: cfg.ready(), lambda _: nullcontext()
+    ).run(pipeline, lambda _: WINDOW)
+    assert {r.store_id for r in result} == {c.store_id, "b2b-only"}
+    assert all(r.pipeline == pipeline and r.status == "completed" for r in result)
+    assert gateway.run_and_wait.call_count == worker_action.call_count == 2
+    assert {call.args[0].store_id for call in worker_action.call_args_list} == {
+        c.store_id,
+        "b2b-only",
+    }
+    assert all(call.args[1] == pipeline for call in worker_action.call_args_list)
+    assert PIPELINES == ("upzero", "meta", "analytics", "intelligence")
+
+
+@pytest.mark.parametrize("pipeline", ["analytics", "intelligence"])
+def test_mixed_worker_materializes_same_b2b_policy_once(pipeline):
+    c = intelligence_config(operation_b2c=True)
+    fake = FakeTransport([])
+    prerequisites = Mock()
+    action = Actions(fake, prerequisites, lease_bucket="synthetic")
+    with (
+        patch("src.control_plane.worker.analytics_materialize") as analytics,
+        patch("src.control_plane.worker.intelligence_materialize") as intelligence,
+        patch.object(action, "upzero") as upzero,
+        patch.object(action, "meta") as meta,
+    ):
+        action(c, pipeline, WINDOW)
+        if pipeline == "analytics":
+            analytics.assert_called_once()
+            intelligence.assert_not_called()
+            policy = analytics.call_args.args[2].policy
+            prerequisites.account.assert_not_called()
+        else:
+            intelligence.assert_called_once()
+            analytics.assert_not_called()
+            policy = intelligence.call_args.args[1]
+            prerequisites.account.assert_called_once_with(c)
+        upzero.assert_not_called()
+        meta.assert_not_called()
+    assert policy.to_dict() == replace(c, operation_b2c=False).policy(WINDOW).to_dict()
+    assert policy.policy_hash == replace(c, operation_b2c=False).policy(WINDOW).policy_hash
+
+
+def test_intelligence_runtime_uses_explicit_b2b_grant_for_mixed_store():
+    from src.connectors.meta.config import Account
+    from src.dashboard.contracts import Grant
+    from src.intelligence.live.runtime import materialize
+
+    c = intelligence_config(operation_b2c=True)
+    account = Account(c.store_id, "100", "meta-one", "v24.0", c.timezone, c.currency)
+    fake = FakeTransport([])
+    fake.client = Mock()
+    with (
+        patch("src.intelligence.live.runtime.DashboardService") as service,
+        pytest.raises(SafeError, match="stop_after_b2b_scope"),
+    ):
+        service.return_value._scope.side_effect = SafeError("stop_after_b2b_scope")
+        materialize(
+            fake,
+            c.policy(WINDOW),
+            account,
+            tenant="synthetic-tenant",
+            snapshot_at=WINDOW.source_snapshot_at,
+            calculated_at=WINDOW.calculated_at,
+        )
+    principal, grant = service.return_value._scope.call_args.args
+    assert grant == Grant("synthetic-tenant", c.store_id, "B2B")
+    assert principal.grants == frozenset({grant})
+    assert fake.calls == []
 
 
 def test_pilot_policy_parity_is_fixture_only_not_runtime_dependency():
