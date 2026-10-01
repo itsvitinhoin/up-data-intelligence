@@ -13,9 +13,12 @@ from src.connectors.meta.config import Account, Insights
 from src.dashboard.contracts import Grant, Principal
 from src.dashboard.repository import BigQueryReadSession, ReadBudget
 from src.dashboard.service import DashboardService
-from src.intelligence.live.materialize import build
+from src.influence.identity import IdentityContext
+from src.intelligence.live.events import EventReader
+from src.intelligence.live.materialize import build_stream
 from src.intelligence.live.publication import Writer
 from src.intelligence.live.schema import PUBLICATION
+from src.intelligence.live.spool import DiskAnchors, Spool
 from src.performance.engine import MediaCoverage
 from src.utils.data import digest, timestamp
 
@@ -123,7 +126,6 @@ def materialize(
         "customers": "store_id source_system customer_id customer_type company_name trade_name state city version_id observed_at".split(),
         "orders": "store_id source_system order_id customer_id created_at order_status requested_total fulfilled_total requested_items_qty fulfilled_items_qty version_id observed_at".split(),
         "order_items": "store_id source_system order_id item_id order_created_at variant_id sku asset_id qty original_qty unit_price status present_in_latest_snapshot parent_order_version_id observed_at".split(),
-        "analytics_events": "store_id source_system fact_id event_name occurred_at order_id session_id visitor_id user_id product_id product_variant_id meta_campaign_id meta_adset_id meta_ad_id utm_source utm_medium utm_campaign fbclid fbc fbp gclid value quantity version_id observed_at".split(),
         "identity_links": list(TABLES["identity_links"].fields),
     }
     snapshot = {}
@@ -205,12 +207,7 @@ def materialize(
     if not heads:
         if not initialize_head:
             raise ValueError("intelligence_head_initialization_required")
-        # Caller holds the same generation-guarded store lease as ingestion.
-        transport.query(
-            f"INSERT INTO {publication}(row_key,record_kind,store_id,policy_hash,generation,status) SELECT @head,'HEAD',@store,@policy,0,'initialized' WHERE NOT EXISTS(SELECT 1 FROM {publication} WHERE store_id=@store AND policy_hash=@policy)",
-            keys
-            + [scalar("head", "STRING", digest([policy.store_id, policy.policy_hash, "HEAD"]))],
-        )
+        # Initialization joins the final atomic transaction; failures leave HEAD untouched.
         heads = [{"generation": 0, "maximum_generation": 0}]
     if len(heads) != 1 or type(heads[0]["generation"]) is not int:
         raise ValueError("invalid_intelligence_head")
@@ -224,16 +221,28 @@ def materialize(
         True,
         digest(compatible),
     )
-    artifact = build(
-        policy,
-        snapshot,
-        account=account,
-        meta_insights=meta["insights_daily"],
-        meta_campaigns=meta["campaigns"],
-        coverage=coverage,
-        calculated_at=calculated_at,
-        source_snapshot_at=snapshot_at,
-        base_publication=base,
-        generation=max(expected, heads[0]["maximum_generation"]) + 1,
-    )
-    return Writer(transport).publish(artifact, expected)
+    with Spool() as spool:
+        reader = EventReader(transport, policy, snapshot_at)
+        context = IdentityContext.build(
+            snapshot["customers"],
+            snapshot["orders"],
+            snapshot["identity_links"],
+            (fact for chunk in reader.chunks(anchors=True) for fact in chunk),
+            index=DiskAnchors(spool),
+        )
+        artifact = build_stream(
+            policy,
+            snapshot,
+            events=reader.chunks(),
+            context=context,
+            spool=spool,
+            account=account,
+            meta_insights=meta["insights_daily"],
+            meta_campaigns=meta["campaigns"],
+            coverage=coverage,
+            calculated_at=calculated_at,
+            source_snapshot_at=snapshot_at,
+            base_publication=base,
+            generation=max(expected, heads[0]["maximum_generation"]) + 1,
+        )
+        return Writer(transport).publish(artifact, expected, initialize_head=initialize_head)

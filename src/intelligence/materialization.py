@@ -1,8 +1,11 @@
 """Four separated Customer 360 read models. No identity heuristics or cloud IO."""
 
 from collections import defaultdict
+from collections.abc import Callable, Iterator, Mapping
+from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal, localcontext
+from typing import Protocol
 
 from src.analytics.engine import Row, amount, instant, product_key, total
 from src.analytics.policy import Policy
@@ -12,7 +15,25 @@ from src.intelligence.schema import SCHEMAS
 from src.utils.data import canonical, digest, numeric, timestamp
 
 
-def summarize_influence(rows: list[Row], paid: dict[str, Row]) -> Row:
+class RowBuffer(Protocol):
+    def append(self, row: Row) -> None: ...
+    def __iter__(self) -> Iterator[Row]: ...
+
+
+class Journeys(Protocol):
+    def get(self, cid: str) -> Row: ...
+
+
+@dataclass(frozen=True)
+class PrecomputedCustomer:
+    source_snapshot_hash: str
+    content_hashes: Mapping[str, str]
+    paid: Mapping[str, Row]
+    journeys: Journeys
+    output_factory: Callable[[str], RowBuffer]
+
+
+def summarize_influence(rows: list[Row], paid: Mapping[str, Row]) -> Row:
     points = sorted(
         {
             path["paid_fact_id"]: paid[path["paid_fact_id"]]
@@ -46,11 +67,20 @@ def materialize(
     events: list[Row],
     identity_links: list[Row],
     calculated_at: str,
+    precomputed: PrecomputedCustomer | None = None,
 ) -> Row:
     with localcontext() as ctx:
         ctx.prec = 78
         return _build(
-            policy, customers, orders, items, influence, events, identity_links, calculated_at
+            policy,
+            customers,
+            orders,
+            items,
+            influence,
+            events,
+            identity_links,
+            calculated_at,
+            precomputed,
         )
 
 
@@ -63,7 +93,10 @@ def _build(
     events: list[Row],
     identity_links: list[Row],
     calculated: str,
+    precomputed: PrecomputedCustomer | None = None,
 ) -> Row:
+    if precomputed is not None and events:
+        raise ValueError("precomputed_customer360_requires_streamed_events")
     if sum(map(len, (customers, orders, items, events, identity_links))) > 100000:
         raise ValueError("bounded_customer360_snapshot_required")
     at = timestamp(calculated)
@@ -82,16 +115,20 @@ def _build(
         raise ValueError("duplicate_item")
     if set(influence) != {s.value for s in InfluenceScope}:
         raise ValueError("all_influence_scopes_required")
-    expected_source = digest(
-        {
-            name: sorted([r for r in rows if r.get("store_id") == p.store_id], key=canonical)
-            for name, rows in (
-                ("customers", customers),
-                ("orders", orders),
-                ("events", events),
-                ("identity_links", identity_links),
-            )
-        }
+    expected_source = (
+        precomputed.source_snapshot_hash
+        if precomputed
+        else digest(
+            {
+                name: sorted([r for r in rows if r.get("store_id") == p.store_id], key=canonical)
+                for name, rows in (
+                    ("customers", customers),
+                    ("orders", orders),
+                    ("events", events),
+                    ("identity_links", identity_links),
+                )
+            }
+        )
     )
     receipts = []
     for scope, artifact in influence.items():
@@ -107,7 +144,8 @@ def _build(
             or receipt["influence_scope"] != scope
             or receipt["report_from"] != p.report_from
             or receipt["report_to"] != p.report_to
-            or receipt["content_sha256"] != digest(artifact["tables"])
+            or receipt["content_sha256"]
+            != (precomputed.content_hashes[scope] if precomputed else digest(artifact["tables"]))
         ):
             raise ValueError("incompatible_influence_snapshot")
         receipts.append(receipt)
@@ -138,7 +176,11 @@ def _build(
         by_customer[o["customer_id"]].append(o)
     lifetime = influence["LIFETIME"]["tables"]
     timeline = lifetime["analytics_customer_timeline"]
-    paid = {t["fact_id"]: t for t in lifetime["analytics_paid_touchpoints"]}
+    paid: Mapping[str, Row] = (
+        precomputed.paid
+        if precomputed
+        else {t["fact_id"]: t for t in lifetime["analytics_paid_touchpoints"]}
+    )
     flags = {
         s: {
             r["customer_id"]: r["paid_media_influenced"]
@@ -147,7 +189,9 @@ def _build(
         for s, a in influence.items()
     }
     infl_orders = {s: a["tables"]["analytics_order_paid_influence"] for s, a in influence.items()}
-    output: dict[str, list[Row]] = {name: [] for name in SCHEMAS}
+    output: dict[str, RowBuffer] = {
+        name: precomputed.output_factory(name) if precomputed else [] for name in SCHEMAS
+    }
     sequence: dict[str, int] = {}
     for c in sorted(customers, key=lambda r: r["customer_id"]):
         cid = c["customer_id"]
@@ -204,46 +248,58 @@ def _build(
                 "history_complete": p.history_complete,
             }
         )
-        journey = sorted(
-            [r for r in timeline if r["customer_id"] == cid],
-            key=lambda r: (instant(r["occurred_at"]), r["row_key"]),
-        )
-        events = [r for r in journey if r["record_type"] == "FACT"]
-        pts = sorted(
-            [paid[r["fact_id"]] for r in events if r["fact_id"] in paid],
-            key=lambda r: (instant(r["occurred_at"]), r["fact_id"]),
-        )
-        output["analytics_customer_journey_summary"].append(
-            {
-                **base,
-                "row_key": digest([p.store_id, "journey", cid]),
-                "customer_id": cid,
-                "first_touch_at": events[0]["occurred_at"] if events else None,
-                "first_paid_touch_at": pts[0]["occurred_at"] if pts else None,
-                "last_paid_touch_at": pts[-1]["occurred_at"] if pts else None,
-                "first_campaign_id": pts[0]["campaign_id"] if pts else None,
-                "last_campaign_id": pts[-1]["campaign_id"] if pts else None,
-                "total_events": len(events),
-                "total_sessions": len(
-                    {
-                        r["session_id"]
-                        for r in events
-                        if r.get("session_id") and r["session_id"].strip()
-                    }
-                ),
-                "total_products_viewed": len(
-                    {
-                        r["product_id"]
-                        for r in events
-                        if r["event_name"] == "product_view" and r.get("product_id")
-                    }
-                ),
-                "total_cart_events": sum(r["event_name"] == "add_to_cart" for r in events),
-                "total_checkout_events": sum(r["event_name"] == "checkout_started" for r in events),
-                "timeline_start": journey[0]["occurred_at"] if journey else None,
-                "timeline_end": journey[-1]["occurred_at"] if journey else None,
-            }
-        )
+        if precomputed:
+            output["analytics_customer_journey_summary"].append(
+                {
+                    **base,
+                    "row_key": digest([p.store_id, "journey", cid]),
+                    "customer_id": cid,
+                    **precomputed.journeys.get(cid),
+                }
+            )
+        else:
+            journey = sorted(
+                [r for r in timeline if r["customer_id"] == cid],
+                key=lambda r: (instant(r["occurred_at"]), r["row_key"]),
+            )
+            events = [r for r in journey if r["record_type"] == "FACT"]
+            pts = sorted(
+                [paid[r["fact_id"]] for r in events if r["fact_id"] in paid],
+                key=lambda r: (instant(r["occurred_at"]), r["fact_id"]),
+            )
+            output["analytics_customer_journey_summary"].append(
+                {
+                    **base,
+                    "row_key": digest([p.store_id, "journey", cid]),
+                    "customer_id": cid,
+                    "first_touch_at": events[0]["occurred_at"] if events else None,
+                    "first_paid_touch_at": pts[0]["occurred_at"] if pts else None,
+                    "last_paid_touch_at": pts[-1]["occurred_at"] if pts else None,
+                    "first_campaign_id": pts[0]["campaign_id"] if pts else None,
+                    "last_campaign_id": pts[-1]["campaign_id"] if pts else None,
+                    "total_events": len(events),
+                    "total_sessions": len(
+                        {
+                            r["session_id"]
+                            for r in events
+                            if r.get("session_id") and r["session_id"].strip()
+                        }
+                    ),
+                    "total_products_viewed": len(
+                        {
+                            r["product_id"]
+                            for r in events
+                            if r["event_name"] == "product_view" and r.get("product_id")
+                        }
+                    ),
+                    "total_cart_events": sum(r["event_name"] == "add_to_cart" for r in events),
+                    "total_checkout_events": sum(
+                        r["event_name"] == "checkout_started" for r in events
+                    ),
+                    "timeline_start": journey[0]["occurred_at"] if journey else None,
+                    "timeline_end": journey[-1]["occurred_at"] if journey else None,
+                }
+            )
     for o in sorted(orders, key=lambda o: (instant(o["created_at"]), o["order_id"])):
         oid = o["order_id"]
         scope_rows = {
@@ -337,8 +393,8 @@ def _build(
                 "revenue_basis": "line_gross_at_current_unit_price",
             }
         )
-    for name, rows in output.items():
-        for row in rows:
+    for name, materialized_rows in output.items():
+        for row in materialized_rows:
             if set(row) != set(SCHEMAS[name].fields):
                 raise ValueError("customer360_schema_mismatch")
             for field, typ in SCHEMAS[name].fields.items():

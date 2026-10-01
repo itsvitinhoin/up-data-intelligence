@@ -467,3 +467,115 @@ segue operation/execution de outro projeto, região ou job. Não aplica retries 
 Resultado desta entrega: **737 testes Python aprovados**, incluindo **65 testes novos**
 do control plane; ruff lint/format, mypy (118 arquivos), Terraform fmt/validate e
 git diff --check aprovados. Frontend não foi alterado e não foi executado.
+
+## CHANGE #16.2 — Intelligence particionado e spool local
+
+A primeira materialização real encontrou
+`analytics_unit_payload_too_large_partition_required` durante a leitura de fontes:
+o snapshot de `analytics_events` excedeu os 32 MiB de uma unidade do transporte.
+Este change implementa a correção **offline**; os fatos comerciais, policy,
+schemas, Terraform, Read API e frontend permanecem preservados.
+
+### Leitura e identidade
+
+`src/intelligence/live/events.py` usa inventário global e por dia local, com
+contagem total, `COUNT(DISTINCT fact_id)` e contagem de chaves inválidas. Duplicatas,
+inclusive entre dias, e IDs nulos/vazios bloqueiam antes de publicar. Todas as
+queries são parametrizadas por store/snapshot/cutoffs, usam `source_system=upzero`
+e `FOR SYSTEM_TIME AS OF @snapshot_at`. A projeção mantém os 25 campos aprovados.
+
+As folhas são determinísticas: dia + prefixo hexadecimal de SHA256(fact_id), com
+ordem pelo hash completo e fact_id. Quando uma folha excede linhas ou payload,
+o prefixo é subdividido recursivamente. Totais de filhos, folhas, dias e inventário
+precisam fechar. Não há OFFSET nem LIMIT sem chave. Um único Fact que não cabe em
+uma unidade falha explicitamente; o envelope não aumenta automaticamente.
+
+São **dois passes BigQuery de payload**: candidatos a anchor
+(`order_id IS NOT NULL OR event_name='register_approved'`) e todos os Facts. Ambos
+usam inventários/partições no mesmo snapshot. Há queries adicionais de inventário
+e split. O `IdentityContext` é construído uma vez com clientes/pedidos/links bounded
+e índice SQLite de anchors; depois fica selado. `resolve_event()` mantém a regra
+anterior de DIRECT/CUSTOMER_JOURNEY/SUPPORTED, conflitos, precedência e temporalidade.
+Não infere identidade por igualdade de user_id/customer_id nem por PII/fuzzy matching.
+A API `resolve()` offline continua compatível.
+
+### Stream e armazenamento temporário
+
+Um único processamento principal de Facts alimenta timeline, paid touchpoints e
+matches dos três scopes LIFETIME/ACQUISITION/REPEAT_PURCHASE. Timeline, touches,
+anchors, matches e cópia canônica de eventos ficam em SQLite execution-local.
+Distinct sessions/products e extremos/contagens da jornada são calculados sobre
+os índices no disco, sem listas globais de eventos ou milhões de tokens em RAM.
+Paid touchpoint sem resolução continua materializado; UTM/fbp isolados continuam
+insuficientes. Customer360 recebe jornadas/timeline/influence precomputados.
+Performance usa `build_from_influence()` e não reexecuta o resolver de Facts.
+As APIs de referência offline permanecem disponíveis com seus limites originais.
+
+O diretório temporário é 0700 e o banco é 0600. SQLite usa cache bounded, temporários
+em disco e mmap desabilitado. `with Spool()` fecha e remove o diretório em finally,
+inclusive em falhas. Spool pode conter IDs/eventos sensíveis: nunca publicar,
+exportar ou adicionar ao Git. Um crash/SIGKILL pode deixar `/tmp/up-intelligence-*`
+órfão até o encerramento do ambiente; limpar somente depois de confirmar que a
+execução terminou. É cache descartável; retry reconstrói a partir do snapshot.
+Nenhuma fonte BigQuery RAW/CORE é apagada ou alterada.
+
+### Hashes e publicação
+
+`source_snapshot_hash v2` usa SHA256 com marcador `source_snapshot_hash:v2`,
+frames de comprimento + JSON canônico, nomes de fontes e contagens. Fontes bounded
+são ordenadas pelo conteúdo canônico; eventos usam dia local/hash completo/fact_id.
+O hash inclui itens e independe da ordem de chegada/tamanho das folhas. O formato
+continua STRING; v2 deliberadamente difere do digest legado, sem migration.
+
+Hashes de conteúdo por tabela são calculados incrementalmente sobre iteradores
+ordenados do spool; a geração física é omitida do hash lógico final. O
+publication_id compõe esses digests e os metadados/cutoffs da publicação, sem
+canonicalizar toda a timeline numa lista. Mesmos inputs/cutoffs/config geram o
+mesmo ID. O spool permite passes locais adicionais para hash, agregação e staging;
+esses passes não repetem a leitura BigQuery de todos os Facts.
+
+O Writer aceita iteráveis reentrantes/spool e também iteradores de passagem única.
+Staging permanece em TEMP tables da session BigQuery. Inserts obedecem linhas,
+payload e o guard existente de request serializada de 8 MB, incluindo escaping.
+O limite existente de **500.000 bytes por linha de saída** permanece: uma célula
+identity_path excepcionalmente grande não é truncada e bloqueia publicação.
+Fontes não-evento e agregados comerciais continuam bounded (100 mil inputs/
+32 MiB, onde aplicável); isso não limita o histórico total de Facts/timeline.
+RAM depende do maior chunk e desses agregados bounded; disco cresce com o histórico.
+
+Antes de COMMIT, contagens esperadas/efetivas, duplicatas, store/policy/generation
+e receipt são verificadas. Receipt e HEAD CAS continuam na mesma transação.
+Quando explicitamente autorizada, a inicialização do HEAD também acontece nessa
+transação final; erro anterior não cria HEAD. Falha de staging aborta a session.
+Resultado ambíguo usa a reconciliação existente de receipt; não repete cegamente
+uma transação. Retry reconstrói iteradores de passagem única ou reutiliza spool
+reentrante durante a mesma execução, e reconhece receipt já confirmado.
+
+### Limites, diagnóstico e validação
+
+Permanecem 1 GiB/query, envelope de execução 32/128 GiB conforme runtime, timeout,
+contagem/reserva conservadora de queries, máximo de linhas e payload por unidade.
+Inventários, splits e inserts consomem o envelope; se ele esgotar, falha controlada
+sem ampliar budgets nem publicar parcialmente. Folhas menores não garantem que
+qualquer histórico caiba no orçamento de uma execução. Revisar orçamento/capacidade
+de disco antes de autorizar uma nova execução; esta entrega não altera infra.
+
+Logs `intelligence_event_inventory`, `intelligence_event_chunk` e
+`intelligence_event_stream_finished` usam store/policy, contagens, maior chunk,
+duração e bytes medidos (desconhecido permanece null). Cada pass reinicia os
+contadores; a ordem é anchors, depois principal. Não logam IDs de entidade, payload
+ou credenciais.
+
+Fixtures exclusivamente sintéticas cobrem 150 mil Facts e payload acima de 32 MiB,
+timeline acima de 100 mil linhas em staging, exatamente uma vez, paridade dos três
+scopes/Customer360/Performance, golden hashes do resolver anterior, isolamento,
+time travel/cutoffs, ausência/duplicação de chave, cobertura parcial, touch não
+resolvido, determinismo por ordem/chunk, orçamento e falha/retry/reconciliação.
+
+**Próxima etapa exige nova imagem** com este código, depois de autorização separada
+para build/deploy/validação live. Não há migration, novos schemas nem alterações
+Terraform/frontend neste change. Nenhum comando live foi executado.
+
+Resultado offline final do CHANGE #16.2: **1.083 testes aprovados** (43 novos),
+ruff check/format, mypy (121 arquivos), Terraform fmt/validate e
+`git diff --check` aprovados. Frontend não mudou e não precisou ser executado.

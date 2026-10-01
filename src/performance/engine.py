@@ -1,6 +1,7 @@
 """Bounded pure performance reference. No exclusive attribution or paid revenue."""
 
 from collections import defaultdict
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass
 from decimal import ROUND_HALF_EVEN, Decimal, localcontext
 
@@ -67,6 +68,8 @@ def _build(
     coverage: MediaCoverage,
     at: str,
     scope: InfluenceScope,
+    precomputed: dict[str, Iterable[Row]] | None = None,
+    source_snapshot_hash: str | None = None,
 ) -> Row:
     if (
         sum(len(snapshot[k]) for k in ("customers", "orders", "events", "identity_links"))
@@ -120,8 +123,20 @@ def _build(
             raise ValueError("duplicate_campaign_day")
         by_day[key] = row
     # Existing resolver validates identity and strict paid-touch-before-conversion.
-    influence = influence_build(p, **snapshot, calculated_at=at, influence_scope=scope)
-    candidates = influence["analytics_order_paid_influence"]
+    influence = (
+        precomputed
+        if precomputed is not None
+        else influence_build(p, **snapshot, calculated_at=at, influence_scope=scope)
+    )
+    candidates: list[Row] = []
+    candidate_bytes = 0
+    for row in influence["analytics_order_paid_influence"]:
+        candidate_bytes += len(canonical(row).encode()) if precomputed is not None else 0
+        if precomputed is not None and (
+            len(candidates) >= 100000 or candidate_bytes > 32 * 1024 * 1024
+        ):
+            raise ValueError("bounded_performance_commercial_aggregates_required")
+        candidates.append(row)
     matched = [r for r in candidates if r["campaign_id"] in campaign_map]
     unmapped = len(candidates) - len(matched)
     complete = p.facts_complete and unmapped == 0
@@ -131,7 +146,7 @@ def _build(
     }
     generation = digest(
         [
-            source,
+            source_snapshot_hash if source_snapshot_hash is not None else source,
             sorted(insights, key=canonical),
             sorted(campaigns, key=canonical),
             asdict(coverage),
@@ -341,3 +356,35 @@ def _build(
             "content_sha256": digest(out),
         },
     }
+
+
+def build_from_influence(
+    policy: Policy,
+    snapshot: Row,
+    *,
+    influence: dict[str, Iterable[Row]],
+    source_snapshot_hash: str,
+    accounts: tuple[Account, ...],
+    meta_insights: list[Row],
+    meta_campaigns: list[Row],
+    coverage: MediaCoverage,
+    calculated_at: str,
+    influence_scope: InfluenceScope = InfluenceScope.LIFETIME,
+) -> Row:
+    """Additive bounded commercial aggregate API; never resolves/replays raw Facts."""
+    if snapshot.get("events"):
+        raise ValueError("precomputed_performance_does_not_accept_events")
+    with localcontext() as ctx:
+        ctx.prec = 78
+        return _build(
+            policy,
+            snapshot,
+            accounts,
+            meta_insights,
+            meta_campaigns,
+            coverage,
+            calculated_at,
+            influence_scope,
+            influence,
+            source_snapshot_hash,
+        )
