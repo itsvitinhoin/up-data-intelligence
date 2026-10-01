@@ -14,7 +14,7 @@ from src.influence.identity import IdentityContext
 from src.influence.materialization import materialize as influence_build
 from src.intelligence.live.influence import InfluenceStream, JourneyLookup
 from src.intelligence.live.schema import PUBLICATION, SCHEMAS
-from src.intelligence.live.spool import PaidLookup, Spool, primitive
+from src.intelligence.live.spool import DiskEvidenceIndex, PaidLookup, Spool, primitive
 from src.intelligence.materialization import PrecomputedCustomer
 from src.intelligence.materialization import materialize as customer_build
 from src.performance.engine import MediaCoverage, build_from_influence, divide
@@ -258,8 +258,19 @@ def build_stream(
     base_publication: Row,
     generation: int,
 ) -> Row:
-    """Bounded non-event inputs, unlimited event history on disk, deterministic v2 hashes."""
-    if set(snapshot) != {"customers", "orders", "items", "identity_links"}:
+    """Bounded non-event inputs, unlimited event history on disk, deterministic v3 hashes."""
+    evidence = context.evidence
+    if (
+        not isinstance(evidence, DiskEvidenceIndex)
+        or evidence.spool is not spool
+        or not evidence.sealed
+        or evidence.store_id != policy.store_id
+        or evidence.history_from != instant(policy.history_from)
+        or evidence.as_of != instant(policy.as_of)
+        or evidence.calculated_at != instant(calculated_at)
+    ):
+        raise ValueError("live_identity_evidence_index_required")
+    if set(snapshot) != {"customers", "orders", "items"}:
         raise ValueError("intelligence_source_set_incomplete")
     if (
         sum(map(len, snapshot.values())) + len(meta_insights) + len(meta_campaigns) > 100000
@@ -297,7 +308,6 @@ def build_stream(
     for name, key in (
         ("customers", "customer_id"),
         ("orders", "order_id"),
-        ("identity_links", "link_id"),
     ):
         _local(snapshot[name], p, key)
     with localcontext() as ctx:
@@ -335,12 +345,18 @@ def build_stream(
             lambda name: spool.rows("customer:" + name),
         )
         customers = customer_build(
-            p, **snapshot, events=[], influence=influence, calculated_at=at, precomputed=precomputed
+            p,
+            **snapshot,
+            identity_links=[],
+            events=[],
+            influence=influence,
+            calculated_at=at,
+            precomputed=precomputed,
         )
         sources = {k: v for k, v in snapshot.items() if k != "items"}
         perf = build_from_influence(
             p,
-            {**sources, "events": []},
+            {**sources, "identity_links": [], "events": []},
             influence=influence["LIFETIME"]["tables"],
             source_snapshot_hash=source_hash,
             accounts=(account,),

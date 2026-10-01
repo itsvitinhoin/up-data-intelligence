@@ -12,7 +12,7 @@ from tempfile import TemporaryDirectory
 from typing import Any
 
 from src.analytics.engine import Row, instant
-from src.influence.identity import value
+from src.influence.identity import IDENTITY_EVIDENCE_CONTRACT_VERSION, resolver_evidence, value
 from src.utils.data import canonical
 
 
@@ -102,6 +102,8 @@ class Spool:
                 CREATE TABLE anchors(field TEXT,token TEXT,kind TEXT,customer TEXT,fact TEXT,data TEXT,
                   PRIMARY KEY(field,token,kind,fact));
                 CREATE TABLE owners(field TEXT,token TEXT,customer TEXT,PRIMARY KEY(field,token,customer));
+                CREATE TABLE evidence_links(source_fact_id TEXT NOT NULL,link_id TEXT NOT NULL PRIMARY KEY,data TEXT NOT NULL);
+                CREATE INDEX evidence_source_fact ON evidence_links(source_fact_id,link_id);
                 CREATE TABLE matches(scope TEXT,oid TEXT,campaign TEXT,fact TEXT,at TEXT,data TEXT,
                   PRIMARY KEY(scope,oid,campaign,fact));
             """)
@@ -151,12 +153,22 @@ class Spool:
     def source_hash(
         self, sources: Mapping[str, list[Row]], *, events: str = "source:events"
     ) -> str:
-        h = hashlib.sha256(b"source_snapshot_hash:v2\0")
-        for name in sorted({*sources, "events"}):
+        if set(sources) != {"customers", "orders", "items"}:
+            raise ValueError("intelligence_source_set_incomplete")
+        h = hashlib.sha256(b"source_snapshot_hash:v3\0")
+        frame(h, {"identity_evidence_contract_version": IDENTITY_EVIDENCE_CONTRACT_VERSION})
+        for name in sorted({*sources, "events", "identity_evidence"}):
             frame(h, name)
             count = 0
             iterator = (
-                iter(self.rows(events))
+                (
+                    json.loads(data)
+                    for (data,) in self.db.execute(
+                        "SELECT data FROM evidence_links ORDER BY source_fact_id,link_id"
+                    )
+                )
+                if name == "identity_evidence"
+                else iter(self.rows(events))
                 if name == "events"
                 else iter(sorted(sources[name], key=canonical))
             )
@@ -237,3 +249,60 @@ class PaidLookup(Mapping[str, Row]):
             "SELECT fact FROM rows WHERE name='paid' ORDER BY fact"
         ):
             yield fid
+
+
+class DiskEvidenceIndex:
+    """Private sealed index; no remote IO and no per-Fact Python link list."""
+
+    def __init__(
+        self, spool: Spool, *, store_id: str, history_from: str, as_of: str, calculated_at: str
+    ):
+        self.spool, self.store_id = spool, store_id
+        self.history_from, self.as_of, self.calculated_at = map(
+            instant, (history_from, as_of, calculated_at)
+        )
+        self.sealed = False
+
+    def add(self, row: Row) -> None:
+        if self.sealed:
+            raise ValueError("identity_evidence_is_immutable")
+        if (
+            not resolver_evidence(row)
+            or not value(row, "link_id")
+            or not value(row, "source_fact_id")
+            or row.get("source_version_id") is None
+            or row.get("occurred_at") is None
+        ):
+            raise ValueError("duplicate_or_invalid_identity_evidence")
+        if (
+            row.get("store_id") != self.store_id
+            or row.get("source_system") != "upzero"
+            or not self.history_from <= instant(row["occurred_at"]) < self.as_of
+        ):
+            raise ValueError("identity_evidence_scope_mismatch")
+        if row.get("observed_at") and instant(row["observed_at"]) > self.calculated_at:
+            raise ValueError("snapshot_observation_after_calculation")
+        try:
+            self.spool.db.execute(
+                "INSERT INTO evidence_links VALUES(?,?,?)",
+                (
+                    row["source_fact_id"],
+                    row["link_id"],
+                    canonical(primitive(row)),
+                ),
+            )
+        except sqlite3.IntegrityError:
+            raise ValueError("duplicate_or_invalid_identity_evidence") from None
+
+    def seal(self) -> None:
+        self.spool.db.commit()
+        self.sealed = True
+
+    def links_for(self, source_fact_id: str) -> Iterator[Mapping[str, Any]]:
+        if not self.sealed:
+            raise ValueError("identity_evidence_not_sealed")
+        for (data,) in self.spool.db.execute(
+            "SELECT data FROM evidence_links WHERE source_fact_id=? ORDER BY link_id",
+            (source_fact_id,),
+        ):
+            yield json.loads(data)

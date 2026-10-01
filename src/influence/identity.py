@@ -16,8 +16,10 @@ def value(row: Mapping[str, Any], field: str) -> str | None:
     return v if isinstance(v, str) and v.strip() else None
 
 
-def user_link(fact: Row, links: Iterable[Mapping[str, Any]]) -> str | None:
-    for link in sorted(links, key=lambda r: str(r.get("link_id"))):
+def user_link(
+    fact: Row, links: Iterable[Mapping[str, Any]], *, ordered: bool = False
+) -> str | None:
+    for link in links if ordered else sorted(links, key=lambda r: str(r.get("link_id"))):
         if (
             link.get("source_fact_id") == fact["fact_id"]
             and value(fact, "version_id") is not None
@@ -35,6 +37,48 @@ def user_link(fact: Row, links: Iterable[Mapping[str, Any]]) -> str | None:
         ):
             return value(link, "link_id")
     return None
+
+
+IDENTITY_EVIDENCE_CONTRACT_VERSION = "identity-evidence:v1"
+RELEVANT_EVIDENCE_TYPES = frozenset(
+    {
+        ("observed_cooccurrence", "session_id", "user_id"),
+        ("observed_registration_customer", "fact_id", "customer_id"),
+    }
+)
+
+
+def resolver_evidence(row: Mapping[str, Any]) -> bool:
+    return (
+        row.get("confidence_type") == "DETERMINISTIC"
+        and (row.get("evidence_type"), row.get("left_namespace"), row.get("right_namespace"))
+        in RELEVANT_EVIDENCE_TYPES
+    )
+
+
+class EvidenceIndex(Protocol):
+    """Sealed inputs; links_for yields fresh/read-only rows ordered by link_id."""
+
+    def links_for(self, source_fact_id: str) -> Iterator[Mapping[str, Any]]: ...
+
+
+class MemoryEvidenceIndex:
+    """Compatible bounded offline index; never changes the legacy evidence predicate."""
+
+    def __init__(self, links: Iterable[Mapping[str, Any]]):
+        grouped: dict[str, list[Mapping[str, Any]]] = defaultdict(list)
+        for link in links:
+            if link.get("source_fact_id"):
+                grouped[link["source_fact_id"]].append(MappingProxyType(deepcopy(dict(link))))
+        self._rows = MappingProxyType(
+            {
+                k: tuple(sorted(rows, key=lambda r: str(r.get("link_id"))))
+                for k, rows in grouped.items()
+            }
+        )
+
+    def links_for(self, source_fact_id: str) -> Iterator[Mapping[str, Any]]:
+        return iter(self._rows.get(source_fact_id, ()))
 
 
 @dataclass(frozen=True)
@@ -84,7 +128,7 @@ class MemoryAnchors:
 class IdentityContext:
     customers: frozenset[str]
     orders: Mapping[str, Mapping[str, Any]]
-    links: Mapping[str, tuple[Mapping[str, Any], ...]]
+    evidence: EvidenceIndex
     index: AnchorIndex
 
     @classmethod
@@ -92,16 +136,12 @@ class IdentityContext:
         cls,
         customers: list[Row],
         orders: list[Row],
-        links: list[Row],
+        links: list[Row] | EvidenceIndex,
         anchors: Iterable[Row],
         *,
         index: AnchorIndex | None = None,
     ) -> "IdentityContext":
         cids = frozenset(c["customer_id"] for c in customers)
-        grouped: dict[str, list[Row]] = defaultdict(list)
-        for link in links:
-            if link.get("source_fact_id"):
-                grouped[link["source_fact_id"]].append(deepcopy(link))
         context = cls(
             cids,
             MappingProxyType(
@@ -111,9 +151,7 @@ class IdentityContext:
                     if o.get("customer_id") in cids
                 }
             ),
-            MappingProxyType(
-                {k: tuple(MappingProxyType(v) for v in rows) for k, rows in grouped.items()}
-            ),
+            MemoryEvidenceIndex(links) if isinstance(links, list) else links,
             index if index is not None else MemoryAnchors(),
         )
         for fact in anchors:
@@ -124,7 +162,7 @@ class IdentityContext:
         return context
 
     def user_evidence(self, fact: Row) -> str | None:
-        return user_link(fact, list(self.links.get(fact["fact_id"], ())))
+        return user_link(fact, self.evidence.links_for(fact["fact_id"]), ordered=True)
 
     def explicit(self, fact: Row) -> tuple[Resolution | None, Row | None]:
         fid, oid = fact["fact_id"], value(fact, "order_id")
@@ -155,26 +193,39 @@ class IdentityContext:
             } and instant(fact["occurred_at"]) >= instant(order["created_at"]) else None
         if fact.get("event_name") != "register_approved":
             return None, None
-        verified = [
-            link
-            for link in self.links.get(fid, ())
-            if value(fact, "version_id") is not None
-            and link.get("source_version_id") == fact["version_id"]
-            and link.get("confidence_type") == "DETERMINISTIC"
-            and link.get("evidence_type") == "observed_registration_customer"
-            and link.get("left_namespace") == "fact_id"
-            and link.get("left_id") == fid
-            and link.get("right_namespace") == "customer_id"
-            and link.get("right_id") in self.customers
-            and link.get("occurred_at") is not None
-            and instant(link["occurred_at"]) == instant(fact["occurred_at"])
-        ]
-        ids = {link["right_id"] for link in verified}
-        if len(ids) > 1:
-            return Resolution(None, None, [], "ambiguous_registration"), None
+
+        def verified() -> Iterator[Mapping[str, Any]]:
+            for link in self.evidence.links_for(fid):
+                if (
+                    value(fact, "version_id") is not None
+                    and link.get("source_version_id") == fact["version_id"]
+                    and link.get("confidence_type") == "DETERMINISTIC"
+                    and link.get("evidence_type") == "observed_registration_customer"
+                    and link.get("left_namespace") == "fact_id"
+                    and link.get("left_id") == fid
+                    and link.get("right_namespace") == "customer_id"
+                    and link.get("right_id") in self.customers
+                    and link.get("occurred_at") is not None
+                    and instant(link["occurred_at"]) == instant(fact["occurred_at"])
+                ):
+                    yield link
+
+        # Determine ambiguity without materializing all rows for one Fact.
+        ids = set()
+        for link in verified():
+            ids.add(link["right_id"])
+            if len(ids) > 1:
+                return Resolution(None, None, [], "ambiguous_registration"), None
         if not ids:
             return None, None
         cid = next(iter(ids))
+        link_ids = []
+        size = 2
+        for link in verified():
+            size += len(canonical(link["link_id"]).encode()) + 1
+            if self.index.maximum_path_bytes is not None and size > self.index.maximum_path_bytes:
+                raise ValueError("intelligence_row_too_large")
+            link_ids.append(link["link_id"])
         path = {
             "via": "register_approved",
             "anchor_fact_id": fid,
@@ -182,7 +233,7 @@ class IdentityContext:
             "anchor_at": fact["occurred_at"],
             "anchor_order_id": None,
             "customer_id": cid,
-            "identity_link_ids": sorted(link["link_id"] for link in verified),
+            "identity_link_ids": sorted(link_ids),
         }
         return Resolution(cid, "CUSTOMER_JOURNEY", [path], "explicit_registration"), {
             "fact": fact,

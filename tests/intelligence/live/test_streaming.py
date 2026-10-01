@@ -15,14 +15,14 @@ from src.analytics.cloud.transport import CloudConfig
 from src.bigquery.writer import REQUEST_BYTES, request_bytes
 from src.domain.models import SafeError
 from src.influence.engine import InfluenceScope
-from src.influence.identity import IdentityContext, resolve
+from src.influence.identity import IdentityContext, resolve, resolver_evidence
 from src.influence.materialization import materialize as reference_influence
 from src.intelligence.live.events import FIELDS, EventReader
 from src.intelligence.live.influence import InfluenceStream
 from src.intelligence.live.materialize import build, build_stream
 from src.intelligence.live.publication import Writer, commit_sql
 from src.intelligence.live.schema import PUBLICATION
-from src.intelligence.live.spool import DiskAnchors, Rows, Spool, clock
+from src.intelligence.live.spool import DiskAnchors, DiskEvidenceIndex, Rows, Spool, clock
 from src.performance.engine import build as reference_performance
 from src.performance.engine import build_from_influence
 from src.utils.data import canonical, digest
@@ -198,13 +198,36 @@ class CountingStage:
         return [], None
 
 
+def sealed_evidence(p, s, a, spool):
+    index = DiskEvidenceIndex(
+        spool,
+        store_id=p.store_id,
+        history_from=p.history_from,
+        as_of=p.as_of,
+        calculated_at=a["calculated_at"],
+    )
+    for row in s["identity_links"]:
+        if (
+            resolver_evidence(row)
+            and row.get("source_version_id") is not None
+            and row.get("occurred_at") is not None
+        ):
+            index.add(row)
+    index.seal()
+    return index
+
+
 def materialize_offline(p, s, a, spool, *, chunks=None):
     context = IdentityContext.build(
-        s["customers"], s["orders"], s["identity_links"], s["events"], index=DiskAnchors(spool)
+        s["customers"],
+        s["orders"],
+        sealed_evidence(p, s, a, spool),
+        s["events"],
+        index=DiskAnchors(spool),
     )
     return build_stream(
         p,
-        {k: v for k, v in s.items() if k != "events"},
+        {k: v for k, v in s.items() if k not in {"events", "identity_links"}},
         events=chunks if chunks is not None else [s["events"]],
         context=context,
         spool=spool,
@@ -472,13 +495,13 @@ def test_150000_events_over_32mib_and_timeline_staged_without_global_list():
         context = IdentityContext.build(
             s["customers"],
             s["orders"],
-            s["identity_links"],
+            sealed_evidence(p, s, a, spool),
             (f for chunk in reader.chunks(anchors=True) for f in chunk),
             index=DiskAnchors(spool),
         )
         new = build_stream(
             p,
-            {k: v for k, v in s.items() if k != "events"},
+            {k: v for k, v in s.items() if k not in {"events", "identity_links"}},
             events=reader.chunks(),
             context=context,
             spool=spool,
@@ -632,7 +655,7 @@ def test_context_order_link_rows_are_sealed_and_input_mutation_cannot_change_ide
         with pytest.raises(TypeError):
             ctx.orders["o1"]["customer_id"] = "other"
         with pytest.raises(TypeError):
-            ctx.links["f2"][0]["right_id"] = "other"
+            next(ctx.evidence.links_for("f2"))["right_id"] = "other"
         s["orders"][0]["customer_id"] = "other"
         s["identity_links"][0]["right_id"] = "other"
         assert ctx.resolve_event(s["events"][0]) == before
@@ -689,13 +712,18 @@ def test_runtime_routes_events_through_partitions_and_initializes_head_only_at_c
 
         def route(sql, params, **kwargs):
             reads.append(sql)
+            if "/* intelligence_evidence_" in sql:
+                return (
+                    ([{"n": 0, "distinct_n": 0, "invalid_n": 0, "invalid_source_n": 0}], None)
+                    if "_total" in sql
+                    else ([], None)
+                )
             if "/* intelligence_event_" in sql:
                 return original(sql, params, **kwargs)
             for table, source in (
                 ("customers", "customers"),
                 ("orders", "orders"),
                 ("order_items", "items"),
-                ("identity_links", "identity_links"),
             ):
                 if f".up_core.{table}`" in sql:
                     return deepcopy(s[source]), None

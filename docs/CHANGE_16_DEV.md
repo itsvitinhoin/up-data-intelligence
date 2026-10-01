@@ -579,3 +579,119 @@ Terraform/frontend neste change. Nenhum comando live foi executado.
 Resultado offline final do CHANGE #16.2: **1.083 testes aprovados** (43 novos),
 ruff check/format, mypy (121 arquivos), Terraform fmt/validate e
 `git diff --check` aprovados. Frontend não mudou e não precisou ser executado.
+
+## CHANGE #16.2.1 — Identity Evidence em streaming
+
+A execução posterior ao #16.2 falhou com
+`analytics_unit_payload_too_large_partition_required` **antes** dos logs do EventReader.
+No diagnóstico fornecido pelo operador para o mesmo snapshot
+`2026-10-01T23:16:44.306915+00:00`, `identity_links` tinha **834.802 rows / ~1.021,318 MiB**.
+Os inputs menores eram customers (1.124 / ~0,379 MiB), orders (18 / ~0,007 MiB)
+e items (304 / ~0,124 MiB). Analytics Events tinha 333.117 rows, 333.117 fact_ids
+distintos e zero chaves inválidas. O #16.2 resolveu Facts grandes; o #16.2.1 resolve
+a fonte Evidence grande que ainda era lida integralmente. Estas contagens são
+evidência do operador, não queries executadas durante esta implementação offline.
+
+### Contrato exato do resolver
+
+O novo `EvidenceReader` projeta apenas 13 campos: store_id, source_system, link_id,
+source_fact_id, source_version_id, left_namespace, left_id, right_namespace,
+right_id, confidence_type, evidence_type, occurred_at e observed_at. Não usa SELECT *.
+Todas as leituras usam store autorizado, source_system=upzero, snapshot fixo igual
+ao das demais fontes e `history_from <= occurred_at < as_of`.
+
+Só entram tipos com confidence_type=DETERMINISTIC e:
+
+- observed_cooccurrence, session_id → user_id;
+- observed_registration_customer, fact_id → customer_id.
+
+No diagnóstico real havia 114.693 links determinísticos session → user. As famílias
+anonymous → visitor, visitor → session, observed_order_customer, confidence NULL ou
+não determinística e outros tipos não entram no algoritmo atual. **Não são apagadas
+nem modificadas no CORE**. Fact.order_id → Order → Customer continua independente
+dessas famílias. Não se adicionam relationships, fallback, fuzzy matching ou PII.
+
+source_version_id e occurred_at devem ser não nulos. O inventário global verifica
+COUNT, DISTINCT link_id, link_id ausente/vazio e source_fact_id ausente/vazio. Esse
+inventário deliberadamente inspeciona referências quebradas **antes** de aplicar
+source_fact_id IS NOT NULL: filtrar primeiro esconderia evidência relevante inválida.
+Qualquer uma dessas falhas bloqueia com `duplicate_or_invalid_identity_evidence`.
+Depois da validação, todos os chunks exigem também source_fact_id IS NOT NULL.
+A validação precisa do resolver (versão, namespaces, IDs e timestamp exatos do Fact)
+continua sendo aplicada; carregar um candidato não o torna evidência válida sozinho.
+
+### Partições e índice privado
+
+O reader usa inventário global e por dia local, SHA256(link_id), prefixos
+hexadecimais recursivos e ordenação determinística. Conta/verifica filhos, folhas,
+dias e total global. As únicas falhas de transporte que provocam split são o
+limite de linhas/payload por unidade. Não usa OFFSET, LIMIT arbitrário nem altera
+limites. Um link individual que não cabe no transporte falha explicitamente.
+Duplicatas entre dias também bloqueiam; SQLite impõe PRIMARY KEY(link_id) como
+segunda defesa. Não há limite global de 100 mil links ou 32 MiB de evidence.
+
+O spool tem `evidence_links(source_fact_id, link_id PRIMARY KEY, data)` e índice
+`(source_fact_id, link_id)`. Permissões continuam 0600, diretório 0700, cleanup em
+finally; crash/SIGKILL pode deixar /tmp órfão conforme seção anterior. O índice é
+selado após carga. `links_for(fid)` lê somente SQLite, em ordem de link_id, sem
+query BigQuery por Fact e sem criar uma lista de todos os links para aquele Fact.
+Registro aprovado verifica ambiguidade por iterator e só materializa os IDs de
+suporte necessários ao path final, mantendo o guard existente por linha de saída.
+
+`EvidenceIndex` é o contrato. `MemoryEvidenceIndex` preserva resolve() offline;
+`DiskEvidenceIndex` serve o runtime. As comparações DIRECT/CUSTOMER_JOURNEY/SUPPORTED,
+precedência, ambiguidades e touch-before-order foram preservadas. O runtime lê
+customers/orders/items bounded e Meta bounded, carrega/seal evidence, lê anchors,
+constrói IdentityContext e processa o stream principal de eventos. Customer360 e
+Performance recebem `identity_links=[]` apenas para compatibilidade com as APIs
+precomputadas legadas; não reprocessam links nem resolvem os Facts novamente.
+
+### Hash v3 e limites
+
+O live `source_snapshot_hash:v3` incorpora o frame
+`identity_evidence_contract_version=identity-evidence:v1`, customers/orders/items,
+eventos do spool e somente evidence do contrato acima. Evidence é ordenada por
+source_fact_id/link_id; eventos mantêm dia/hash/fact_id. Frames incluem nome de
+fonte, comprimento, row canônica e contagem. Ordem física, tamanho de chunk e split
+não alteram hash/publication_id. Evidence irrelevante não muda o v3; evidence
+relevante muda. O live builder exige índice de evidence selado no mesmo spool,
+store e cutoffs; não aceita um MemoryEvidenceIndex ou índice externo que deixaria
+os inputs usados pelo resolver fora do hash. O campo físico permanece STRING e não há migration. O v3 supersede
+o v2 live; segundo o estado fornecido não existe publicação Intelligence live
+bem-sucedida anterior. APIs bounded de referência mantêm seu hash legado.
+
+Os limites de 100 mil/32 MiB do snapshot non-event passam a incluir somente
+customers/orders/items e os guards já existentes de Meta/agregados comerciais.
+Evidence/events permanecem limitados **por unidade**. Transport não mudou:
+1 GiB/query, 128 GiB no control plane (ou envelope já selecionado pelo CLI),
+timeouts e reservas conservadoras por query preservados. Inventários, splits,
+folhas, staging e reconciliação consomem o mesmo transporte/envelope; falhas de
+budget não são tratadas como payload overflow e não ampliam limites. Capacity de
+disco e orçamento de execução continuam pré-requisitos operacionais.
+
+Publication writer e RECEIPT/HEAD CAS não mudaram. Falha de evidence antes da
+publicação deixa HEAD ausente/antigo. Retry reconstrói spool no snapshot autorizado;
+receipt confirmado continua idempotente e commit ambíguo continua reconciliado.
+
+Logs novos: `intelligence_evidence_inventory`, `intelligence_evidence_chunk` e
+`intelligence_evidence_stream_finished`, com store/policy, contagens, maior chunk,
+duração e bytes medidos. Sem link/source_fact/session/user/customer IDs ou payload.
+
+### Validação offline e próxima etapa
+
+Fixtures sintéticas cobrem 150 mil evidências relevantes (>32 MiB) **simultaneamente
+com 150 mil eventos**, partições bounded/exatamente uma vez, filtering, ausência e
+duplicação de IDs, time travel, paridade golden do resolver, SUPPORTED/registration/
+ambiguidades, invariância a evidence irrelevante/ordem/chunks, hash v3, envelopes,
+non-event bounds e runtime completo com falha/retry/reconciliação. O dataset de
+ruído sintético menor representa as famílias irrelevantes; não cria 834 mil objetos
+Python nem contém dados reais. Nenhuma query live foi feita.
+
+Nova imagem será necessária em etapa posterior autorizada. Nenhum schema físico,
+Terraform, frontend, policy, binding ou dado CORE mudou. Nenhum build, deploy,
+materialização, Meta API ou operação GCP foi executado nesta entrega.
+
+Resultado offline final do CHANGE #16.2.1: **1.122 testes aprovados** (39 novos),
+ruff check/format, mypy (122 arquivos), Terraform fmt/validate e
+`git diff --check` aprovados. Push autorizado somente deste código/documentação;
+nenhuma operação live foi executada.

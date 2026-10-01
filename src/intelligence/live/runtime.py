@@ -15,10 +15,11 @@ from src.dashboard.repository import BigQueryReadSession, ReadBudget
 from src.dashboard.service import DashboardService
 from src.influence.identity import IdentityContext
 from src.intelligence.live.events import EventReader
+from src.intelligence.live.evidence import EvidenceReader
 from src.intelligence.live.materialize import build_stream
 from src.intelligence.live.publication import Writer
 from src.intelligence.live.schema import PUBLICATION
-from src.intelligence.live.spool import DiskAnchors, Spool
+from src.intelligence.live.spool import DiskAnchors, DiskEvidenceIndex, Spool
 from src.performance.engine import MediaCoverage
 from src.utils.data import digest, timestamp
 
@@ -126,7 +127,6 @@ def materialize(
         "customers": "store_id source_system customer_id customer_type company_name trade_name state city version_id observed_at".split(),
         "orders": "store_id source_system order_id customer_id created_at order_status requested_total fulfilled_total requested_items_qty fulfilled_items_qty version_id observed_at".split(),
         "order_items": "store_id source_system order_id item_id order_created_at variant_id sku asset_id qty original_qty unit_price status present_in_latest_snapshot parent_order_version_id observed_at".split(),
-        "identity_links": list(TABLES["identity_links"].fields),
     }
     snapshot = {}
     source_rows = 0
@@ -134,7 +134,7 @@ def materialize(
     for name, fields in specs.items():
         if not set(fields) <= TABLES[name].fields.keys():
             raise ValueError("intelligence_source_schema_drift")
-        conditions = " AND source_system='upzero'" if name != "identity_links" else ""
+        conditions = " AND source_system='upzero'"
         stamp = {
             "orders": "created_at",
             "order_items": "order_created_at",
@@ -222,11 +222,23 @@ def materialize(
         digest(compatible),
     )
     with Spool() as spool:
+        evidence = DiskEvidenceIndex(
+            spool,
+            store_id=policy.store_id,
+            history_from=policy.history_from,
+            as_of=policy.as_of,
+            calculated_at=calculated_at,
+        )
+        for chunk in EvidenceReader(transport, policy, snapshot_at).chunks():
+            for link in chunk:
+                evidence.add(link)
+            spool.db.commit()
+        evidence.seal()
         reader = EventReader(transport, policy, snapshot_at)
         context = IdentityContext.build(
             snapshot["customers"],
             snapshot["orders"],
-            snapshot["identity_links"],
+            evidence,
             (fact for chunk in reader.chunks(anchors=True) for fact in chunk),
             index=DiskAnchors(spool),
         )
