@@ -53,17 +53,35 @@ def dispatch(
         resource, store = "customer_orders", _value(query, "store_id")
     elif customer:
         resource, store = "customer", _value(query, "store_id")
-    elif path in {"/v1/customers", "/v1/retention", "/v1/products", "/v1/funnel", "/v1/geography"}:
+    elif path in {
+        "/v1/orders",
+        "/v1/acquisition",
+        "/v1/customers",
+        "/v1/retention",
+        "/v1/products",
+        "/v1/funnel",
+        "/v1/geography",
+    }:
         resource, store = path.rsplit("/", 1)[-1], _value(query, "store_id")
     else:
         raise ReadError(404, "route_not_found")
     allowed = {"tenant_id", "operation"}
     if not overview:
         allowed.add("store_id")
-    if resource in {"overview", "retention", "products", "funnel"}:
+    if resource in {
+        "overview",
+        "orders",
+        "acquisition",
+        "customers",
+        "retention",
+        "products",
+        "funnel",
+    }:
         allowed.update({"from", "to"})
-    if resource in {"customers", "products", "customer_orders"}:
+    if resource in {"orders", "customers", "products", "customer_orders"}:
         allowed.update({"page_size", "cursor"})
+    if resource == "orders":
+        allowed.add("status")
     if set(query) - allowed:
         raise ReadError(400, "unsupported_filter")
     tenant = _value(query, "tenant_id")
@@ -77,7 +95,26 @@ def dispatch(
         )
     elif resource == "customers":
         result = service.customers(
-            principal, grant, size=_value(query, "page_size"), cursor=_value(query, "cursor")
+            principal,
+            grant,
+            size=_value(query, "page_size"),
+            cursor=_value(query, "cursor"),
+            from_day=_value(query, "from"),
+            to_day=_value(query, "to"),
+        )
+    elif resource == "orders":
+        result = service.orders(
+            principal,
+            grant,
+            size=_value(query, "page_size"),
+            cursor=_value(query, "cursor"),
+            from_day=_value(query, "from"),
+            to_day=_value(query, "to"),
+            status=_value(query, "status"),
+        )
+    elif resource == "acquisition":
+        result = service.acquisition(
+            principal, grant, from_day=_value(query, "from"), to_day=_value(query, "to")
         )
     elif resource == "customer":
         result = service.customer(principal, grant, unquote(customer.group(1)))  # type: ignore[union-attr]

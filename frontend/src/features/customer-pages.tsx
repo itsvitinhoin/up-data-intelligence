@@ -1,4 +1,7 @@
 "use client";
+import { B2BReadBoundary } from "@/hooks/use-dashboard-read";
+import { RealCustomers, RealCustomer } from "./b2b-read-pages";
+
 import { recordColumns } from "@/lib/list-export";
 import { ListExport } from "@/components/exports";
 import { useState } from "react";
@@ -96,7 +99,7 @@ function RetailCustomerDetail({ data }: { data: CustomerDetail }) {
     </>
   );
 }
-export function CustomersPage() {
+function DemoCustomersPage() {
   const { filters, setFilters, scope } = useWorkspace();
   const b2c = scope?.operation === "B2C";
   const q = useResource("customers");
@@ -220,7 +223,7 @@ export function CustomersPage() {
     </>
   );
 }
-export function CustomerDetailPage({ id }: { id: string }) {
+function DemoCustomerDetailPage({ id }: { id: string }) {
   const { scope } = useWorkspace();
   const b2c = scope?.operation === "B2C";
   const q = useCustomer(id);
@@ -372,5 +375,23 @@ export function CustomerDetailPage({ id }: { id: string }) {
         </TabsContent>
       </Tabs>
     </>
+  );
+}
+
+export function CustomersPage() {
+  return (
+    <B2BReadBoundary real={(metadata) => <RealCustomers metadata={metadata} />}>
+      <DemoCustomersPage />
+    </B2BReadBoundary>
+  );
+}
+
+export function CustomerDetailPage({ id }: { id: string }) {
+  return (
+    <B2BReadBoundary
+      real={(metadata) => <RealCustomer metadata={metadata} id={id} />}
+    >
+      <DemoCustomerDetailPage id={id} />
+    </B2BReadBoundary>
   );
 }

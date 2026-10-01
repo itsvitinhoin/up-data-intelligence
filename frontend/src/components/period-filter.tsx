@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { usePathname } from "next/navigation";
+import { activePageState, isB2BReadPage } from "@/lib/dashboard-source";
 import { CalendarDays } from "lucide-react";
 import { useWorkspace } from "@/features/providers";
 import {
@@ -21,19 +22,14 @@ import {
   exclusiveToInclusive,
 } from "@/lib/period";
 export function PeriodFilter() {
-  const { filters, setFilters, dataMode, scope, overviewReadState } =
+  const { filters, setFilters, dataMode, scope, dashboardPageState } =
     useWorkspace();
   const path = usePathname();
   const previewRoute =
-    path === "/b2b" &&
+    isB2BReadPage(path) &&
     scope?.operation === "B2B" &&
     dataMode === "read-api-preview";
-  const current =
-    previewRoute &&
-    overviewReadState?.scopeKey ===
-      `${scope.tenant_id}/${scope.store_id}/${scope.operation}`
-      ? overviewReadState
-      : null;
+  const current = activePageState(path, dataMode, scope, dashboardPageState);
   const coverage = current?.metadata;
   const pendingCoverage =
     previewRoute && current?.source !== "demo" && !coverage;

@@ -97,6 +97,13 @@ WHERE {scope} AND order_date>=@from AND order_date<@to"""
         )
         if name == "customer":
             params["customer"] = ("STRING", values.get("customer"))
+        period_selector = ""
+        if name == "customers" and values.get("from_day") is not None:
+            params.update({"from": ("DATE", values["from_day"]), "to": ("DATE", values["to_day"])})
+            period_selector = f"""AND EXISTS (
+ SELECT 1 FROM {a("analytics_customer_purchase_sequence")} {history} s
+ WHERE s.store_id=m.store_id AND s.policy_hash=@policy AND s.customer_id=m.customer_id
+ AND s.order_date>=@from AND s.order_date<@to)"""
         selector = "m.customer_id=@customer" if name == "customer" else "cursor_key>@after"
         sql = f"""/* dashboard:{name} */
 WITH metrics AS (
@@ -113,7 +120,47 @@ SELECT m.customer_id,m.customer_type,m.purchases,m.first_purchase_at,
  m.first_purchase_date,m.ltv_lifetime_observed,m.ltv_paid,m.cursor_key,
  p.name,p.company_name,p.trade_name,p.state,p.city
 FROM metrics m LEFT JOIN profiles p ON p.customer_id=m.customer_id
-WHERE {selector} ORDER BY m.cursor_key LIMIT @limit"""
+WHERE {selector} {period_selector} ORDER BY m.cursor_key LIMIT @limit"""
+    elif name == "store_orders":
+        params.update(
+            {
+                "from": ("DATE", values.get("from_day")),
+                "to": ("DATE", values.get("to_day")),
+                "timezone": ("STRING", values.get("timezone")),
+                "status": ("STRING", values.get("status")),
+                "after": ("STRING", values.get("after", "")),
+                "limit": ("INT64", values.get("limit")),
+                "as_of": ("TIMESTAMP", values.get("as_of")),
+            }
+        )
+        sql = f"""/* dashboard:store_orders */
+WITH selected AS (
+ SELECT order_id,customer_id,created_at,order_status,payment_status,
+ requested_total,fulfilled_total,requested_items_qty,fulfilled_items_qty,
+ CONCAT(FORMAT_TIMESTAMP('%Y-%m-%dT%H:%M:%E6SZ',created_at),':',order_id) AS cursor_key
+ FROM {c("orders")} {history}
+ WHERE store_id=@store AND source_system='upzero'
+ AND DATE(created_at,@timezone)>=@from AND DATE(created_at,@timezone)<@to
+ AND created_at<@as_of AND (@status IS NULL OR order_status=@status)
+)
+SELECT * FROM selected WHERE cursor_key>@after ORDER BY created_at,order_id LIMIT @limit"""
+        params.pop("policy")
+    elif name == "acquisition_first":
+        params.update(
+            {"from": ("DATE", values.get("from_day")), "to": ("DATE", values.get("to_day"))}
+        )
+        sql = f"""/* dashboard:acquisition_first */
+WITH first_orders AS (
+ SELECT *,COUNT(*) OVER(PARTITION BY customer_id) AS customer_first_rows,
+ COUNT(*) OVER(PARTITION BY order_id) AS order_first_rows
+ FROM {a("analytics_customer_purchase_sequence")} {history}
+ WHERE {scope} AND purchase_number=1
+)
+SELECT COUNT(DISTINCT customer_id) AS customers,COUNT(*) AS orders,
+ COUNTIF(customer_first_rows!=1 OR order_first_rows!=1 OR customer_id IS NULL OR order_id IS NULL) AS invalid_first_orders,
+ IF(COUNTIF(revenue_generated IS NULL)>0,NULL,IF(COUNT(*)=0,NUMERIC '0',SUM(revenue_generated))) AS requested,
+ IF(COUNTIF(revenue_fulfilled IS NULL)>0,NULL,IF(COUNT(*)=0,NUMERIC '0',SUM(revenue_fulfilled))) AS fulfilled
+FROM first_orders WHERE order_date>=@from AND order_date<@to"""
     elif name == "orders":
         params.update(
             {

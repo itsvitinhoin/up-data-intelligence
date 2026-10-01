@@ -1,4 +1,7 @@
 "use client";
+import { B2BReadBoundary } from "@/hooks/use-dashboard-read";
+import { RealGeography } from "./b2b-read-pages";
+
 import { ListExport } from "@/components/exports";
 import { useState } from "react";
 import Link from "next/link";
@@ -26,7 +29,7 @@ type GeoMetric =
   | "orders"
   | "newCustomers"
   | "influencedCustomers";
-export function GeographyPage() {
+function DemoGeographyPage() {
   const q = useResource("geography");
   const { filters, setFilters } = useWorkspace();
   const [metric, setMetric] = useState<GeoMetric>("requested");
@@ -319,5 +322,13 @@ export function GeographyPage() {
         </Notice>
       )}
     </>
+  );
+}
+
+export function GeographyPage() {
+  return (
+    <B2BReadBoundary real={(metadata) => <RealGeography metadata={metadata} />}>
+      <DemoGeographyPage />
+    </B2BReadBoundary>
   );
 }

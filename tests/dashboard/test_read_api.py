@@ -567,3 +567,203 @@ def test_wsgi_requires_injected_auth_and_never_leaks_exception(
             },
             PRINCIPAL,
         )
+
+
+class ExtendedReader(FakeReader):
+    """Deterministic synthetic source rows, filtered like the read projections."""
+
+    def query(self, query: Query, **kwargs: Any) -> list[dict[str, Any]]:
+        if query.name == "store_orders":
+            self.calls.append(query)
+            p = {k: v[1] for k, v in query.parameters.items()}
+            rows = [
+                {
+                    "order_id": f"order-{i}",
+                    "customer_id": "c1" if i < 2 else None,
+                    "created_at": f"2026-09-0{i + 1}T12:00:00Z",
+                    "order_status": status,
+                    "payment_status": "unpaid",
+                    "requested_total": Decimal("20.00"),
+                    "fulfilled_total": None if i == 1 else Decimal("0.00"),
+                    "requested_items_qty": 2,
+                    "fulfilled_items_qty": None,
+                    "cursor_key": f"2026-09-0{i + 1}T12:00:00.000000Z:order-{i}",
+                }
+                for i, status in enumerate(["CANCELED", "CONFIRMED", "SHIPPED"])
+            ]
+            return [
+                r
+                for r in rows
+                if p["from"] <= r["created_at"][:10] < p["to"]
+                and (p["status"] is None or p["status"] == r["order_status"])
+                and r["cursor_key"] > p["after"]
+            ][: p["limit"]]
+        if query.name == "acquisition_first":
+            self.calls.append(query)
+            if query.name in self.override:
+                return self.override[query.name]
+            # c1 has its first purchase before the selected period, not a new first purchase.
+            start, end = query.parameters["from"][1], query.parameters["to"][1]
+            first = [
+                {"customer": "c1", "day": "2026-09-01", "requested": Decimal("40.25")},
+                {"customer": "c2", "day": "2026-09-03", "requested": Decimal("50.00")},
+            ]
+            selected = [r for r in first if start <= r["day"] < end]
+            return [
+                {
+                    "customers": len(selected),
+                    "orders": len(selected),
+                    "invalid_first_orders": 0,
+                    "requested": sum((r["requested"] for r in selected), Decimal(0)),
+                    "fulfilled": Decimal("0.00"),
+                }
+            ]
+        return super().query(query, **kwargs)
+
+
+@pytest.fixture
+def extended(policy: AnalyticsPolicy) -> tuple[DashboardService, ExtendedReader]:
+    reader = ExtendedReader(policy)
+    return DashboardService(PROJECT, {policy.store_id: policy}, lambda: reader, KEY), reader
+
+
+def test_store_orders_route_scope_period_status_null_and_cancelled(extended):
+    service, reader = extended
+    query = {
+        "tenant_id": [GRANT.tenant_id],
+        "store_id": [GRANT.store_id],
+        "operation": ["B2B"],
+        "from": ["2026-09-01"],
+        "to": ["2026-09-03"],
+        "page_size": ["100"],
+    }
+    status, response = dispatch(service, "GET", "/v1/orders", query, PRINCIPAL)
+    assert status == 200
+    assert [o["order_status"] for o in response["data"]] == ["CANCELED", "CONFIRMED"]
+    assert response["data"][1]["fulfilled_total"] is None
+    assert response["data"][0]["fulfilled_total"] == "0.00"
+    assert response["data"][0]["requested_total"] == "20.00"
+    assert response["data"][0]["payment_status"] == "unpaid"
+    sql = reader.calls[-1]
+    assert "store_id=@store AND source_system='upzero'" in sql.sql
+    assert "DATE(created_at,@timezone)>=@from" in sql.sql
+    assert "ORDER BY created_at,order_id LIMIT @limit" in sql.sql
+    assert sql.parameters["timezone"][1] == "America/Sao_Paulo"
+    assert sql.parameters["snapshot_at"][1] == head(reader.policy)["snapshot_at"]
+    assert sql.parameters["as_of"][1] == reader.policy.as_of
+    _, filtered = dispatch(
+        service, "GET", "/v1/orders", {**query, "status": ["CANCELED"]}, PRINCIPAL
+    )
+    assert len(filtered["data"]) == 1 and filtered["data"][0]["order_status"] == "CANCELED"
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"size": "0"},
+        {"size": "101"},
+        {"size": "bad"},
+        {"status": "x' OR 1=1"},
+        {"from_day": "2026-08-01"},
+        {"cursor": "invalid"},
+    ],
+)
+def test_orders_invalid_filters_fail_without_orders_query(extended, kwargs):
+    service, reader = extended
+    with pytest.raises(ReadError):
+        service.orders(PRINCIPAL, GRANT, **kwargs)
+    assert not any(q.name == "store_orders" for q in reader.calls)
+
+
+@pytest.mark.parametrize("resource", ["orders", "acquisition"])
+def test_new_endpoints_isolate_store_before_read(extended, resource):
+    service, reader = extended
+    with pytest.raises(ReadError, match="store_forbidden"):
+        getattr(service, resource)(PRINCIPAL, Grant(GRANT.tenant_id, "foreign-store", "B2B"))
+    assert reader.calls == []
+
+
+def test_orders_cursor_binds_period_status_size_and_generation(extended):
+    service, reader = extended
+    first = service.orders(PRINCIPAL, GRANT, size="1")
+    token = first["pagination"]["cursor"]
+    assert token and first["pagination"]["has_more"]
+    second = service.orders(PRINCIPAL, GRANT, size="1", cursor=token)
+    assert first["data"][0]["order_id"] != second["data"][0]["order_id"]
+    for changes in [{"status": "CANCELED"}, {"from_day": "2026-09-02"}, {"size": "2"}]:
+        with pytest.raises(ReadError, match="invalid_cursor"):
+            service.orders(PRINCIPAL, GRANT, **{"size": "1", "cursor": token, **changes})
+    reader.override["head"] = [{**head(reader.policy), "generation": 5, "receipt_generation": 5}]
+    with pytest.raises(ReadError, match="invalid_cursor"):
+        service.orders(PRINCIPAL, GRANT, size="1", cursor=token)
+
+
+def test_acquisition_first_purchase_full_history_then_period(extended):
+    service, reader = extended
+    response = service.acquisition(PRINCIPAL, GRANT, from_day="2026-09-02", to_day="2026-09-04")
+    data = response["data"]
+    assert data["first_purchase_customers_observed"] == data["first_purchase_orders_observed"] == 1
+    assert data["requested_first_purchase_observed"] == "50.00"
+    assert data["fulfilled_first_purchase_observed"] == "0.00"
+    assert data["confirmed_new_customers"] is None
+    assert response["metadata"]["history_complete"] is False
+    sql = reader.calls[-1].sql
+    assert "purchase_number=1" in sql
+    assert "FROM first_orders WHERE order_date>=@from AND order_date<@to" in sql
+    assert "COUNT(*) OVER(PARTITION BY customer_id)" in sql
+    assert "COUNT(*) OVER(PARTITION BY order_id)" in sql
+    assert all(
+        q.parameters["snapshot_at"][1] == head(reader.policy)["snapshot_at"]
+        for q in reader.calls[1:]
+    )
+
+
+def test_acquisition_null_and_duplicate_first_purchase_fail_closed(extended):
+    service, reader = extended
+    row = {
+        "customers": 1,
+        "orders": 1,
+        "invalid_first_orders": 0,
+        "requested": None,
+        "fulfilled": None,
+    }
+    reader.override["acquisition_first"] = [row]
+    result = service.acquisition(PRINCIPAL, GRANT)["data"]
+    assert result["requested_first_purchase_observed"] is None
+    assert result["fulfilled_first_purchase_observed"] is None
+    reader.override["acquisition_first"] = [{**row, "invalid_first_orders": 1}]
+    with pytest.raises(ReadError, match="invalid_first_purchase_sequence"):
+        service.acquisition(PRINCIPAL, GRANT)
+
+
+def test_customer_period_filter_is_parameterized_and_cursor_bound(setup):
+    service, reader = setup
+    first = service.customers(
+        PRINCIPAL, GRANT, size="1", from_day="2026-09-01", to_day="2026-09-02"
+    )
+    sql = reader.calls[-1]
+    assert "AND EXISTS" in sql.sql and "s.customer_id=m.customer_id" in sql.sql
+    assert sql.parameters["from"][1] == "2026-09-01"
+    assert sql.parameters["to"][1] == "2026-09-02"
+    assert sql.sql.count("FOR SYSTEM_TIME AS OF @snapshot_at") == 3
+    with pytest.raises(ReadError, match="invalid_cursor"):
+        service.customers(
+            PRINCIPAL,
+            GRANT,
+            size="1",
+            cursor=first["pagination"]["cursor"],
+            from_day="2026-09-02",
+            to_day="2026-09-03",
+        )
+
+
+def test_acquisition_http_route(extended):
+    service, _ = extended
+    status, result = dispatch(
+        service,
+        "GET",
+        "/v1/acquisition",
+        {"store_id": [GRANT.store_id], "tenant_id": [GRANT.tenant_id], "operation": ["B2B"]},
+        PRINCIPAL,
+    )
+    assert status == 200 and result["data"]["first_purchase_orders_observed"] == 2

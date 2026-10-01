@@ -1,3 +1,7 @@
+# Atualização CHANGE #15B.2
+
+O preview B2B foi ampliado. A execução vigente e a matriz por página estão em [DASHBOARD_B2B_PREVIEW_DEV.md](DASHBOARD_B2B_PREVIEW_DEV.md). A descrição abaixo registra o estágio anterior; não use suas limitações de Overview-only para a rodada atual.
+
 # CHANGE #15B.1 — Preview local do Overview B2B
 
 O cutover é **apenas da rota `/b2b`**, no Next.js em modo desenvolvimento e com `DASHBOARD_DATA_MODE=read-api-preview` definido no **servidor**. `api = demoApi` permanece global; B2C e as demais rotas B2B continuam demonstrativas. O badge, o footer e o cabeçalho do PDF sinalizam dados reais somente depois de uma resposta real válida. A busca global de clientes e as notificações demo ficam indisponíveis nessa rota durante o preview para evitar mistura de fontes. Falha da leitura exibe erro, sem recorrer a fixtures.

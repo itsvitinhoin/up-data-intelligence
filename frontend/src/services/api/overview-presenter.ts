@@ -49,11 +49,13 @@ export function ticket(
   orders: number | null,
 ): string | null {
   if (revenue === null || orders === null || orders <= 0) return null;
-  const match = /^(-?)(\d+)\.(\d{2})$/.exec(revenue);
+  const match = /^(-?)(\d+)(?:\.(\d+))?$/.exec(revenue);
   if (!match) return null;
-  const cents = BigInt(match[2]) * 100n + BigInt(match[3]);
-  const divisor = BigInt(orders);
-  const rounded = (cents * 2n + divisor) / (2n * divisor);
+  const fraction = match[3] ?? "";
+  const scale = 10n ** BigInt(fraction.length);
+  const amount = BigInt(match[2]) * scale + BigInt(fraction || "0");
+  const divisor = BigInt(orders) * scale;
+  const rounded = (amount * 200n + divisor) / (2n * divisor);
   return `${match[1]}${rounded / 100n}.${String(rounded % 100n).padStart(2, "0")}`;
 }
 

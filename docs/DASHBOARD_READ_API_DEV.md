@@ -1,3 +1,7 @@
+# Atualização CHANGE #15B.2
+
+O preview B2B foi ampliado. A execução vigente e a matriz por página estão em [DASHBOARD_B2B_PREVIEW_DEV.md](DASHBOARD_B2B_PREVIEW_DEV.md). A descrição abaixo registra o estágio anterior; não use suas limitações de Overview-only para a rodada atual.
+
 # Dashboard Read API — CHANGE #15A (DEV, não ativado)
 
 Esta entrega prepara a leitura real da Analytics V1 sem executar BigQuery, GCP, deploy ou cutover. A composição visual continua `export const api = demoApi`. `createHttpApi` é um cliente HTTP separado, com envelope e DTOs validados; não aceita a sessão demonstrativa como autorização. O servidor HTTP ainda precisa de um autenticador real injetado antes de qualquer exposição de rede.

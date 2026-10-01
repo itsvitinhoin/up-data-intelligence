@@ -162,6 +162,8 @@ class CursorCodec:
 
     def decode(self, token: str, context: dict[str, Any]) -> str:
         try:
+            if len(token) > 8192:
+                raise ValueError
             raw = base64.urlsafe_b64decode(token + "=" * (-len(token) % 4))
             payload, signature = raw[:-32], raw[-32:]
             data = json.loads(payload)
@@ -169,7 +171,9 @@ class CursorCodec:
                 not hmac.compare_digest(signature, hmac.digest(self._key, payload, "sha256"))
                 or data["context"] != context
                 or not re.fullmatch(
-                    r"(?:[a-f0-9]{64}|\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z:[a-f0-9]{64})",
+                    r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z:[^\r\n]{1,200}"
+                    if context.get("resource") == "store_orders"
+                    else r"(?:[a-f0-9]{64}|\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z:[a-f0-9]{64})",
                     data["last_key"],
                 )
             ):

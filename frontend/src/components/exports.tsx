@@ -2,7 +2,7 @@
 import { useWorkspace } from "@/features/providers";
 import { usePathname } from "next/navigation";
 import { dateRange, displayRange, exclusiveToInclusive } from "@/lib/period";
-import { overviewSourceLabel } from "@/lib/overview-source";
+import { dashboardSourceLabel, activePageState } from "@/lib/dashboard-source";
 import { useState } from "react";
 import { Download, FileDown } from "lucide-react";
 import { DropdownMenu } from "radix-ui";
@@ -97,14 +97,23 @@ export function PageExport() {
 }
 
 export function PrintContext() {
-  const { filters, scope, dataMode, overviewReadState } = useWorkspace();
+  const { filters, scope, dataMode, dashboardPageState } = useWorkspace();
   const path = usePathname();
   const admin = path.startsWith("/admin");
-  const source = overviewSourceLabel(path, dataMode, scope, overviewReadState);
-  const metadata =
-    source === "Dados reais · Analytics V1"
-      ? overviewReadState?.metadata
-      : undefined;
+  const source = dashboardSourceLabel(
+    path,
+    dataMode,
+    scope,
+    dashboardPageState,
+  );
+  const metadata = activePageState(
+    path,
+    dataMode,
+    scope,
+    dashboardPageState,
+  )?.metadata;
+  const missingCoverage = source !== "Dados demonstrativos" && !metadata;
+  const history = !!metadata && /^\/customers\/[^/]+$/.test(path);
   const range =
     metadata && !filters.from && !filters.to
       ? {
@@ -118,7 +127,9 @@ export function PrintContext() {
       <p>
         {admin
           ? "Administração UP"
-          : `${displayRange(range.from, range.to)} · ${metadata?.reporting_timezone ?? "America/Sao_Paulo"} · datas inclusivas`}{" "}
+          : missingCoverage
+            ? "Cobertura de período ainda indisponível"
+            : `${history ? "Histórico observado até " + metadata?.as_of : displayRange(range.from, range.to)} · ${metadata?.reporting_timezone ?? "America/Sao_Paulo"} · datas inclusivas`}{" "}
         · {source}
       </p>
     </div>

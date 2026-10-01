@@ -17,8 +17,12 @@ import {
 } from "lucide-react";
 import { navigation } from "@/config/navigation";
 import { defaultFilters } from "@/config/tenants";
-import { overviewSourceLabel } from "@/lib/overview-source";
-import { useWorkspace, overviewScopeKey } from "@/features/providers";
+import {
+  dashboardSourceLabel,
+  activePageState,
+  isB2BReadPage,
+} from "@/lib/dashboard-source";
+import { useWorkspace } from "@/features/providers";
 import { useResource } from "@/hooks/use-resource";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -277,7 +281,7 @@ function SearchDialog() {
   );
 }
 export function Shell({ children }: { children: React.ReactNode }) {
-  const { session, scope, select, logout, dataMode, overviewReadState } =
+  const { session, scope, select, logout, dataMode, dashboardPageState } =
     useWorkspace();
   const router = useRouter();
   const path = usePathname();
@@ -297,24 +301,25 @@ export function Shell({ children }: { children: React.ReactNode }) {
     );
   const selected = options.find((o) => o.value === scope?.store_id);
   const overviewPreview =
-    path === "/b2b" &&
+    isB2BReadPage(path) &&
     dataMode === "read-api-preview" &&
     scope?.operation === "B2B";
-  const currentRead =
-    overviewPreview &&
-    scope &&
-    overviewReadState?.scopeKey === overviewScopeKey(scope)
-      ? overviewReadState
-      : null;
-  const realOverview = currentRead?.source === "real";
-  const failedOverview = currentRead?.source === "error";
-  const pendingOverview =
-    overviewPreview && (!currentRead || currentRead.source === "loading");
-  const sourceLabel = overviewSourceLabel(
+  const currentRead = activePageState(
     path,
     dataMode,
     scope,
-    overviewReadState,
+    dashboardPageState,
+  );
+  const realOverview =
+    currentRead?.source === "real" || currentRead?.source === "partial-real";
+  const failedOverview = currentRead?.source === "error-real";
+  const pendingOverview =
+    overviewPreview && (!currentRead || currentRead.source === "loading-real");
+  const sourceLabel = dashboardSourceLabel(
+    path,
+    dataMode,
+    scope,
+    dashboardPageState,
   );
   return (
     <div className="app">
@@ -373,7 +378,12 @@ export function Shell({ children }: { children: React.ReactNode }) {
           ) : (
             <SearchDialog />
           )}
-          {path !== "/b2c/stock" && <PeriodFilter />}
+          {path !== "/b2c/stock" &&
+            !(
+              overviewPreview &&
+              currentRead?.source !== "demo" &&
+              /^\/customers\/[^/]+$/.test(path)
+            ) && <PeriodFilter />}
           <PageExport />
           <Button
             variant="ghost"
@@ -460,9 +470,11 @@ export function Shell({ children }: { children: React.ReactNode }) {
             ? `UP Data Intelligence · Dados reais · Analytics V1${currentRead?.metadata?.history_complete ? "" : " · Histórico parcial"}`
             : failedOverview
               ? "UP Data Intelligence · Falha na leitura real · Nenhum dado demonstrativo foi usado nesta página"
-              : pendingOverview
-                ? "UP Data Intelligence · Aguardando publicação Analytics V1"
-                : "UP Data Intelligence · Ambiente demonstrativo · Nenhuma integração real conectada"}
+              : currentRead?.source === "unavailable-real"
+                ? "UP Data Intelligence · Cobertura indisponível · Nenhum dado demonstrativo foi usado nesta página"
+                : pendingOverview
+                  ? "UP Data Intelligence · Aguardando publicação Analytics V1"
+                  : "UP Data Intelligence · Ambiente demonstrativo · Nenhuma integração real conectada"}
         </footer>
       </main>
     </div>

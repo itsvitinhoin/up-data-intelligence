@@ -1,4 +1,7 @@
 "use client";
+import { B2BReadBoundary } from "@/hooks/use-dashboard-read";
+import { RealAcquisition } from "./b2b-read-pages";
+
 import { LeadCards } from "@/components/lead-cards";
 import { OrderDialog } from "@/components/order-dialog";
 import type { ColumnDef } from "@tanstack/react-table";
@@ -39,7 +42,7 @@ const firstOrderColumns: ColumnDef<Order>[] = orderColumns.map<
       }
     : column,
 );
-export function AcquisitionPage() {
+function DemoAcquisitionPage() {
   const q = useResource("acquisition");
   const metrics: Metric[] = q.data
     ? [
@@ -148,5 +151,15 @@ export function AcquisitionPage() {
         </>
       )}
     </>
+  );
+}
+
+export function AcquisitionPage() {
+  return (
+    <B2BReadBoundary
+      real={(metadata) => <RealAcquisition metadata={metadata} />}
+    >
+      <DemoAcquisitionPage />
+    </B2BReadBoundary>
   );
 }

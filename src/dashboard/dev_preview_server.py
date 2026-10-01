@@ -1,13 +1,15 @@
-"""Explicit, loopback-only Analytics V1 Overview preview; never production auth."""
+"""Explicit, loopback-only B2B Analytics V1 preview; never production auth."""
 
 import argparse
 import hmac
 import json
 import os
+import re
 import secrets
 from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
 from typing import Any
+from urllib.parse import parse_qs
 from wsgiref.simple_server import WSGIRequestHandler, make_server
 
 from google.cloud import bigquery
@@ -36,16 +38,28 @@ def create_dev_preview_app(
         return principal if hmac.compare_digest(supplied, token) else None
 
     protected = create_wsgi_app(service_factory, authenticate)
-    allowed_path = f"/v1/stores/{store_id}/overview"
+    allowed_paths = {
+        f"/v1/stores/{store_id}/overview",
+        "/v1/orders",
+        "/v1/acquisition",
+        "/v1/customers",
+        "/v1/retention",
+        "/v1/products",
+        "/v1/funnel",
+        "/v1/geography",
+    }
 
     def app(environ: Mapping[str, Any], start_response: Callable[..., Any]) -> Iterable[bytes]:
-        # The generic Read API has other routes; this local process exposes only Overview.
-        if environ.get("PATH_INFO") != allowed_path or environ.get("REQUEST_METHOD") != "GET":
-            code = (
-                "404 Not Found"
-                if environ.get("PATH_INFO") != allowed_path
-                else "405 Method Not Allowed"
-            )
+        path = str(environ.get("PATH_INFO", ""))
+        allowed = (
+            path in allowed_paths
+            or re.fullmatch(r"/v1/customers/[^/]{1,200}(?:/orders)?", path) is not None
+        )
+        query = parse_qs(str(environ.get("QUERY_STRING", "")), keep_blank_values=True)
+        if path != f"/v1/stores/{store_id}/overview" and query.get("store_id") != [store_id]:
+            allowed = False
+        if not allowed or environ.get("REQUEST_METHOD") != "GET":
+            code = "404 Not Found" if not allowed else "405 Method Not Allowed"
             body = b'{"error":{"code":"preview_route_unavailable"}}'
             start_response(
                 code,
@@ -68,7 +82,7 @@ class QuietRequestHandler(WSGIRequestHandler):
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Local-only B2B Overview DEV preview")
+    parser = argparse.ArgumentParser(description="Local-only B2B Analytics V1 DEV preview")
     parser.add_argument("--project", required=True)
     parser.add_argument("--location", required=True)
     parser.add_argument("--policy", type=Path, required=True)
@@ -105,7 +119,7 @@ def main() -> int:
         service_factory, tenant_id=args.tenant_id, store_id=args.store_id, token=token
     )
     with make_server(args.host, args.port, app, handler_class=QuietRequestHandler) as server:
-        print("Dashboard Overview DEV preview listening on loopback; read-only", flush=True)
+        print("Dashboard B2B Analytics V1 DEV preview listening on loopback; read-only", flush=True)
         server.serve_forever()
     return 0
 

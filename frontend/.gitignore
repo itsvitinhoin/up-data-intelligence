@@ -7,3 +7,5 @@ test-results/
 *.tsbuildinfo
 .env*
 !.env.example
+
+.next-offline/

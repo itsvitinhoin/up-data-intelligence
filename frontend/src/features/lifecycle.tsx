@@ -1,4 +1,7 @@
 "use client";
+import { B2BReadBoundary } from "@/hooks/use-dashboard-read";
+import { RealRetention } from "./b2b-read-pages";
+
 import { ListExport } from "@/components/exports";
 import { RetentionMetrics } from "@/features/retention-metrics";
 import { useResource } from "@/hooks/use-resource";
@@ -18,7 +21,7 @@ const decimal = (value: number | null) =>
     : value.toLocaleString("pt-BR", { maximumFractionDigits: 1 });
 const percent = (value: number | null) =>
   value === null ? "—" : `${decimal(value)}%`;
-export function RetentionDashboard() {
+function DemoRetentionDashboard() {
   const q = useResource("lifecycle");
   return (
     <>
@@ -261,5 +264,13 @@ export function ConversionVelocity() {
         </div>
       </div>
     </section>
+  );
+}
+
+export function RetentionDashboard() {
+  return (
+    <B2BReadBoundary real={(metadata) => <RealRetention metadata={metadata} />}>
+      <DemoRetentionDashboard />
+    </B2BReadBoundary>
   );
 }

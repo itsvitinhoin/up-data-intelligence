@@ -49,3 +49,7 @@ A futura credencial Meta é **global da UP, server-side**. Após validá-la no b
 A autenticação mockada é uma seleção explícita de identidade; não há senha, convite ou usuário real provisionado. O cadastro e a edição de permissões são locais. Ativação real exige autenticação e autorização no servidor, revisão de acesso, revogação de sessão, gestão segura da senha e proteção das rotas globais de administração.
 
 Agregações demonstrativas de influência usam união de order_id dentro do contexto autorizado, e somas em centavos. Nenhuma campanha recebe crédito exclusivo. As métricas reais continuarão vindo das materializações; não mover cálculos de domínio para componentes nem recalcular o histórico completo no browser. Coortes, novos clientes, reativação e dados financeiros indisponíveis nunca ganham número de fallback.
+
+## CHANGE #15B.2 — Preview B2B Analytics V1
+
+O modo DEV privado amplia a leitura same-origin para Pedidos, Aquisição observada, Retenção, Clientes/Summary/pedidos e Produtos. Geography mantém mapa neutro + 424; Performance aguarda materialização, sem fixtures. B2C e marcas não vinculadas seguem demo. `api = demoApi` continua global. Fonte/cobertura por página, cursor bounded, NULL e strings decimais preservados; nenhum cutover público nem camadas #08–#14 promovidas. [Runbook atual](../../docs/DASHBOARD_B2B_PREVIEW_DEV.md).

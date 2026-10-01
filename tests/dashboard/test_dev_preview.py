@@ -70,3 +70,69 @@ def test_preview_refuses_public_bind_and_missing_explicit_flag(monkeypatch: pyte
     monkeypatch.setattr(sys, "argv", required)
     with pytest.raises(SystemExit):
         main()
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/v1/orders",
+        "/v1/acquisition",
+        "/v1/customers",
+        "/v1/customers/synthetic",
+        "/v1/customers/synthetic/orders",
+        "/v1/retention",
+        "/v1/products",
+        "/v1/funnel",
+        "/v1/geography",
+    ],
+)
+def test_preview_explicit_b2b_allowlist(path):
+    service = Mock()
+    for name in [
+        "orders",
+        "acquisition",
+        "customers",
+        "customer",
+        "customer_orders",
+        "retention",
+        "products",
+        "funnel",
+        "geography",
+    ]:
+        getattr(service, name).return_value = {"data": []}
+    factory = Mock(return_value=service)
+    app = create_dev_preview_app(
+        factory, tenant_id="demo-up", store_id="mx-fashion", token="t" * 40
+    )
+
+    def request(store, token):
+        statuses = []
+        body = b"".join(
+            app(
+                {
+                    "REQUEST_METHOD": "GET",
+                    "PATH_INFO": path,
+                    "QUERY_STRING": f"tenant_id=demo-up&operation=B2B&store_id={store}",
+                    "HTTP_X_DASHBOARD_PREVIEW_TOKEN": token,
+                },
+                lambda status, headers: statuses.append(status),
+            )
+        )
+        return statuses[0], json.loads(body)
+
+    assert request("other-store", "t" * 40)[0] == "404 Not Found"
+    assert request("mx-fashion", "")[0] == "401 Unauthorized"
+    assert factory.call_count == 0
+    assert request("mx-fashion", "t" * 40)[0] == "200 OK"
+
+
+@pytest.mark.parametrize(
+    "path", ["/v1/performance", "/v1/admin", "/v1/meta", "/v1/stores/other-store/overview"]
+)
+def test_preview_rejects_unapproved_resources(path):
+    factory = Mock()
+    app = create_dev_preview_app(
+        factory, tenant_id="demo-up", store_id="mx-fashion", token="t" * 40
+    )
+    assert call(app, path, token="t" * 40)[0] == "404 Not Found"
+    assert factory.call_count == 0

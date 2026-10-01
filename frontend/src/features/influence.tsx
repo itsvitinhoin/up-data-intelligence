@@ -1,4 +1,6 @@
 "use client";
+import { B2BReadBoundary } from "@/hooks/use-dashboard-read";
+import { RealOrders, RealPerformance } from "./b2b-read-pages";
 import dynamic from "next/dynamic";
 import { ConversionVelocity } from "@/features/lifecycle";
 import Link from "next/link";
@@ -48,7 +50,7 @@ function PerformanceTrend() {
     </Panel>
   );
 }
-export function InfluencePage({
+function DemoInfluencePage({
   acquisition = false,
   performance = false,
 }: {
@@ -267,7 +269,7 @@ export function CampaignDetailPage({ id }: { id: string }) {
     </>
   );
 }
-export function CommercialPage({ revenue = false }: { revenue?: boolean }) {
+function DemoCommercialPage({ revenue = false }: { revenue?: boolean }) {
   const q = useResource("orders");
   const overview = useResource("overview");
   const { scope } = useWorkspace();
@@ -304,5 +306,25 @@ export function CommercialPage({ revenue = false }: { revenue?: boolean }) {
         )}
       </Panel>
     </>
+  );
+}
+
+export function InfluencePage(props: {
+  acquisition?: boolean;
+  performance?: boolean;
+}) {
+  return (
+    <B2BReadBoundary
+      real={(metadata) => <RealPerformance metadata={metadata} />}
+    >
+      <DemoInfluencePage {...props} />
+    </B2BReadBoundary>
+  );
+}
+export function CommercialPage(props: { revenue?: boolean }) {
+  return (
+    <B2BReadBoundary real={(metadata) => <RealOrders metadata={metadata} />}>
+      <DemoCommercialPage {...props} />
+    </B2BReadBoundary>
   );
 }

@@ -1,5 +1,6 @@
 /** Analytics V1 read transport. Never selected by the demo composition root. */
 import { ApiError } from "./access";
+import { validDate } from "@/lib/period";
 
 export type LiveScope = {
   tenant_id: string;
@@ -44,7 +45,7 @@ export type LiveCustomer = {
 };
 export type LiveOrder = {
   store_id: string;
-  customer_id: string;
+  customer_id: string | null;
   order_id: string;
   created_at: string;
   order_status: string | null;
@@ -53,6 +54,14 @@ export type LiveOrder = {
   fulfilled_total: string | null;
   requested_items_qty: number | null;
   fulfilled_items_qty: number | null;
+};
+export type LiveAcquisition = {
+  buyers_observed: number | null;
+  first_purchase_customers_observed: number | null;
+  first_purchase_orders_observed: number | null;
+  requested_first_purchase_observed: string | null;
+  fulfilled_first_purchase_observed: string | null;
+  confirmed_new_customers: number | null;
 };
 export type LiveOverview = {
   requested_revenue: string | null;
@@ -174,6 +183,11 @@ function parseMetadata(value: unknown, scope?: LiveScope): ReadMetadata {
     row.contract_version !== "1.0.0" ||
     generation === null ||
     generation < 1 ||
+    typeof row.report_from !== "string" ||
+    !validDate(row.report_from) ||
+    typeof row.report_to !== "string" ||
+    !validDate(row.report_to) ||
+    row.report_from >= row.report_to ||
     typeof row.policy_hash !== "string" ||
     !/^[a-f0-9]{64}$/.test(row.policy_hash)
   )
@@ -212,11 +226,10 @@ function parsePagination(value: unknown): ReadPagination | null {
   const row = object(value),
     size = count(row.page_size);
   if (size === null || size < 1 || size > 100) throw invalid();
-  return {
-    page_size: size,
-    cursor: nullableText(row.cursor),
-    has_more: flag(row.has_more),
-  };
+  const cursor = nullableText(row.cursor),
+    hasMore = flag(row.has_more);
+  if (hasMore !== (cursor !== null)) throw invalid();
+  return { page_size: size, cursor, has_more: hasMore };
 }
 function parseCustomer(value: unknown, scope: LiveScope): LiveCustomer {
   const row = object(value);
@@ -237,14 +250,17 @@ function parseCustomer(value: unknown, scope: LiveScope): LiveCustomer {
 function parseOrder(
   value: unknown,
   scope: LiveScope,
-  customerId: string,
+  customerId?: string,
 ): LiveOrder {
   const row = object(value);
-  if (row.store_id !== scope.store_id || row.customer_id !== customerId)
+  if (
+    row.store_id !== scope.store_id ||
+    (customerId !== undefined && row.customer_id !== customerId)
+  )
     throw invalid();
   return {
     store_id: text(row.store_id),
-    customer_id: text(row.customer_id),
+    customer_id: nullableText(row.customer_id),
     order_id: text(row.order_id),
     created_at: text(row.created_at),
     order_status: nullableText(row.order_status),
@@ -283,6 +299,131 @@ function parseOverview(value: unknown): LiveOverview {
       };
     }),
   };
+}
+function parseAcquisition(value: unknown): LiveAcquisition {
+  const row = object(value);
+  return {
+    buyers_observed: count(row.buyers_observed),
+    first_purchase_customers_observed: count(
+      row.first_purchase_customers_observed,
+    ),
+    first_purchase_orders_observed: count(row.first_purchase_orders_observed),
+    requested_first_purchase_observed: decimal(
+      row.requested_first_purchase_observed,
+    ),
+    fulfilled_first_purchase_observed: decimal(
+      row.fulfilled_first_purchase_observed,
+    ),
+    confirmed_new_customers: count(row.confirmed_new_customers),
+  };
+}
+function parseCustomerDetail(
+  value: unknown,
+  scope: LiveScope,
+  id: string,
+): LiveCustomerDetail {
+  const row = object(value),
+    profile = parseCustomer(row.profile, scope),
+    commercial = object(row.commercial);
+  if (profile.customer_id !== id) throw invalid();
+  return {
+    profile,
+    commercial: {
+      qualifying_orders_observed: count(commercial.qualifying_orders_observed),
+      requested_revenue_observed: decimal(
+        commercial.requested_revenue_observed,
+      ),
+      fulfilled_revenue_observed: decimal(
+        commercial.fulfilled_revenue_observed,
+      ),
+      first_purchase_at_observed: nullableText(
+        commercial.first_purchase_at_observed,
+      ),
+      last_purchase_at_observed: nullableText(
+        commercial.last_purchase_at_observed,
+      ),
+      ltv_complete: decimal(commercial.ltv_complete),
+    },
+  };
+}
+
+export type ReadResourceMap = {
+  overview: LiveOverview;
+  orders: LiveOrder[];
+  acquisition: LiveAcquisition;
+  customers: LiveCustomer[];
+  customer: LiveCustomerDetail;
+  customerOrders: LiveOrder[];
+  retention: LiveRetention;
+  products: LiveProduct[];
+  funnel: LiveFunnel;
+  geography: Record<string, unknown>;
+};
+export type ReadResource = keyof ReadResourceMap;
+export function decodeReadEnvelope<K extends ReadResource>(
+  resource: K,
+  value: unknown,
+  customerId?: string,
+): ReadEnvelope<ReadResourceMap[K]> {
+  const payload = object(value),
+    meta = parseMetadata(payload.metadata);
+  const scope: LiveScope = {
+    tenant_id: "bridge-validated",
+    store_id: meta.store_id,
+    operation: "B2B",
+  };
+  const parsers: {
+    [R in ReadResource]: (value: unknown) => ReadResourceMap[R];
+  } = {
+    overview: parseOverview,
+    acquisition: parseAcquisition,
+    customers: (v) => array(v).map((item) => parseCustomer(item, scope)),
+    orders: (v) => array(v).map((item) => parseOrder(item, scope)),
+    customerOrders: (v) => {
+      if (!customerId) throw invalid();
+      return array(v).map((item) => parseOrder(item, scope, customerId));
+    },
+    customer: (v) => {
+      if (!customerId) throw invalid();
+      return parseCustomerDetail(v, scope, customerId);
+    },
+    retention: parseRetention,
+    products: (v) => array(v).map((item) => parseProduct(item, scope)),
+    funnel: parseFunnel,
+    geography: object,
+  };
+  const data = parsers[resource](payload.data);
+  const pagination = parsePagination(payload.pagination);
+  if (
+    ["orders", "customers", "customerOrders", "products"].includes(resource) &&
+    !pagination
+  )
+    throw invalid();
+  if (!meta.history_complete) {
+    // Validate history-dependent values after their concrete DTO parsers have run.
+    if (resource === "overview") decodeOverviewEnvelope(payload);
+    if (
+      resource === "acquisition" &&
+      parseAcquisition(payload.data).confirmed_new_customers !== null
+    )
+      throw invalid();
+    if (
+      resource === "customers" &&
+      array(payload.data).some(
+        (v) => parseCustomer(v, scope).ltv_complete !== null,
+      )
+    )
+      throw invalid();
+    if (resource === "customer") {
+      const detail = parseCustomerDetail(payload.data, scope, customerId!);
+      if (
+        detail.profile.ltv_complete !== null ||
+        detail.commercial.ltv_complete !== null
+      )
+        throw invalid();
+    }
+  }
+  return { data, pagination, metadata: meta };
 }
 function parseProduct(value: unknown, scope: LiveScope): LiveProduct {
   const row = object(value);
@@ -379,11 +520,12 @@ function parseFunnel(value: unknown): LiveFunnel {
     }),
   };
 }
-type ReadOptions = {
+export type ReadOptions = {
   from?: string;
   to?: string;
   pageSize?: number;
   cursor?: string;
+  status?: string;
   signal?: AbortSignal;
 };
 export function createHttpApi(baseUrl: string, fetcher: typeof fetch = fetch) {
@@ -408,6 +550,7 @@ export function createHttpApi(baseUrl: string, fetcher: typeof fetch = fetch) {
     if (options.pageSize !== undefined)
       url.searchParams.set("page_size", String(options.pageSize));
     if (options.cursor) url.searchParams.set("cursor", options.cursor);
+    if (options.status) url.searchParams.set("status", options.status);
     const response = await fetcher(url, {
       method: "GET",
       credentials: "include",
@@ -425,6 +568,20 @@ export function createHttpApi(baseUrl: string, fetcher: typeof fetch = fetch) {
     };
   }
   return {
+    orders: async (scope: LiveScope, options?: ReadOptions) => {
+      const response = await request(
+        "/v1/orders",
+        scope,
+        (value) => array(value).map((item) => parseOrder(item, scope)),
+        options,
+      );
+      if (!response.pagination) throw invalid();
+      return response;
+    },
+    acquisition: (scope: LiveScope, options?: ReadOptions) =>
+      request("/v1/acquisition", scope, parseAcquisition, options),
+    geography: (scope: LiveScope, options?: ReadOptions) =>
+      request("/v1/geography", scope, object, options),
     overview: async (scope: LiveScope, options?: ReadOptions) => {
       const response = await request(
         `/v1/stores/${encodeURIComponent(scope.store_id)}/overview`,
@@ -459,33 +616,7 @@ export function createHttpApi(baseUrl: string, fetcher: typeof fetch = fetch) {
       const response = await request(
         `/v1/customers/${encodeURIComponent(id)}`,
         scope,
-        (value): LiveCustomerDetail => {
-          const row = object(value),
-            profile = parseCustomer(row.profile, scope),
-            commercial = object(row.commercial);
-          if (profile.customer_id !== id) throw invalid();
-          return {
-            profile,
-            commercial: {
-              qualifying_orders_observed: count(
-                commercial.qualifying_orders_observed,
-              ),
-              requested_revenue_observed: decimal(
-                commercial.requested_revenue_observed,
-              ),
-              fulfilled_revenue_observed: decimal(
-                commercial.fulfilled_revenue_observed,
-              ),
-              first_purchase_at_observed: nullableText(
-                commercial.first_purchase_at_observed,
-              ),
-              last_purchase_at_observed: nullableText(
-                commercial.last_purchase_at_observed,
-              ),
-              ltv_complete: decimal(commercial.ltv_complete),
-            },
-          };
-        },
+        (value) => parseCustomerDetail(value, scope, id),
         options,
       );
       if (

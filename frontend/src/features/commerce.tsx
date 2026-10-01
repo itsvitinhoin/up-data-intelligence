@@ -1,4 +1,6 @@
 "use client";
+import { B2BReadBoundary } from "@/hooks/use-dashboard-read";
+import { RealProducts, RealFunnel, RealPerformance } from "./b2b-read-pages";
 import { RetailProductsPage } from "@/features/retail-products";
 import { ListExport } from "@/components/exports";
 import { RetentionDashboard } from "@/features/lifecycle";
@@ -27,7 +29,7 @@ import {
 } from "@/components/business";
 import type { Product } from "@/types/domain";
 import { money, number } from "@/lib/format";
-export function PerformancePage() {
+function DemoPerformancePage() {
   const q = useResource("performance");
   return (
     <>
@@ -127,7 +129,7 @@ const retailColumns: ColumnDef<Product>[] = [
   },
   { accessorKey: "abc", header: "ABC" },
 ];
-export function ProductsPage({ inventory = false }: { inventory?: boolean }) {
+function DemoProductsPage({ inventory = false }: { inventory?: boolean }) {
   const { scope } = useWorkspace();
   return scope?.operation === "B2C" ? (
     <RetailProductsPage inventory={inventory} />
@@ -304,7 +306,7 @@ export function OrdersPage() {
     </>
   );
 }
-export function FunnelPage() {
+function DemoFunnelPage() {
   const q = useResource("funnel");
   return (
     <>
@@ -371,5 +373,29 @@ export function FunnelPage() {
         </>
       )}
     </>
+  );
+}
+
+export function ProductsPage(props: { inventory?: boolean }) {
+  return (
+    <B2BReadBoundary real={(metadata) => <RealProducts metadata={metadata} />}>
+      <DemoProductsPage {...props} />
+    </B2BReadBoundary>
+  );
+}
+export function FunnelPage() {
+  return (
+    <B2BReadBoundary real={(metadata) => <RealFunnel metadata={metadata} />}>
+      <DemoFunnelPage />
+    </B2BReadBoundary>
+  );
+}
+export function PerformancePage() {
+  return (
+    <B2BReadBoundary
+      real={(metadata) => <RealPerformance metadata={metadata} />}
+    >
+      <DemoPerformancePage />
+    </B2BReadBoundary>
   );
 }

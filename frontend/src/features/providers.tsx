@@ -15,6 +15,7 @@ import type {
   Scope,
   Session,
 } from "@/types/domain";
+import type { DashboardPageState } from "@/lib/dashboard-source";
 import type { ReadMetadata } from "@/services/api/http";
 import { defaultFilters } from "@/config/tenants";
 import { authorizedTenants, sessionFor } from "@/services/api";
@@ -31,6 +32,8 @@ interface Workspace {
   scope: Scope | null;
   filters: Filters;
   dataMode: DashboardDataMode;
+  dashboardPageState: DashboardPageState | null;
+  setDashboardPageState: Dispatch<SetStateAction<DashboardPageState | null>>;
   overviewReadState: OverviewReadState | null;
   setOverviewReadState: Dispatch<SetStateAction<OverviewReadState | null>>;
   login: (id: string) => void;
@@ -60,7 +63,10 @@ export function Providers({
   const [filters, setFilters] = useState<Filters>(defaultFilters);
   const [overviewReadState, setOverviewReadState] =
     useState<OverviewReadState | null>(null);
+  const [dashboardPageState, setDashboardPageState] =
+    useState<DashboardPageState | null>(null);
   function clear() {
+    setDashboardPageState(null);
     void client.cancelQueries();
     client.clear();
     setOverviewReadState(null);
@@ -74,6 +80,8 @@ export function Providers({
             scope,
             filters,
             dataMode,
+            dashboardPageState,
+            setDashboardPageState,
             overviewReadState,
             setOverviewReadState,
             setFilters,

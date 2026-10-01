@@ -1,6 +1,7 @@
 """Analytics V1 projections; only the injected reader can touch BigQuery."""
 
 import math
+import re
 from collections.abc import Callable, Mapping
 from datetime import date
 from decimal import Decimal
@@ -326,9 +327,15 @@ class DashboardService:
         *,
         size: str | None = None,
         cursor: str | None = None,
+        from_day: str | None = None,
+        to_day: str | None = None,
     ) -> dict[str, Any]:
         self._scope(principal, grant)
-        selected, pagination = self._page("customers", page_size(size), cursor)
+        extra: dict[str, object] | None = None
+        if from_day is not None or to_day is not None:
+            start, end = self._interval(from_day, to_day)
+            extra = {"from_day": start, "to_day": end}
+        selected, pagination = self._page("customers", page_size(size), cursor, extra=extra)
         return self._response(
             [self._customer(row) for row in selected],
             pagination=pagination,
@@ -395,23 +402,93 @@ class DashboardService:
             },
         )
         return self._response(
-            [
-                {
-                    "store_id": self.grant.store_id,
-                    "customer_id": row["customer_id"],
-                    "order_id": row["order_id"],
-                    "created_at": _timestamp(row["created_at"]),
-                    "order_status": row.get("order_status"),
-                    "payment_status": row.get("payment_status"),
-                    "requested_total": decimal_string(row.get("requested_total")),
-                    "fulfilled_total": decimal_string(row.get("fulfilled_total")),
-                    "requested_items_qty": integer(row.get("requested_items_qty")),
-                    "fulfilled_items_qty": integer(row.get("fulfilled_items_qty")),
-                }
-                for row in selected
-            ],
+            [self._order(row) for row in selected],
             pagination=pagination,
             limitations=["core_orders_not_source_generation_pinned", "fulfilled_is_not_paid"],
+        )
+
+    def _order(self, row: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "store_id": self.grant.store_id,
+            "customer_id": row.get("customer_id"),
+            "order_id": row["order_id"],
+            "created_at": _timestamp(row["created_at"]),
+            "order_status": row.get("order_status"),
+            "payment_status": row.get("payment_status"),
+            "requested_total": decimal_string(row.get("requested_total")),
+            "fulfilled_total": decimal_string(row.get("fulfilled_total")),
+            "requested_items_qty": integer(row.get("requested_items_qty")),
+            "fulfilled_items_qty": integer(row.get("fulfilled_items_qty")),
+        }
+
+    def orders(
+        self,
+        principal: Principal | None,
+        grant: Grant,
+        *,
+        from_day: str | None = None,
+        to_day: str | None = None,
+        size: str | None = None,
+        cursor: str | None = None,
+        status: str | None = None,
+    ) -> dict[str, Any]:
+        self._scope(principal, grant)
+        start, end = self._interval(from_day, to_day)
+        if status is not None and not re.fullmatch(r"[A-Z][A-Z0-9_]{0,49}", status):
+            raise ReadError(400, "invalid_order_status")
+        selected, pagination = self._page(
+            "store_orders",
+            page_size(size),
+            cursor,
+            extra={
+                "from_day": start,
+                "to_day": end,
+                "status": status,
+                "timezone": self.policy.reporting_timezone,
+                "as_of": self.publication.as_of,
+            },
+        )
+        return self._response(
+            [self._order(row) for row in selected],
+            pagination=pagination,
+            limitations=[
+                "core_orders_not_source_generation_pinned",
+                "fulfilled_is_not_paid",
+                "payment_not_certified",
+            ],
+        )
+
+    def acquisition(
+        self,
+        principal: Principal | None,
+        grant: Grant,
+        *,
+        from_day: str | None = None,
+        to_day: str | None = None,
+    ) -> dict[str, Any]:
+        self._scope(principal, grant)
+        start, end = self._interval(from_day, to_day)
+        population = self._rows("customer_period", from_day=start, to_day=end)
+        first = self._rows("acquisition_first", from_day=start, to_day=end)
+        if len(population) != 1 or len(first) != 1 or first[0].get("invalid_first_orders") != 0:
+            raise ReadError(503, "invalid_first_purchase_sequence")
+        row = first[0]
+        return self._response(
+            {
+                "buyers_observed": integer(population[0].get("buyers")),
+                "first_purchase_customers_observed": integer(row.get("customers")),
+                "first_purchase_orders_observed": integer(row.get("orders")),
+                "requested_first_purchase_observed": decimal_string(row.get("requested")),
+                "fulfilled_first_purchase_observed": decimal_string(row.get("fulfilled")),
+                "confirmed_new_customers": integer(row.get("customers"))
+                if self.policy.history_complete
+                else None,
+            },
+            limitations=[
+                "first_purchase_is_observed_not_confirmed",
+                "leads_not_in_analytics_v1",
+                "approval_to_purchase_not_certified",
+            ],
         )
 
     def retention(
