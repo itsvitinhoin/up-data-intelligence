@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { usePathname } from "next/navigation";
 import { CalendarDays } from "lucide-react";
 import { useWorkspace } from "@/features/providers";
 import {
@@ -17,15 +18,39 @@ import {
   periodError,
   periodPresets,
   presetRange,
+  exclusiveToInclusive,
 } from "@/lib/period";
 export function PeriodFilter() {
-  const { filters, setFilters } = useWorkspace();
-  const range = dateRange(filters);
+  const { filters, setFilters, dataMode, scope, overviewReadState } =
+    useWorkspace();
+  const path = usePathname();
+  const previewRoute =
+    path === "/b2b" &&
+    scope?.operation === "B2B" &&
+    dataMode === "read-api-preview";
+  const current =
+    previewRoute &&
+    overviewReadState?.scopeKey ===
+      `${scope.tenant_id}/${scope.store_id}/${scope.operation}`
+      ? overviewReadState
+      : null;
+  const coverage = current?.metadata;
+  const pendingCoverage =
+    previewRoute && current?.source !== "demo" && !coverage;
+  const lastClosed = coverage ? exclusiveToInclusive(coverage.report_to) : null;
+  const range =
+    coverage && !filters.from && !filters.to
+      ? { from: coverage.report_from, to: lastClosed!, days: 0 }
+      : dateRange(filters);
   const [open, setOpen] = useState(false);
   const [from, setFrom] = useState(range.from);
   const [to, setTo] = useState(range.to);
   const [preset, setPreset] = useState(filters.period ?? "30");
-  const error = periodError(from, to);
+  const error =
+    periodError(from, to) ??
+    (coverage && (from < coverage.report_from || to > lastClosed!)
+      ? "Período fora da cobertura publicada."
+      : null);
   return (
     <Dialog
       open={open}
@@ -41,20 +66,28 @@ export function PeriodFilter() {
       <DialogTrigger asChild>
         <button
           className="range glass period-trigger"
-          aria-label={`Filtrar período: ${displayRange(range.from, range.to)}`}
+          disabled={pendingCoverage}
+          aria-label={
+            pendingCoverage
+              ? "Aguardando cobertura publicada"
+              : `Filtrar período: ${displayRange(range.from, range.to)}`
+          }
         >
           <CalendarDays />
           <span>
             <small>Período</small>
-            {displayRange(range.from, range.to)}
+            {pendingCoverage
+              ? "Aguardando cobertura"
+              : displayRange(range.from, range.to)}
           </span>
         </button>
       </DialogTrigger>
       <DialogContent className="glass period-dialog">
         <DialogTitle>Filtrar período</DialogTitle>
         <DialogDescription>
-          Datas inclusivas · America/Sao_Paulo. Referência demonstrativa:
-          30/09/2026.
+          {coverage
+            ? `Datas inclusivas · ${coverage.reporting_timezone}. Cobertura: ${displayRange(coverage.report_from, lastClosed!)}.`
+            : "Datas inclusivas · America/Sao_Paulo. Referência demonstrativa: 30/09/2026."}
         </DialogDescription>
         <div className="period-presets">
           {periodPresets.map(([key, label]) => (
@@ -65,7 +98,7 @@ export function PeriodFilter() {
               onClick={() => {
                 setPreset(key);
                 if (key !== "custom") {
-                  const next = presetRange(key);
+                  const next = presetRange(key, lastClosed ?? undefined);
                   setFrom(next.from);
                   setTo(next.to);
                 }

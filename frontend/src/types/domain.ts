@@ -2,6 +2,7 @@ import type { ErpData } from "./erp";
 import type { RetentionSummary } from "@/services/demo/retention-summary";
 export type Role = "ADMIN" | "MANAGER" | "VIEWER";
 export type Operation = "B2B" | "B2C";
+export type DashboardDataMode = "demo" | "read-api-preview";
 export interface Scope {
   tenant_id: string;
   store_id: string;
@@ -41,6 +42,7 @@ export interface Metric {
   label: string;
   value: string | null;
   format: "currency" | "number" | "percent" | "ratio" | "decimal" | "days";
+  displayDigits?: number;
   delta?: number;
   hint: string;
   secondary?: { label: string; value: string | null; hint: string };
@@ -165,11 +167,11 @@ export interface Overview {
     relationship: Metric[];
     series: {
       date: string;
-      requested: number;
-      fulfilled: number;
+      requested: number | null;
+      fulfilled: number | null;
       newCustomers: number | null;
-      recurringCustomers: number;
-      mediaRevenue: number;
+      recurringCustomers: number | null;
+      mediaRevenue: number | null;
       spend: number | null;
     }[];
     attributedOrders: (Order & { campaign_names: string })[];

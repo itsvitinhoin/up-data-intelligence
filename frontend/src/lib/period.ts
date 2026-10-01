@@ -21,6 +21,17 @@ export function validDate(value: string) {
     isoDay(Date.parse(value)) === value
   );
 }
+export function shiftIsoDay(value: string, days: number) {
+  if (!validDate(value) || !Number.isSafeInteger(days))
+    throw new Error("Invalid calendar day");
+  return isoDay(Date.parse(value) + days * DAY);
+}
+export function inclusiveToExclusive(value: string) {
+  return shiftIsoDay(value, 1);
+}
+export function exclusiveToInclusive(value: string) {
+  return shiftIsoDay(value, -1);
+}
 export function periodError(from: string, to: string) {
   if (!validDate(from) || !validDate(to))
     return "Selecione uma data de início e uma data de fim válidas.";

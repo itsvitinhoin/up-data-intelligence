@@ -17,7 +17,8 @@ import {
 } from "lucide-react";
 import { navigation } from "@/config/navigation";
 import { defaultFilters } from "@/config/tenants";
-import { useWorkspace } from "@/features/providers";
+import { overviewSourceLabel } from "@/lib/overview-source";
+import { useWorkspace, overviewScopeKey } from "@/features/providers";
 import { useResource } from "@/hooks/use-resource";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -276,7 +277,8 @@ function SearchDialog() {
   );
 }
 export function Shell({ children }: { children: React.ReactNode }) {
-  const { session, scope, select, logout } = useWorkspace();
+  const { session, scope, select, logout, dataMode, overviewReadState } =
+    useWorkspace();
   const router = useRouter();
   const path = usePathname();
   const [menu, setMenu] = useState(false);
@@ -294,6 +296,26 @@ export function Shell({ children }: { children: React.ReactNode }) {
       ),
     );
   const selected = options.find((o) => o.value === scope?.store_id);
+  const overviewPreview =
+    path === "/b2b" &&
+    dataMode === "read-api-preview" &&
+    scope?.operation === "B2B";
+  const currentRead =
+    overviewPreview &&
+    scope &&
+    overviewReadState?.scopeKey === overviewScopeKey(scope)
+      ? overviewReadState
+      : null;
+  const realOverview = currentRead?.source === "real";
+  const failedOverview = currentRead?.source === "error";
+  const pendingOverview =
+    overviewPreview && (!currentRead || currentRead.source === "loading");
+  const sourceLabel = overviewSourceLabel(
+    path,
+    dataMode,
+    scope,
+    overviewReadState,
+  );
   return (
     <div className="app">
       <aside className="sidebar">
@@ -339,7 +361,18 @@ export function Shell({ children }: { children: React.ReactNode }) {
             <b>{scope?.operation}</b>
           </div>
           <div className="spacer" />
-          <SearchDialog />
+          {overviewPreview && currentRead?.source !== "demo" ? (
+            <button
+              className="search glass"
+              disabled
+              title="Busca de clientes indisponível neste preview"
+            >
+              <Search />
+              <span>Busca indisponível neste preview</span>
+            </button>
+          ) : (
+            <SearchDialog />
+          )}
           {path !== "/b2c/stock" && <PeriodFilter />}
           <PageExport />
           <Button
@@ -370,40 +403,44 @@ export function Shell({ children }: { children: React.ReactNode }) {
               }
             }}
           />
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button
-                variant="ghost"
-                className="icon-btn"
-                aria-label="Notificações"
-              >
-                <Bell />
-                {notifications && <span className="notification-dot" />}
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="glass">
-              <DialogTitle>Seu workspace</DialogTitle>
-              <DialogDescription>
-                Notificações demonstrativas.
-              </DialogDescription>
-              {notifications ? (
-                <>
-                  <p>Seu ambiente de demonstração está pronto para explorar.</p>
-                  <Button
-                    onClick={() => setNotifications(false)}
-                    className="btn"
-                  >
-                    Marcar como lida
-                  </Button>
-                </>
-              ) : (
-                <Empty
-                  title="Tudo em dia"
-                  description="Você não tem notificações pendentes."
-                />
-              )}
-            </DialogContent>
-          </Dialog>
+          {(!overviewPreview || currentRead?.source === "demo") && (
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button
+                  variant="ghost"
+                  className="icon-btn"
+                  aria-label="Notificações"
+                >
+                  <Bell />
+                  {notifications && <span className="notification-dot" />}
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="glass">
+                <DialogTitle>Seu workspace</DialogTitle>
+                <DialogDescription>
+                  Notificações demonstrativas.
+                </DialogDescription>
+                {notifications ? (
+                  <>
+                    <p>
+                      Seu ambiente de demonstração está pronto para explorar.
+                    </p>
+                    <Button
+                      onClick={() => setNotifications(false)}
+                      className="btn"
+                    >
+                      Marcar como lida
+                    </Button>
+                  </>
+                ) : (
+                  <Empty
+                    title="Tudo em dia"
+                    description="Você não tem notificações pendentes."
+                  />
+                )}
+              </DialogContent>
+            </Dialog>
+          )}
         </div>
         <div className="workspace-strip">
           <span>
@@ -415,12 +452,17 @@ export function Shell({ children }: { children: React.ReactNode }) {
                 : "Inteligência comercial"}
             </span>
           </span>
-          <span className="badge badge--up">Dados demonstrativos</span>
+          <span className="badge badge--up">{sourceLabel}</span>
         </div>
         {children}
         <footer className="note">
-          UP Data Intelligence · Ambiente demonstrativo · Nenhuma integração
-          real conectada
+          {realOverview
+            ? `UP Data Intelligence · Dados reais · Analytics V1${currentRead?.metadata?.history_complete ? "" : " · Histórico parcial"}`
+            : failedOverview
+              ? "UP Data Intelligence · Falha na leitura real · Nenhum dado demonstrativo foi usado nesta página"
+              : pendingOverview
+                ? "UP Data Intelligence · Aguardando publicação Analytics V1"
+                : "UP Data Intelligence · Ambiente demonstrativo · Nenhuma integração real conectada"}
         </footer>
       </main>
     </div>

@@ -33,7 +33,7 @@ Envelope em todas as respostas de sucesso: `{data,pagination,metadata}`. `metada
 
 Clientes/pedidos/produtos usam ordenação estável com chave de cursor opaca assinada: hash de identidade ou timestamp + hash do pedido. Token vincula usuário, role, tenant, loja, operação, policy, geração, rota, filtros e tamanho. A chave HMAC deve vir de configuração secreta **server-side** no futuro, não do navegador/Git. O probe gera chave efêmera e não pagina. Cursor não substitui autorização. Troca de geração invalida o cursor.
 
-O cliente HTTP TS valida envelope, metadata, escopo, paginação, decimais, `null` e projeções B2B. `customerCard` mostra o mapeamento para um view model **nullable**. O `DataApi` atual é demo e possui campos obrigatórios incompatíveis com ausência real. Por isso o adaptador real não é selecionado por `src/services/api/index.ts` e a UI não recebe mistura silenciosa de fixture com dado real. `frontend/src/services/api/server.ts` lê somente configuração privada `DASHBOARD_DATA_MODE=read-api` e `DASHBOARD_READ_API_BASE_URL`, sem variável `NEXT_PUBLIC`; ainda requer sessão/autenticação reais para uso. Não informar esses valores para a UI demo como se a sessão mock fosse válida.
+O cliente HTTP TS valida envelope, metadata, escopo, paginação, decimais, `null` e projeções B2B. `customerCard` mostra o mapeamento para um view model **nullable**. O `DataApi` global continua demo. CHANGE #15B.1 adiciona somente um [preview local do Overview B2B](DASHBOARD_OVERVIEW_PREVIEW_DEV.md), com `DASHBOARD_DATA_MODE=read-api-preview`, token efêmero no servidor e binding DEV restrito. A sessão mock não vira autorização real de produção.
 
 ## Custo, IAM e operação
 

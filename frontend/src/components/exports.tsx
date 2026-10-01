@@ -1,7 +1,8 @@
 "use client";
 import { useWorkspace } from "@/features/providers";
 import { usePathname } from "next/navigation";
-import { dateRange, displayRange } from "@/lib/period";
+import { dateRange, displayRange, exclusiveToInclusive } from "@/lib/period";
+import { overviewSourceLabel } from "@/lib/overview-source";
 import { useState } from "react";
 import { Download, FileDown } from "lucide-react";
 import { DropdownMenu } from "radix-ui";
@@ -96,17 +97,29 @@ export function PageExport() {
 }
 
 export function PrintContext() {
-  const { filters } = useWorkspace();
-  const admin = usePathname().startsWith("/admin");
-  const range = dateRange(filters);
+  const { filters, scope, dataMode, overviewReadState } = useWorkspace();
+  const path = usePathname();
+  const admin = path.startsWith("/admin");
+  const source = overviewSourceLabel(path, dataMode, scope, overviewReadState);
+  const metadata =
+    source === "Dados reais · Analytics V1"
+      ? overviewReadState?.metadata
+      : undefined;
+  const range =
+    metadata && !filters.from && !filters.to
+      ? {
+          from: metadata.report_from,
+          to: exclusiveToInclusive(metadata.report_to),
+        }
+      : dateRange(filters);
   return (
     <div className="print-context">
       <strong>UP Data Intelligence</strong>
       <p>
         {admin
           ? "Administração UP"
-          : `${displayRange(range.from, range.to)} · America/Sao_Paulo · datas inclusivas`}{" "}
-        · Ambiente demonstrativo
+          : `${displayRange(range.from, range.to)} · ${metadata?.reporting_timezone ?? "America/Sao_Paulo"} · datas inclusivas`}{" "}
+        · {source}
       </p>
     </div>
   );

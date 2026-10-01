@@ -1,14 +1,38 @@
 "use client";
-import { createContext, useContext, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useState,
+  type ReactNode,
+  type Dispatch,
+  type SetStateAction,
+} from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MotionConfig } from "framer-motion";
-import type { Filters, Scope, Session } from "@/types/domain";
+import type {
+  DashboardDataMode,
+  Filters,
+  Scope,
+  Session,
+} from "@/types/domain";
+import type { ReadMetadata } from "@/services/api/http";
 import { defaultFilters } from "@/config/tenants";
 import { authorizedTenants, sessionFor } from "@/services/api";
+export type OverviewReadState = {
+  scopeKey: string;
+  source: "demo" | "real" | "loading" | "error";
+  metadata?: ReadMetadata;
+};
+export function overviewScopeKey(scope: Scope) {
+  return `${scope.tenant_id}/${scope.store_id}/${scope.operation}`;
+}
 interface Workspace {
   session: Session | null;
   scope: Scope | null;
   filters: Filters;
+  dataMode: DashboardDataMode;
+  overviewReadState: OverviewReadState | null;
+  setOverviewReadState: Dispatch<SetStateAction<OverviewReadState | null>>;
   login: (id: string) => void;
   logout: () => void;
   select: (scope: Scope) => void;
@@ -16,7 +40,13 @@ interface Workspace {
   refreshAccess: () => void;
 }
 const Context = createContext<Workspace | null>(null);
-export function Providers({ children }: { children: ReactNode }) {
+export function Providers({
+  children,
+  dataMode = "demo",
+}: {
+  children: ReactNode;
+  dataMode?: DashboardDataMode;
+}) {
   const [client] = useState(
     () =>
       new QueryClient({
@@ -28,9 +58,12 @@ export function Providers({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [scope, setScope] = useState<Scope | null>(null);
   const [filters, setFilters] = useState<Filters>(defaultFilters);
+  const [overviewReadState, setOverviewReadState] =
+    useState<OverviewReadState | null>(null);
   function clear() {
     void client.cancelQueries();
     client.clear();
+    setOverviewReadState(null);
   }
   return (
     <QueryClientProvider client={client}>
@@ -40,6 +73,9 @@ export function Providers({ children }: { children: ReactNode }) {
             session,
             scope,
             filters,
+            dataMode,
+            overviewReadState,
+            setOverviewReadState,
             setFilters,
             login: (id) => {
               clear();

@@ -166,11 +166,11 @@ function array(value: unknown): unknown[] {
   if (!Array.isArray(value)) throw invalid();
   return value;
 }
-function parseMetadata(value: unknown, scope: LiveScope): ReadMetadata {
+function parseMetadata(value: unknown, scope?: LiveScope): ReadMetadata {
   const row = object(value),
     generation = count(row.generation);
   if (
-    row.store_id !== scope.store_id ||
+    (scope !== undefined && row.store_id !== scope.store_id) ||
     row.contract_version !== "1.0.0" ||
     generation === null ||
     generation < 1 ||
@@ -192,6 +192,20 @@ function parseMetadata(value: unknown, scope: LiveScope): ReadMetadata {
     facts_complete: flag(row.facts_complete),
     limitations: array(row.limitations).map(text),
   };
+}
+/** Decode a same-origin bridge response after the server has resolved the store binding. */
+export function decodeOverviewEnvelope(
+  value: unknown,
+): ReadEnvelope<LiveOverview> {
+  const payload = object(value);
+  const metadata = parseMetadata(payload.metadata);
+  const data = parseOverview(payload.data);
+  if (
+    !metadata.history_complete &&
+    (data.new_customers_confirmed !== null || data.ltv_complete !== null)
+  )
+    throw invalid();
+  return { data, pagination: parsePagination(payload.pagination), metadata };
 }
 function parsePagination(value: unknown): ReadPagination | null {
   if (value === null) return null;

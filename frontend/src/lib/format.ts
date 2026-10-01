@@ -1,10 +1,11 @@
-export function money(value: string | number | null) {
+export function money(value: string | number | null, digits = 0) {
   return value === null
     ? "—"
     : new Intl.NumberFormat("pt-BR", {
         style: "currency",
         currency: "BRL",
-        maximumFractionDigits: 0,
+        minimumFractionDigits: digits,
+        maximumFractionDigits: digits,
       }).format(Number(value));
 }
 export function number(value: string | number | null) {
@@ -24,14 +25,18 @@ export function date(value: string | null | undefined) {
       }).format(new Date(value.length === 10 ? value + "T12:00:00Z" : value))
     : "Não disponível";
 }
-export function metric(value: string | null, format: string) {
+export function metric(
+  value: string | null,
+  format: string,
+  displayDigits?: number,
+) {
   if (value === null) return "—";
-  if (format === "currency") return money(value);
+  if (format === "currency") return money(value, displayDigits);
   if (format === "percent" || format === "ratio")
     return (
-      new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 }).format(
-        Number(value),
-      ) + (format === "percent" ? "%" : "x")
+      new Intl.NumberFormat("pt-BR", {
+        maximumFractionDigits: displayDigits ?? 1,
+      }).format(Number(value)) + (format === "percent" ? "%" : "x")
     );
   if (format === "decimal" || format === "days")
     return (

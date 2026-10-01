@@ -119,11 +119,20 @@ export function OrdersChart({ data }: { data: Overview["series"] }) {
 export function Gauge({
   requested,
   fulfilled,
+  rate,
 }: {
-  requested: number;
-  fulfilled: number;
+  requested: number | string | null;
+  fulfilled: number | string | null;
+  rate?: string | null;
 }) {
-  const ratio = requested ? fulfilled / requested : 0;
+  const ratio =
+    rate !== undefined
+      ? rate === null
+        ? null
+        : Number(rate)
+      : requested === null || fulfilled === null || Number(requested) === 0
+        ? null
+        : Number(fulfilled) / Number(requested);
   const id = useId();
   return (
     <>
@@ -149,15 +158,17 @@ export function Gauge({
             strokeWidth="20"
             strokeLinecap="round"
             pathLength="100"
-            strokeDasharray={`${ratio * 100} 100`}
+            strokeDasharray={`${ratio === null ? 0 : Math.max(0, Math.min(100, ratio * 100))} 100`}
           />
         </svg>
         <div className="gauge-center">
           <div className="gauge-pct">
-            {(ratio * 100).toLocaleString("pt-BR", {
-              maximumFractionDigits: 1,
-            })}
-            %
+            {ratio === null
+              ? "—"
+              : `${(ratio * 100).toLocaleString("pt-BR", {
+                  minimumFractionDigits: rate === undefined ? 0 : 2,
+                  maximumFractionDigits: rate === undefined ? 1 : 2,
+                })}%`}
           </div>
           <div className="gauge-cap">do solicitado foi atendido</div>
         </div>
@@ -165,11 +176,11 @@ export function Gauge({
       <div className="gauge-rows">
         <div>
           <small>Solicitado</small>
-          <span>{money(requested)}</span>
+          <span>{money(requested, rate === undefined ? 0 : 2)}</span>
         </div>
         <div>
           <small>Atendido</small>
-          <span>{money(fulfilled)}</span>
+          <span>{money(fulfilled, rate === undefined ? 0 : 2)}</span>
         </div>
       </div>
     </>

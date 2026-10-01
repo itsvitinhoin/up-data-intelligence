@@ -146,7 +146,7 @@ export function MetricCard({
           </Tooltip.Provider>
         </div>
         <div className="metric-value num">
-          {metric(item.value, item.format)}
+          {metric(item.value, item.format, item.displayDigits)}
         </div>
         <div className="metric-row">
           {item.delta !== undefined ? (
@@ -237,11 +237,19 @@ export function Empty({
     </div>
   );
 }
-export function Failure({ retry }: { retry: () => void }) {
+export function Failure({
+  retry,
+  description,
+}: {
+  retry: () => void;
+  description?: string;
+}) {
   return (
     <div role="alert" className="empty-state">
       <h2>Não foi possível carregar os dados.</h2>
-      <p>Tente novamente. A seleção de empresa foi preservada.</p>
+      <p>
+        {description ?? "Tente novamente. A seleção de empresa foi preservada."}
+      </p>
       <Button className="btn" onClick={retry}>
         <RefreshCw size={15} />
         Tentar novamente

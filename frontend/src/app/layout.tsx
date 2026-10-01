@@ -6,13 +6,13 @@ import "@fontsource/playfair-display/400-italic.css";
 import "@fontsource/jetbrains-mono/400.css";
 import "./globals.css";
 import { Providers } from "@/features/providers";
+import { getDashboardDataMode } from "@/services/api/server";
 export const metadata: Metadata = {
   title: {
     default: "UP Data Intelligence",
     template: "%s · UP Data Intelligence",
   },
-  description:
-    "Inteligência comercial para marcas de moda. Ambiente demonstrativo.",
+  description: "Inteligência comercial para marcas de moda.",
 };
 export default function RootLayout({
   children,
@@ -25,7 +25,7 @@ export default function RootLayout({
         <a href="#main" className="skip-link">
           Ir para conteúdo
         </a>
-        <Providers>{children}</Providers>
+        <Providers dataMode={getDashboardDataMode()}>{children}</Providers>
       </body>
     </html>
   );

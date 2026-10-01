@@ -31,9 +31,11 @@ const series = {
 export function OverviewChart({
   data,
   kind,
+  currencyDigits = 0,
 }: {
   data: NonNullable<Overview["b2b"]>["series"];
   kind: Kind;
+  currencyDigits?: number;
 }) {
   const shared = (
     <>
@@ -65,7 +67,7 @@ export function OverviewChart({
             ? "Não confirmado"
             : kind === "customers"
               ? number(Number(v))
-              : money(Number(v))
+              : money(Number(v), currencyDigits)
         }
       />
       <Legend wrapperStyle={{ fontSize: 12, paddingTop: 16 }} />

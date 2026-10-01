@@ -38,6 +38,8 @@ O backend read-only está em `src/dashboard/`, com autenticação HTTP injetada 
 
 A demonstração não tenta certificar os contratos reais nem a segurança de produção. Sua separação permite conectar o adaptador correto sem transportar lógica de API ou dados sintéticos para componentes visuais.
 
+CHANGE #15B.1: `/b2b` pode ser pré-visualizado com dados reais somente em desenvolvimento e com modo privado explícito `DASHBOARD_DATA_MODE=read-api-preview`. O browser chama apenas a rota same-origin `/api/dashboard/overview`, que resolve o workspace para a loja canônica no servidor e usa token efêmero para o servidor Python loopback. `api = demoApi` continua global; outras páginas permanecem demo. O Overview real valida envelope, mantém `NULL`, metadata/cobertura e mostra erro sem fallback. [Runbook do preview](../../docs/DASHBOARD_OVERVIEW_PREVIEW_DEV.md).
+
 ## Ajuste: plataforma operada pela UP
 
 A permissão ADMIN neste frontend representa **Admin interno UP**. Usuários de marcas são VIEWER/MANAGER vinculados a uma única brand_id; a autorização é a interseção desse vínculo com tenant_id/store_id/operação. O catálogo administrativo e o inventário de contas Meta são globais da UP, nunca recursos expostos a clientes.
