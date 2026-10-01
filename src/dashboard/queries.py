@@ -101,7 +101,7 @@ WHERE {scope} AND order_date>=@from AND order_date<@to"""
         if name == "customers" and values.get("from_day") is not None:
             params.update({"from": ("DATE", values["from_day"]), "to": ("DATE", values["to_day"])})
             period_selector = f"""AND EXISTS (
- SELECT 1 FROM {a("analytics_customer_purchase_sequence")} {history} s
+ SELECT 1 FROM {a("analytics_customer_purchase_sequence")} AS s {history}
  WHERE s.store_id=m.store_id AND s.policy_hash=@policy AND s.customer_id=m.customer_id
  AND s.order_date>=@from AND s.order_date<@to)"""
         selector = "m.customer_id=@customer" if name == "customer" else "cursor_key>@after"

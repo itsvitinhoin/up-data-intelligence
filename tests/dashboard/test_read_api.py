@@ -1,6 +1,7 @@
 """Synthetic-only contract tests; no GCP client or customer records."""
 
 import json
+import re
 from dataclasses import replace
 from datetime import date
 from decimal import Decimal
@@ -767,3 +768,169 @@ def test_acquisition_http_route(extended):
         PRINCIPAL,
     )
     assert status == 200 and result["data"]["first_purchase_orders_observed"] == 2
+
+
+class CustomerPeriodReader(FakeReader):
+    """Synthetic observed qualifying purchases; model the EXISTS selection only."""
+
+    def query(
+        self, query: Query, *, request_id: str, store_id: str, generation: int | None
+    ) -> list[dict[str, Any]]:
+        if query.name != "customers" or "from" not in query.parameters:
+            return super().query(
+                query, request_id=request_id, store_id=store_id, generation=generation
+            )
+        self.calls.append(query)
+        p = {key: value[1] for key, value in query.parameters.items()}
+        purchases = [
+            (self.policy.store_id, "c1", "2026-09-01"),
+            (self.policy.store_id, "c1", "2026-09-02"),
+            (self.policy.store_id, "c2", "2026-09-02"),
+            ("synthetic-foreign-store", "c1", "2026-09-10"),
+        ]
+        buyers = {
+            customer
+            for store, customer, day in purchases
+            if store == p["store"] and p["from"] <= day < p["to"]
+        }
+        return [
+            row
+            for row in [customer_row(), customer_row("c2", "b" * 64)]
+            if row["customer_id"] in buyers and row["cursor_key"] > p["after"]
+        ][: p["limit"]]
+
+
+@pytest.fixture
+def customer_period_setup(policy: AnalyticsPolicy) -> tuple[DashboardService, CustomerPeriodReader]:
+    reader = CustomerPeriodReader(policy)
+    return DashboardService(PROJECT, {policy.store_id: policy}, lambda: reader, KEY), reader
+
+
+def test_customer_period_sql_alias_snapshot_correlation_and_parameters():
+    query = build(
+        PROJECT,
+        "customers",
+        store="synthetic-store' OR TRUE --",
+        policy="synthetic-policy' OR TRUE --",
+        from_day="2026-09-01' OR TRUE --",
+        to_day="2026-09-28' OR TRUE --",
+        after="synthetic-cursor' OR TRUE --",
+        limit=26,
+        snapshot_at="2026-09-30T00:00:00Z",
+    )
+    sql = " ".join(query.sql.split())
+    assert "AS s FOR SYSTEM_TIME AS OF @snapshot_at" in sql
+    assert "FOR SYSTEM_TIME AS OF @snapshot_at s" not in sql
+    assert "SELECT 1 FROM" in sql and "AND EXISTS (" in sql
+    assert "s.store_id=m.store_id" in sql and "store_id=@store" in sql
+    assert "s.policy_hash=@policy" in sql
+    assert "s.customer_id=m.customer_id" in sql
+    assert "s.order_date>=@from AND s.order_date<@to" in sql
+    assert query.parameters["store"][0] == "STRING"
+    assert query.parameters["from"][0] == query.parameters["to"][0] == "DATE"
+    for name in ("store", "policy", "from", "to", "after", "snapshot_at"):
+        assert query.parameters[name][1] not in query.sql
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "head",
+        "store_daily",
+        "customer_period",
+        "customers",
+        "customer",
+        "store_orders",
+        "acquisition_first",
+        "orders",
+        "customer_summary",
+        "retention_distribution",
+        "retention_cohorts",
+        "retention_gaps",
+        "products",
+        "funnel_daily",
+    ],
+)
+def test_dashboard_time_travel_has_no_trailing_alias(name: str):
+    query = build(PROJECT, name, from_day="2026-09-01", to_day="2026-09-28")
+    # Every current time-travel table read is followed by WHERE, never an alias.
+    following_tokens = re.findall(r"FOR SYSTEM_TIME AS OF @snapshot_at\s+(\w+)", query.sql)
+    assert all(token == "WHERE" for token in following_tokens)
+    assert len(following_tokens) == query.sql.count("FOR SYSTEM_TIME AS OF @snapshot_at")
+
+
+@pytest.mark.parametrize(
+    ("start", "end", "expected"),
+    [
+        ("2026-09-01", "2026-09-02", ["c1"]),
+        ("2026-09-01", "2026-09-03", ["c1", "c2"]),
+        ("2026-09-03", "2026-09-04", []),
+        # A purchase from another store must not select the same customer ID here.
+        ("2026-09-10", "2026-09-11", []),
+    ],
+)
+def test_customer_period_http_valid_rows_or_empty_list(customer_period_setup, start, end, expected):
+    service, reader = customer_period_setup
+    status, result = dispatch(
+        service,
+        "GET",
+        "/v1/customers",
+        {
+            "tenant_id": [GRANT.tenant_id],
+            "store_id": [GRANT.store_id],
+            "operation": ["B2B"],
+            "from": [start],
+            "to": [end],
+            "page_size": ["25"],
+        },
+        PRINCIPAL,
+    )
+    assert status == 200
+    assert [row["customer_id"] for row in result["data"]] == expected
+    assert result["pagination"] == {"page_size": 25, "cursor": None, "has_more": False}
+    assert reader.calls[-1].parameters["store"] == ("STRING", GRANT.store_id)
+    assert reader.calls[-1].parameters["from"] == ("DATE", start)
+    assert reader.calls[-1].parameters["to"] == ("DATE", end)
+
+
+@pytest.mark.parametrize(
+    ("start", "end"),
+    [("2026-08-31", "2026-09-02"), ("2026-09-01", "2026-09-29")],
+)
+def test_customer_period_outside_publication_is_400(customer_period_setup, start, end):
+    service, reader = customer_period_setup
+    with pytest.raises(ReadError, match="interval_outside_publication") as error:
+        service.customers(PRINCIPAL, GRANT, from_day=start, to_day=end)
+    assert error.value.status == 400
+    assert not any(query.name == "customers" for query in reader.calls)
+
+
+def test_customer_period_cursor_valid_and_bound_to_period(customer_period_setup):
+    service, reader = customer_period_setup
+    args = {"from_day": "2026-09-01", "to_day": "2026-09-03", "size": "1"}
+    first = service.customers(PRINCIPAL, GRANT, **args)
+    assert [row["customer_id"] for row in first["data"]] == ["c1"]
+    token = first["pagination"]["cursor"]
+    assert token is not None and first["pagination"]["has_more"]
+    second = service.customers(PRINCIPAL, GRANT, cursor=token, **args)
+    assert [row["customer_id"] for row in second["data"]] == ["c2"]
+    assert second["pagination"]["cursor"] is None
+    assert second["metadata"]["generation"] == first["metadata"]["generation"]
+    reader.calls.clear()
+    with pytest.raises(ReadError, match="invalid_cursor") as error:
+        service.customers(PRINCIPAL, GRANT, cursor=token, **{**args, "from_day": "2026-09-02"})
+    assert error.value.status == 400
+    assert not any(query.name == "customers" for query in reader.calls)
+
+
+def test_customer_period_unauthorized_store_fails_before_any_read(customer_period_setup):
+    service, reader = customer_period_setup
+    with pytest.raises(ReadError, match="store_forbidden") as error:
+        service.customers(
+            PRINCIPAL,
+            Grant(GRANT.tenant_id, "synthetic-foreign-store", "B2B"),
+            from_day="2026-09-01",
+            to_day="2026-09-28",
+        )
+    assert error.value.status == 403
+    assert reader.calls == []
