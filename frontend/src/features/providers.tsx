@@ -16,14 +16,8 @@ import type {
   Session,
 } from "@/types/domain";
 import type { DashboardPageState } from "@/lib/dashboard-source";
-import type { ReadMetadata } from "@/services/api/http";
 import { defaultFilters } from "@/config/tenants";
 import { authorizedTenants, sessionFor } from "@/services/api";
-export type OverviewReadState = {
-  scopeKey: string;
-  source: "demo" | "real" | "loading" | "error";
-  metadata?: ReadMetadata;
-};
 export function overviewScopeKey(scope: Scope) {
   return `${scope.tenant_id}/${scope.store_id}/${scope.operation}`;
 }
@@ -34,8 +28,6 @@ interface Workspace {
   dataMode: DashboardDataMode;
   dashboardPageState: DashboardPageState | null;
   setDashboardPageState: Dispatch<SetStateAction<DashboardPageState | null>>;
-  overviewReadState: OverviewReadState | null;
-  setOverviewReadState: Dispatch<SetStateAction<OverviewReadState | null>>;
   login: (id: string) => void;
   logout: () => void;
   select: (scope: Scope) => void;
@@ -61,15 +53,12 @@ export function Providers({
   const [session, setSession] = useState<Session | null>(null);
   const [scope, setScope] = useState<Scope | null>(null);
   const [filters, setFilters] = useState<Filters>(defaultFilters);
-  const [overviewReadState, setOverviewReadState] =
-    useState<OverviewReadState | null>(null);
   const [dashboardPageState, setDashboardPageState] =
     useState<DashboardPageState | null>(null);
   function clear() {
     setDashboardPageState(null);
     void client.cancelQueries();
     client.clear();
-    setOverviewReadState(null);
   }
   return (
     <QueryClientProvider client={client}>
@@ -82,8 +71,6 @@ export function Providers({
             dataMode,
             dashboardPageState,
             setDashboardPageState,
-            overviewReadState,
-            setOverviewReadState,
             setFilters,
             login: (id) => {
               clear();

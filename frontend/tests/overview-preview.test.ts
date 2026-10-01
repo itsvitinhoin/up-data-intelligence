@@ -12,7 +12,7 @@ import { handleOverviewBridge } from "@/services/api/overview-bridge.server";
 import { resolveDevOverviewBinding } from "@/services/api/preview-binding.server";
 import { decodeOverviewEnvelope } from "@/services/api/http";
 import { presentLiveOverview, ticket } from "@/services/api/overview-presenter";
-import { overviewSourceLabel } from "@/lib/overview-source";
+import { dashboardSourceLabel } from "@/lib/dashboard-source";
 import {
   inclusiveToExclusive,
   exclusiveToInclusive,
@@ -328,21 +328,22 @@ describe("controlled B2B Overview preview", () => {
   it("labels only a successfully connected B2B Overview as real", () => {
     const mx = context().scope;
     const real = {
+      path: "/b2b",
       scopeKey: overviewScopeKey(mx),
-      source: "real" as const,
+      source: "partial-real" as const,
       metadata: live.metadata,
     };
-    expect(overviewSourceLabel("/b2b", "read-api-preview", mx, real)).toBe(
-      "Dados reais · Analytics V1",
+    expect(dashboardSourceLabel("/b2b", "read-api-preview", mx, real)).toBe(
+      "Dados reais · Histórico parcial",
     );
     expect(
-      overviewSourceLabel("/b2b/products", "read-api-preview", mx, real),
-    ).toBe("Dados demonstrativos");
-    expect(overviewSourceLabel("/b2b", "demo", mx, real)).toBe(
+      dashboardSourceLabel("/b2b/products", "read-api-preview", mx, real),
+    ).toBe("Conectando dados reais");
+    expect(dashboardSourceLabel("/b2b", "demo", mx, real)).toBe(
       "Dados demonstrativos",
     );
     expect(
-      overviewSourceLabel(
+      dashboardSourceLabel(
         "/b2b",
         "read-api-preview",
         context("lume-b2b").scope,
@@ -350,9 +351,9 @@ describe("controlled B2B Overview preview", () => {
       ),
     ).toBe("Conectando dados reais");
     expect(
-      overviewSourceLabel("/b2b", "read-api-preview", mx, {
+      dashboardSourceLabel("/b2b", "read-api-preview", mx, {
         ...real,
-        source: "error",
+        source: "error-real",
       }),
     ).toBe("Dados reais indisponíveis");
     expect(readFileSync("src/features/b2b-overview.tsx", "utf8")).toContain(

@@ -71,22 +71,7 @@ export function B2BReadBoundary({
     </div>
   );
 }
-export function usePageSource(
-  source:
-    | "loading-real"
-    | "real"
-    | "partial-real"
-    | "unavailable-real"
-    | "error-real",
-  metadata: ReadMetadata,
-) {
-  const { scope, setDashboardPageState } = useWorkspace();
-  const path = usePathname(),
-    scopeKey = scope ? overviewScopeKey(scope) : "";
-  useEffect(() => {
-    setDashboardPageState({ path, scopeKey, source, metadata });
-  }, [path, scopeKey, source, metadata, setDashboardPageState]);
-}
+export { usePageSource } from "./use-page-source";
 export async function readDashboard<K extends ReadResource>(
   resource: K,
   context: ReturnType<typeof useRequestContext>,

@@ -1,8 +1,7 @@
 "use client";
-import { usePathname } from "next/navigation";
-import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useWorkspace, overviewScopeKey } from "@/features/providers";
+import { useWorkspace } from "@/features/providers";
+import { usePageSource } from "./use-page-source";
 import { useRequestContext, queryKey } from "./use-resource";
 import { api } from "@/services/api";
 import { ApiError } from "@/services/api/access";
@@ -74,72 +73,23 @@ export async function readOverview(
 
 export function useOverviewData() {
   const context = useRequestContext();
-  const { dataMode, setOverviewReadState, setDashboardPageState } =
-    useWorkspace();
-  const path = usePathname();
-  const scopeKey = overviewScopeKey(context.scope);
+  const { dataMode } = useWorkspace();
   const result = useQuery({
     queryKey: overviewQueryKey(dataMode, context),
     queryFn: ({ signal }) => readOverview(dataMode, { ...context, signal }),
     retry: false,
   });
-  useEffect(() => {
-    setDashboardPageState((previous) => ({
-      path,
-      scopeKey,
-      source: result.isPending
-        ? "loading-real"
-        : result.isError
-          ? "error-real"
-          : result.data?.source === "real"
-            ? result.data.overview.metadata.history_complete
-              ? "real"
-              : "partial-real"
-            : "demo",
-      metadata:
-        result.data?.source === "real"
-          ? result.data.overview.metadata
-          : previous?.scopeKey === scopeKey
-            ? previous.metadata
-            : undefined,
-    }));
-  }, [
-    path,
-    scopeKey,
-    result.isPending,
-    result.isError,
-    result.data,
-    setDashboardPageState,
-  ]);
-  useEffect(() => {
-    if (result.isPending)
-      setOverviewReadState((previous) => ({
-        scopeKey,
-        source: "loading",
-        metadata:
-          previous?.scopeKey === scopeKey ? previous.metadata : undefined,
-      }));
-    else if (result.isError)
-      setOverviewReadState((previous) => ({
-        scopeKey,
-        source: "error",
-        metadata:
-          previous?.scopeKey === scopeKey ? previous.metadata : undefined,
-      }));
-    else if (result.data?.source === "real")
-      setOverviewReadState({
-        scopeKey,
-        source: "real",
-        metadata: result.data.overview.metadata,
-      });
-    else if (result.data?.source === "demo")
-      setOverviewReadState({ scopeKey, source: "demo" });
-  }, [
-    result.isPending,
-    result.isError,
-    result.data,
-    scopeKey,
-    setOverviewReadState,
-  ]);
+  usePageSource(
+    result.isPending
+      ? "loading-real"
+      : result.isError
+        ? "error-real"
+        : result.data?.source === "real"
+          ? result.data.overview.metadata.history_complete
+            ? "real"
+            : "partial-real"
+          : "demo",
+    result.data?.source === "real" ? result.data.overview.metadata : undefined,
+  );
   return result;
 }

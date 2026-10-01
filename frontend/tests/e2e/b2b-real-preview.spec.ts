@@ -198,6 +198,18 @@ test("one-round B2B V1 traversal: real, partial and explicitly unavailable", asy
   await expect(
     page.getByRole("region", { name: "Indicadores de Receita" }),
   ).toContainText("73.220,13");
+  await expect(page.locator(".workspace-strip .badge")).toHaveText(
+    "Dados reais · Histórico parcial",
+  );
+  await expect(page.locator(".period-trigger")).toBeEnabled();
+  await expect(page.locator(".period-trigger")).toContainText(
+    "01/09/2026 – 27/09/2026",
+  );
+  await expect(page.locator("footer.note")).toContainText("Dados reais");
+  await expect(page.locator("footer.note")).toContainText("Histórico parcial");
+  await expect(page.locator(".print-context")).toContainText(
+    "Dados reais · Histórico parcial",
+  );
   await nav(page, "/b2b/commercial");
   await realBadge(page);
   await expect(page.locator("tbody tr").first()).toBeVisible();
