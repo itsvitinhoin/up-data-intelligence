@@ -22,7 +22,9 @@ Os caminhos acima são relativos à **raiz frontend**, não a este documento. Ne
 | Overview, produtos, mapa, coortes | materializações aprovadas | Endpoint, grain, cobertura, paginação e projeção pendentes |
 | Admin / integrations / users | futuro backend administrativo | Autenticação, RBAC, CSRF e gestão segura de credenciais pendentes |
 
-`services/api/http.ts` demonstra a fronteira de transporte para **view models**, inclusive paginação ainda local ao demo. Ele NÃO decodifica nem consome diretamente os DTOs #11/#12. As rotas desse esqueleto são candidatas, não um novo contrato aprovado. Ao conectar, substituir essa implementação por adaptador que valide responses e traduza apenas campos autorizados. Nunca fazer cast de um envelope `{data,pagination,metadata}` para uma lista.
+CHANGE #15A: `services/api/http.ts` agora implementa o transporte separado da Dashboard Read API Analytics V1. Decodifica e valida `{data,pagination,metadata}`, store, geração, cobertura, `null` e decimais; oferece `customerCard` como projeção nullable. Os contratos offline #11/#12/#14 não foram promovidos nem lidos por essa API. O transporte não é compatível por cast com os modelos demo de campos obrigatórios: uma futura adaptação visual explícita deve preservar campos ausentes, sem preencher fixtures. `services/api/index.ts` continua `export const api = demoApi`.
+
+O backend read-only está em `src/dashboard/`, com autenticação HTTP injetada e fail-closed, HEAD/RECEIPT e snapshot de leitura, budget por query e cursor. [Runbook DEV](../../docs/DASHBOARD_READ_API_DEV.md). A seleção opcional em `services/api/server.ts` usa somente ambiente privado do servidor (`DASHBOARD_DATA_MODE`, `DASHBOARD_READ_API_BASE_URL`); não faz cutover e não substitui uma sessão real por identidade demo. Não existem credenciais no bundle.
 
 ## Requisitos para ativação futura
 

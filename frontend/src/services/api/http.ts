@@ -1,64 +1,528 @@
-import type {
-  DataApi,
-  RequestContext,
-  Resource,
-  ResourceMap,
-} from "@/types/domain";
-import { assertAccess, ApiError } from "./access";
-/** Future transport. Never selected automatically and no credentials in public environment. */
-export function createHttpApi(baseUrl: string): DataApi {
+/** Analytics V1 read transport. Never selected by the demo composition root. */
+import { ApiError } from "./access";
+
+export type LiveScope = {
+  tenant_id: string;
+  store_id: string;
+  operation: "B2B";
+};
+export type ReadMetadata = {
+  contract_version: string;
+  store_id: string;
+  generation: number;
+  policy_hash: string;
+  currency: string | null;
+  reporting_timezone: string;
+  as_of: string;
+  report_from: string;
+  report_to: string;
+  history_complete: boolean;
+  facts_complete: boolean;
+  limitations: string[];
+};
+export type ReadPagination = {
+  page_size: number;
+  cursor: string | null;
+  has_more: boolean;
+};
+export type ReadEnvelope<T> = {
+  data: T;
+  pagination: ReadPagination | null;
+  metadata: ReadMetadata;
+};
+export type LiveCustomer = {
+  store_id: string;
+  customer_id: string;
+  customer_type: string | null;
+  name: string | null;
+  state: string | null;
+  city: string | null;
+  purchases_observed: number | null;
+  first_purchase_at_observed: string | null;
+  requested_lifetime_observed: string | null;
+  ltv_complete: string | null;
+};
+export type LiveOrder = {
+  store_id: string;
+  customer_id: string;
+  order_id: string;
+  created_at: string;
+  order_status: string | null;
+  payment_status: string | null;
+  requested_total: string | null;
+  fulfilled_total: string | null;
+  requested_items_qty: number | null;
+  fulfilled_items_qty: number | null;
+};
+export type LiveOverview = {
+  requested_revenue: string | null;
+  fulfilled_revenue: string | null;
+  fulfillment_rate: string | null;
+  fulfillment_gap: string | null;
+  cancelled_requested_revenue: string | null;
+  orders_requested: number | null;
+  orders_cancelled: number | null;
+  buyers_observed: number | null;
+  recurring_buyers_observed: number | null;
+  purchase_frequency_observed: string | null;
+  new_customers_confirmed: number | null;
+  ltv_complete: string | null;
+  cac: string | null;
+  revenue_paid: string | null;
+  series: {
+    date: string;
+    requested: string | null;
+    fulfilled: string | null;
+    orders: number | null;
+    new_customers_confirmed: number | null;
+  }[];
+};
+export type LiveProduct = {
+  store_id: string;
+  product_key: string;
+  product_id: string | null;
+  sku: string | null;
+  name: string | null;
+  requested_revenue: string | null;
+  fulfilled_revenue: string | null;
+  units_requested: string | null;
+  units_fulfilled: string | null;
+  orders_observed: number | null;
+  buyers_unique: number | null;
+};
+export type LiveCustomerDetail = {
+  profile: LiveCustomer;
+  commercial: {
+    qualifying_orders_observed: number | null;
+    requested_revenue_observed: string | null;
+    fulfilled_revenue_observed: string | null;
+    first_purchase_at_observed: string | null;
+    last_purchase_at_observed: string | null;
+    ltv_complete: string | null;
+  };
+};
+export type LiveRetention = {
+  buyers_observed: number | null;
+  recurring_buyers_observed: number | null;
+  retention_observed: string | null;
+  retention_ticket_observed: string | null;
+  frequency_observed: string | null;
+  progression: {
+    from_purchase: number;
+    to_purchase: string;
+    customers_reached_observed: number;
+    continuation_observed: string | null;
+    mean_days_observed: number | null;
+    median_days_observed: number | null;
+  }[];
+  cohorts: {
+    cohort_month: string;
+    reporting_month: string;
+    month: number | null;
+    buyers_observed: number | null;
+    rate: string | null;
+    observed_rate: string | null;
+    period_complete: boolean;
+  }[];
+};
+export type LiveFunnel = {
+  totals: Record<string, number | null>;
+  session_to_cart_rate: string | null;
+  cart_to_checkout_rate: string | null;
+  checkout_to_purchase_rate: string | null;
+  days: { date: string; [key: string]: string | number | null }[];
+};
+type ObjectRow = Record<string, unknown>;
+const invalid = () => new ApiError(502, "Resposta inválida da API de leitura.");
+function object(value: unknown): ObjectRow {
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    throw invalid();
+  return value as ObjectRow;
+}
+function text(value: unknown): string {
+  if (typeof value !== "string" || !value) throw invalid();
+  return value;
+}
+function nullableText(value: unknown): string | null {
+  return value === null ? null : text(value);
+}
+function decimal(value: unknown): string | null {
+  if (value === null) return null;
+  if (typeof value !== "string" || !/^-?(?:0|[1-9]\d*)(?:\.\d+)?$/.test(value))
+    throw invalid();
+  return value;
+}
+function count(value: unknown): number | null {
+  if (value === null) return null;
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0)
+    throw invalid();
+  return value;
+}
+function flag(value: unknown): boolean {
+  if (typeof value !== "boolean") throw invalid();
+  return value;
+}
+function array(value: unknown): unknown[] {
+  if (!Array.isArray(value)) throw invalid();
+  return value;
+}
+function parseMetadata(value: unknown, scope: LiveScope): ReadMetadata {
+  const row = object(value),
+    generation = count(row.generation);
+  if (
+    row.store_id !== scope.store_id ||
+    row.contract_version !== "1.0.0" ||
+    generation === null ||
+    generation < 1 ||
+    typeof row.policy_hash !== "string" ||
+    !/^[a-f0-9]{64}$/.test(row.policy_hash)
+  )
+    throw invalid();
+  return {
+    contract_version: text(row.contract_version),
+    store_id: text(row.store_id),
+    generation,
+    policy_hash: row.policy_hash,
+    currency: nullableText(row.currency),
+    reporting_timezone: text(row.reporting_timezone),
+    as_of: text(row.as_of),
+    report_from: text(row.report_from),
+    report_to: text(row.report_to),
+    history_complete: flag(row.history_complete),
+    facts_complete: flag(row.facts_complete),
+    limitations: array(row.limitations).map(text),
+  };
+}
+function parsePagination(value: unknown): ReadPagination | null {
+  if (value === null) return null;
+  const row = object(value),
+    size = count(row.page_size);
+  if (size === null || size < 1 || size > 100) throw invalid();
+  return {
+    page_size: size,
+    cursor: nullableText(row.cursor),
+    has_more: flag(row.has_more),
+  };
+}
+function parseCustomer(value: unknown, scope: LiveScope): LiveCustomer {
+  const row = object(value);
+  if (row.store_id !== scope.store_id) throw invalid();
+  return {
+    store_id: text(row.store_id),
+    customer_id: text(row.customer_id),
+    customer_type: nullableText(row.customer_type),
+    name: nullableText(row.name),
+    state: nullableText(row.state),
+    city: nullableText(row.city),
+    purchases_observed: count(row.purchases_observed),
+    first_purchase_at_observed: nullableText(row.first_purchase_at_observed),
+    requested_lifetime_observed: decimal(row.requested_lifetime_observed),
+    ltv_complete: decimal(row.ltv_complete),
+  };
+}
+function parseOrder(
+  value: unknown,
+  scope: LiveScope,
+  customerId: string,
+): LiveOrder {
+  const row = object(value);
+  if (row.store_id !== scope.store_id || row.customer_id !== customerId)
+    throw invalid();
+  return {
+    store_id: text(row.store_id),
+    customer_id: text(row.customer_id),
+    order_id: text(row.order_id),
+    created_at: text(row.created_at),
+    order_status: nullableText(row.order_status),
+    payment_status: nullableText(row.payment_status),
+    requested_total: decimal(row.requested_total),
+    fulfilled_total: decimal(row.fulfilled_total),
+    requested_items_qty: count(row.requested_items_qty),
+    fulfilled_items_qty: count(row.fulfilled_items_qty),
+  };
+}
+function parseOverview(value: unknown): LiveOverview {
+  const row = object(value);
+  return {
+    requested_revenue: decimal(row.requested_revenue),
+    fulfilled_revenue: decimal(row.fulfilled_revenue),
+    fulfillment_rate: decimal(row.fulfillment_rate),
+    fulfillment_gap: decimal(row.fulfillment_gap),
+    cancelled_requested_revenue: decimal(row.cancelled_requested_revenue),
+    orders_requested: count(row.orders_requested),
+    orders_cancelled: count(row.orders_cancelled),
+    buyers_observed: count(row.buyers_observed),
+    recurring_buyers_observed: count(row.recurring_buyers_observed),
+    purchase_frequency_observed: decimal(row.purchase_frequency_observed),
+    new_customers_confirmed: count(row.new_customers_confirmed),
+    ltv_complete: decimal(row.ltv_complete),
+    cac: decimal(row.cac),
+    revenue_paid: decimal(row.revenue_paid),
+    series: array(row.series).map((item) => {
+      const point = object(item);
+      return {
+        date: text(point.date),
+        requested: decimal(point.requested),
+        fulfilled: decimal(point.fulfilled),
+        orders: count(point.orders),
+        new_customers_confirmed: count(point.new_customers_confirmed),
+      };
+    }),
+  };
+}
+function parseProduct(value: unknown, scope: LiveScope): LiveProduct {
+  const row = object(value);
+  if (row.store_id !== scope.store_id) throw invalid();
+  return {
+    store_id: text(row.store_id),
+    product_key: text(row.product_key),
+    product_id: nullableText(row.product_id),
+    sku: nullableText(row.sku),
+    name: nullableText(row.name),
+    requested_revenue: decimal(row.requested_revenue),
+    fulfilled_revenue: decimal(row.fulfilled_revenue),
+    units_requested: decimal(row.units_requested),
+    units_fulfilled: decimal(row.units_fulfilled),
+    orders_observed: count(row.orders_observed),
+    buyers_unique: count(row.buyers_unique),
+  };
+}
+function nullableNumber(value: unknown): number | null {
+  if (value === null) return null;
+  if (typeof value !== "number" || !Number.isFinite(value)) throw invalid();
+  return value;
+}
+function parseRetention(value: unknown): LiveRetention {
+  const row = object(value);
+  return {
+    buyers_observed: count(row.buyers_observed),
+    recurring_buyers_observed: count(row.recurring_buyers_observed),
+    retention_observed: decimal(row.retention_observed),
+    retention_ticket_observed: decimal(row.retention_ticket_observed),
+    frequency_observed: decimal(row.frequency_observed),
+    progression: array(row.progression).map((value) => {
+      const step = object(value),
+        reached = count(step.customers_reached_observed),
+        from = count(step.from_purchase);
+      if (reached === null || from === null) throw invalid();
+      return {
+        from_purchase: from,
+        to_purchase: text(step.to_purchase),
+        customers_reached_observed: reached,
+        continuation_observed: decimal(step.continuation_observed),
+        mean_days_observed: nullableNumber(step.mean_days_observed),
+        median_days_observed: nullableNumber(step.median_days_observed),
+      };
+    }),
+    cohorts: array(row.cohorts).map((value) => {
+      const cohort = object(value),
+        complete = flag(cohort.period_complete);
+      const rate = decimal(cohort.rate),
+        observed = decimal(cohort.observed_rate);
+      if (!complete && (rate !== null || observed !== null)) throw invalid();
+      return {
+        cohort_month: text(cohort.cohort_month),
+        reporting_month: text(cohort.reporting_month),
+        month: count(cohort.month),
+        buyers_observed: count(cohort.buyers_observed),
+        rate,
+        observed_rate: observed,
+        period_complete: complete,
+      };
+    }),
+  };
+}
+const funnelFields = [
+  "sessions",
+  "product_views",
+  "add_to_cart",
+  "checkout_started",
+  "purchase",
+  "sessions_with_cart",
+  "sessions_cart_then_checkout",
+  "sessions_cart_checkout_purchase",
+  "sessions_with_purchase",
+  "events_without_session",
+] as const;
+function parseFunnel(value: unknown): LiveFunnel {
+  const row = object(value),
+    totals = object(row.totals);
+  return {
+    totals: Object.fromEntries(
+      funnelFields.map((field) => [field, count(totals[field])]),
+    ),
+    session_to_cart_rate: decimal(row.session_to_cart_rate),
+    cart_to_checkout_rate: decimal(row.cart_to_checkout_rate),
+    checkout_to_purchase_rate: decimal(row.checkout_to_purchase_rate),
+    days: array(row.days).map((value) => {
+      const day = object(value);
+      return {
+        date: text(day.date),
+        ...Object.fromEntries(
+          funnelFields.map((field) => [field, count(day[field])]),
+        ),
+      };
+    }),
+  };
+}
+type ReadOptions = {
+  from?: string;
+  to?: string;
+  pageSize?: number;
+  cursor?: string;
+  signal?: AbortSignal;
+};
+export function createHttpApi(baseUrl: string, fetcher: typeof fetch = fetch) {
+  const base = new URL(baseUrl);
+  if (!["http:", "https:"].includes(base.protocol))
+    throw new Error("Invalid read API URL");
   async function request<T>(
     path: string,
-    c: RequestContext,
-    body?: unknown,
-  ): Promise<T> {
-    assertAccess(c, !!body);
-    const url = new URL(path, baseUrl);
-    url.searchParams.set("tenant_id", c.scope.tenant_id);
-    url.searchParams.set("store_id", c.scope.store_id);
-    Object.entries(c.filters).forEach(([k, v]) =>
-      url.searchParams.set(k, String(v)),
-    );
-    const response = await fetch(url, {
+    scope: LiveScope,
+    decode: (value: unknown) => T,
+    options: ReadOptions = {},
+  ): Promise<ReadEnvelope<T>> {
+    if (!scope.tenant_id || !scope.store_id || scope.operation !== "B2B")
+      throw invalid();
+    const url = new URL(path, base);
+    url.searchParams.set("tenant_id", scope.tenant_id);
+    url.searchParams.set("operation", scope.operation);
+    if (!path.startsWith("/v1/stores/"))
+      url.searchParams.set("store_id", scope.store_id);
+    if (options.from) url.searchParams.set("from", options.from);
+    if (options.to) url.searchParams.set("to", options.to);
+    if (options.pageSize !== undefined)
+      url.searchParams.set("page_size", String(options.pageSize));
+    if (options.cursor) url.searchParams.set("cursor", options.cursor);
+    const response = await fetcher(url, {
+      method: "GET",
       credentials: "include",
-      signal: c.signal,
-      method: body ? "POST" : "GET",
-      headers: { "Content-Type": "application/json" },
-      body: body ? JSON.stringify(body) : undefined,
+      cache: "no-store",
+      headers: { Accept: "application/json" },
+      signal: options.signal,
     });
     if (!response.ok)
-      throw new ApiError(
-        response.status,
-        "Não foi possível concluir a solicitação.",
-      );
-    return response.status === 204
-      ? (undefined as T)
-      : ((await response.json()) as T);
+      throw new ApiError(response.status, "Falha na leitura do dashboard.");
+    const payload = object(await response.json());
+    return {
+      data: decode(payload.data),
+      pagination: parsePagination(payload.pagination),
+      metadata: parseMetadata(payload.metadata, scope),
+    };
   }
   return {
-    read<K extends Resource>(r: K, c: RequestContext) {
-      return request<ResourceMap[K]>(
-        `/v1/${["companies", "users", "integrations"].includes(r) ? "admin/" : ""}${r}`,
-        c,
+    overview: async (scope: LiveScope, options?: ReadOptions) => {
+      const response = await request(
+        `/v1/stores/${encodeURIComponent(scope.store_id)}/overview`,
+        scope,
+        parseOverview,
+        options,
       );
+      if (
+        !response.metadata.history_complete &&
+        (response.data.new_customers_confirmed !== null ||
+          response.data.ltv_complete !== null)
+      )
+        throw invalid();
+      return response;
     },
-    campaign(id, c) {
-      return request(`/v1/campaigns/${encodeURIComponent(id)}`, c);
+    customers: async (scope: LiveScope, options?: ReadOptions) => {
+      const response = await request(
+        "/v1/customers",
+        scope,
+        (value) => array(value).map((item) => parseCustomer(item, scope)),
+        options,
+      );
+      if (
+        !response.metadata.history_complete &&
+        response.data.some((row) => row.ltv_complete !== null)
+      )
+        throw invalid();
+      if (!response.pagination) throw invalid();
+      return response;
     },
-    order(id, c) {
-      return request(`/v1/orders/${encodeURIComponent(id)}`, c);
+    customer: async (scope: LiveScope, id: string, options?: ReadOptions) => {
+      const response = await request(
+        `/v1/customers/${encodeURIComponent(id)}`,
+        scope,
+        (value): LiveCustomerDetail => {
+          const row = object(value),
+            profile = parseCustomer(row.profile, scope),
+            commercial = object(row.commercial);
+          if (profile.customer_id !== id) throw invalid();
+          return {
+            profile,
+            commercial: {
+              qualifying_orders_observed: count(
+                commercial.qualifying_orders_observed,
+              ),
+              requested_revenue_observed: decimal(
+                commercial.requested_revenue_observed,
+              ),
+              fulfilled_revenue_observed: decimal(
+                commercial.fulfilled_revenue_observed,
+              ),
+              first_purchase_at_observed: nullableText(
+                commercial.first_purchase_at_observed,
+              ),
+              last_purchase_at_observed: nullableText(
+                commercial.last_purchase_at_observed,
+              ),
+              ltv_complete: decimal(commercial.ltv_complete),
+            },
+          };
+        },
+        options,
+      );
+      if (
+        !response.metadata.history_complete &&
+        (response.data.profile.ltv_complete !== null ||
+          response.data.commercial.ltv_complete !== null)
+      )
+        throw invalid();
+      return response;
     },
-    customer(id, c) {
-      return request(`/v1/customers/${encodeURIComponent(id)}`, c);
+    customerOrders: async (
+      scope: LiveScope,
+      id: string,
+      options?: ReadOptions,
+    ) => {
+      const response = await request(
+        `/v1/customers/${encodeURIComponent(id)}/orders`,
+        scope,
+        (value) => array(value).map((item) => parseOrder(item, scope, id)),
+        options,
+      );
+      if (!response.pagination) throw invalid();
+      return response;
     },
-    saveCompany(value, c) {
-      return request("/v1/admin/companies", c, value);
+    retention: (scope: LiveScope, options?: ReadOptions) =>
+      request("/v1/retention", scope, parseRetention, options),
+    products: async (scope: LiveScope, options?: ReadOptions) => {
+      const response = await request(
+        "/v1/products",
+        scope,
+        (value) => array(value).map((item) => parseProduct(item, scope)),
+        options,
+      );
+      if (!response.pagination) throw invalid();
+      return response;
     },
-    saveIntegration(value, c) {
-      return request("/v1/admin/integrations", c, value);
-    },
-    saveUser(value, c) {
-      return request("/v1/admin/users", c, value);
-    },
+    funnel: (scope: LiveScope, options?: ReadOptions) =>
+      request("/v1/funnel", scope, parseFunnel, options),
+  };
+}
+
+/** Nullable presentation projection; never cast an envelope to demo Customer[]. */
+export function customerCard(row: LiveCustomer) {
+  return {
+    id: row.customer_id,
+    name: row.name,
+    state: row.state,
+    city: row.city,
+    ordersObserved: row.purchases_observed,
+    requestedObserved: row.requested_lifetime_observed,
+    fulfilledObserved: null,
+    completeLtv: row.ltv_complete,
   };
 }

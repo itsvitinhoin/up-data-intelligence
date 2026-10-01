@@ -51,15 +51,15 @@ lib/                 formatação e utilitários
 types/              contratos internos de apresentação
 ```
 
-Os componentes não fazem `fetch`. `services/api/index.ts` escolhe explicitamente o adaptador demo. As chaves de consulta incluem usuário, role, tenant, store, operação, recurso e filtros. Na troca de contexto, requisições são canceladas, cache limpo e filtros reiniciados. A administração global é uma fronteira exclusiva da UP. Novas marcas começam sem registros comerciais de outras marcas. Usuários clientes não acessam integrações nem configurações internas.
+Os componentes não fazem `fetch`. `services/api/index.ts` escolhe explicitamente o adaptador demo. O CHANGE #15A acrescentou em `services/api/http.ts` um cliente separado para a Dashboard Read API, com validação de envelope e view models nullable; ele **não** é selecionado pela UI. As chaves de consulta incluem usuário, role, tenant, store, operação, recurso e filtros. Na troca de contexto, requisições são canceladas, cache limpo e filtros reiniciados. A administração global é uma fronteira exclusiva da UP. Novas marcas começam sem registros comerciais de outras marcas. Usuários clientes não acessam integrações nem configurações internas.
 
 O guard de UI **não é autenticação/autorização de produção**. O backend deverá validar identidade, role e vínculo tenant/store em toda requisição. A seleção do navegador nunca concede autorização.
 
 ## Preparação para os contratos existentes
 
-Leia [API e integração futura](docs/api-integration.md). `DataApi` é um **contrato de apresentação**, não uma cópia dos DTOs do backend. O transporte HTTP é um esqueleto não conectado; rotas administrativas e diversas rotas de dashboard ainda não existem. Não basta trocar a URL para habilitar dados reais.
+Leia [API e integração futura](docs/api-integration.md). `DataApi` é um **contrato de apresentação**, não uma cópia dos DTOs do backend. O transporte HTTP de leitura Analytics V1 está implementado separadamente, sem autenticação real ou seleção pela UI; rotas administrativas e diversas rotas de dashboard ainda não existem. Não basta trocar a URL para habilitar dados reais.
 
-Antes da conexão: validar DTOs, mapear explicitamente os contratos Changes #11/#12/#14, preservar NULL/cobertura/metadados, implementar paginação cursor no servidor e chave de geração, e integrar autenticação real no backend. Nenhuma API real foi implementada ou chamada nesta entrega.
+Antes do cutover visual: adequar os componentes aos view models nullable, mapear explicitamente os contratos Changes #11/#12/#14 quando forem promovidos e integrar autenticação real no backend. A Read API #15A foi implementada para Analytics V1 e é testada offline; nenhuma query real, deploy ou troca de adaptador ocorreu.
 
 Dinheiro permanece string decimal no contrato. Conversão para Number ocorre somente na apresentação e no cenário sintético, sem pretensão de cálculo contábil. Receita atendida não é receita paga. Clientes novos/CAC ficam sem confirmação quando não há histórico completo. Campanhas participantes não recebem atribuição exclusiva e não têm receitas somáveis. Os cards e séries demonstrativos ilustram componentes; não são um ledger conciliado nem resultados da MX Fashion.
 

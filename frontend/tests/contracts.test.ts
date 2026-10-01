@@ -4,7 +4,7 @@ import { adminApi, authorizedTenants, sessionFor } from "@/services/demo/admin";
 import { createHttpApi } from "@/services/api/http";
 import { defaultFilters } from "@/config/tenants";
 import { queryKey } from "@/hooks/use-resource";
-import type { RequestContext, Resource } from "@/types/domain";
+import type { RequestContext } from "@/types/domain";
 function context(user = "up-admin"): RequestContext {
   return {
     scope: {
@@ -266,27 +266,42 @@ describe("customer, campaign and metric contracts", () => {
     controller.abort();
     await expect(request).rejects.toMatchObject({ name: "AbortError" });
   });
-  it("prepared HTTP transport keeps both context IDs without tokens", async () => {
-    const fetcher = vi
-      .fn()
-      .mockImplementation(() => new Response("[]", { status: 200 }));
-    vi.stubGlobal("fetch", fetcher);
-    const api = createHttpApi("https://api.example.test");
-    for (const r of [
-      "customers",
-      "orders",
-      "campaigns",
-      "products",
-      "performance",
-    ] as Resource[])
-      await api.read(r, context());
-    await api.campaign("sample/id", context());
-    for (const [url, options] of fetcher.mock.calls) {
-      expect(url.searchParams.get("tenant_id")).toBe("demo-up");
-      expect(url.searchParams.get("store_id")).toBe("mx-fashion-b2b");
-      expect(options.credentials).toBe("include");
-      expect(options.headers.Authorization).toBeUndefined();
-    }
+  it("read transport validates the envelope and sends scope without tokens", async () => {
+    const fetcher = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: [],
+          pagination: { page_size: 20, cursor: null, has_more: false },
+          metadata: {
+            contract_version: "1.0.0",
+            store_id: "mx-fashion",
+            generation: 1,
+            policy_hash: "a".repeat(64),
+            currency: "BRL",
+            reporting_timezone: "America/Sao_Paulo",
+            as_of: "2026-09-28T03:00:00Z",
+            report_from: "2026-09-01",
+            report_to: "2026-09-28",
+            history_complete: false,
+            facts_complete: true,
+            limitations: [],
+          },
+        }),
+        { status: 200 },
+      ),
+    );
+    const api = createHttpApi("https://api.example.test", fetcher);
+    const scope = {
+      tenant_id: "tenant-mx",
+      store_id: "mx-fashion",
+      operation: "B2B" as const,
+    };
+    expect((await api.customers(scope)).data).toEqual([]);
+    const [url, options] = fetcher.mock.calls[0];
+    expect(url.searchParams.get("tenant_id")).toBe("tenant-mx");
+    expect(url.searchParams.get("store_id")).toBe("mx-fashion");
+    expect(options.credentials).toBe("include");
+    expect(options.headers.Authorization).toBeUndefined();
   });
 });
 
