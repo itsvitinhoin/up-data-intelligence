@@ -205,3 +205,7 @@ CHANGE #03: [proposta multi-store, auditoria e rollout](docs/scale/CHANGE_03.md)
 [comparações técnicas de escala/custo](docs/scale/ESTIMATES.md).
 Simulador offline: `python -m scripts.estimate_scale_cost --preset 100-stores --compare`.
 Os modelos de `src/scale` não estão conectados ao runtime; piloto e Terraform ativo preservados.
+
+## CHANGE #16 — DEV Customer Intelligence / Performance
+
+Implementação offline do runner Meta gated, publicação atômica independente e leitura B2B materializada. Contratos, IAM, limites, pré-requisitos e rodada futura em [docs/CHANGE_16_DEV.md](docs/CHANGE_16_DEV.md). Nenhuma operação live é executada por imports/tests/geração de schemas. O roteiro exige aprovação explícita para apply/publicação e binding prévia.

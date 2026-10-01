@@ -1,12 +1,4 @@
 {
-  "meta_raw_accounts": {
-    "dataset": "up_raw",
-    "partition": "ingested_at",
-    "cluster": [
-      "store_id",
-      "source_connection_id"
-    ]
-  },
   "meta_accounts": {
     "dataset": "up_core",
     "partition": null,
@@ -21,14 +13,6 @@
     "cluster": [
       "store_id",
       "account_id"
-    ]
-  },
-  "meta_raw_campaigns": {
-    "dataset": "up_raw",
-    "partition": "ingested_at",
-    "cluster": [
-      "store_id",
-      "source_connection_id"
     ]
   },
   "meta_campaigns": {
@@ -49,14 +33,6 @@
       "campaign_id"
     ]
   },
-  "meta_raw_adsets": {
-    "dataset": "up_raw",
-    "partition": "ingested_at",
-    "cluster": [
-      "store_id",
-      "source_connection_id"
-    ]
-  },
   "meta_adsets": {
     "dataset": "up_core",
     "partition": null,
@@ -73,14 +49,6 @@
       "store_id",
       "account_id",
       "adset_id"
-    ]
-  },
-  "meta_raw_ads": {
-    "dataset": "up_raw",
-    "partition": "ingested_at",
-    "cluster": [
-      "store_id",
-      "source_connection_id"
     ]
   },
   "meta_ads": {
@@ -101,14 +69,6 @@
       "ad_id"
     ]
   },
-  "meta_raw_insights": {
-    "dataset": "up_raw",
-    "partition": "ingested_at",
-    "cluster": [
-      "store_id",
-      "source_connection_id"
-    ]
-  },
   "meta_insights_daily": {
     "dataset": "up_core",
     "partition": "date_start",
@@ -125,14 +85,6 @@
       "store_id",
       "account_id",
       "ad_id"
-    ]
-  },
-  "meta_account_bindings": {
-    "dataset": "up_core",
-    "partition": null,
-    "cluster": [
-      "store_id",
-      "account_id"
     ]
   }
 }

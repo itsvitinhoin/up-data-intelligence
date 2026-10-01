@@ -28,8 +28,10 @@ export function isB2BReadPage(path: string) {
       "/products",
       "/performance",
       "/media",
+      "/campaigns",
+      "/campaigns/meta",
       "/customers",
-    ].includes(path) || /^\/customers\/[^/]+$/.test(path)
+    ].includes(path) || /^\/(?:customers|campaigns)\/[^/]+$/.test(path)
   );
 }
 export function activePageState(
@@ -66,7 +68,9 @@ export function dashboardSourceLabel(
     case "demo":
       return "Dados demonstrativos";
     case "real":
-      return "Dados reais · Analytics V1";
+      return current.metadata?.publication_domain === "intelligence"
+        ? "Dados reais · Intelligence"
+        : "Dados reais · Analytics V1";
     case "partial-real":
       return "Dados reais · Histórico parcial";
     case "unavailable-real":

@@ -1,5 +1,7 @@
 # Changes #08 + #09 — influência paga e materialização offline
 
+> Proposta/reference offline histórica. O contrato físico live DEV vigente é [CHANGE #16](CHANGE_16_DEV.md): nomes Meta `meta_live_*`, generation INT64 e publicação Intelligence independente. Conteúdo anterior preservado para auditoria.
+
 A pergunta é: **“há contato pago observado antes desta compra, com vínculo
 comprovado ao cliente?”**. Não existe atribuição exclusiva, divisão percentual,
 last click/first click, causalidade, CAC ou ROAS nesta camada. Campanhas participam

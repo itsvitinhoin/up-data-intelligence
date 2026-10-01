@@ -1,4 +1,10 @@
 /** Analytics V1 read transport. Never selected by the demo composition root. */
+import {
+  parseIntelligence,
+  intelligenceResources,
+  type IntelligenceResource,
+  type IntelligenceResourceMap,
+} from "./intelligence";
 import { ApiError } from "./access";
 import { validDate } from "@/lib/period";
 
@@ -20,6 +26,13 @@ export type ReadMetadata = {
   history_complete: boolean;
   facts_complete: boolean;
   limitations: string[];
+  publication_domain?: "intelligence";
+  analytics_generation?: number;
+  publication_id?: string;
+  meta_complete?: boolean;
+  influence_complete?: boolean;
+  customer_intelligence_complete?: boolean;
+  performance_complete?: boolean;
 };
 export type ReadPagination = {
   page_size: number;
@@ -175,7 +188,7 @@ function array(value: unknown): unknown[] {
   if (!Array.isArray(value)) throw invalid();
   return value;
 }
-function parseMetadata(value: unknown, scope?: LiveScope): ReadMetadata {
+export function parseMetadata(value: unknown, scope?: LiveScope): ReadMetadata {
   const row = object(value),
     generation = count(row.generation);
   if (
@@ -192,7 +205,28 @@ function parseMetadata(value: unknown, scope?: LiveScope): ReadMetadata {
     !/^[a-f0-9]{64}$/.test(row.policy_hash)
   )
     throw invalid();
+  const intelligence: Partial<ReadMetadata> = {};
+  if (row.publication_domain !== undefined) {
+    if (
+      row.publication_domain !== "intelligence" ||
+      count(row.analytics_generation) === null ||
+      !Number.isSafeInteger(row.analytics_generation) ||
+      typeof row.publication_id !== "string" ||
+      !/^[a-f0-9]{64}$/.test(row.publication_id)
+    )
+      throw invalid();
+    intelligence.publication_domain = "intelligence";
+    intelligence.analytics_generation = Number(row.analytics_generation);
+    intelligence.publication_id = row.publication_id;
+    intelligence.meta_complete = flag(row.meta_complete);
+    intelligence.influence_complete = flag(row.influence_complete);
+    intelligence.customer_intelligence_complete = flag(
+      row.customer_intelligence_complete,
+    );
+    intelligence.performance_complete = flag(row.performance_complete);
+  }
   return {
+    ...intelligence,
     contract_version: text(row.contract_version),
     store_id: text(row.store_id),
     generation,
@@ -347,7 +381,7 @@ function parseCustomerDetail(
   };
 }
 
-export type ReadResourceMap = {
+export type ReadResourceMap = IntelligenceResourceMap & {
   overview: LiveOverview;
   orders: LiveOrder[];
   acquisition: LiveAcquisition;
@@ -372,8 +406,29 @@ export function decodeReadEnvelope<K extends ReadResource>(
     store_id: meta.store_id,
     operation: "B2B",
   };
+  if (intelligenceResources.includes(resource as IntelligenceResource)) {
+    if (meta.publication_domain !== "intelligence") throw invalid();
+    const data = parseIntelligence(
+      resource as IntelligenceResource,
+      payload.data,
+      customerId,
+    );
+    const pagination = parsePagination(payload.pagination);
+    if (!["customer360", "performance"].includes(resource) && !pagination)
+      throw invalid();
+    if (
+      !meta.history_complete &&
+      resource === "performance" &&
+      (object(payload.data).new_customers_influenced !== null ||
+        object(payload.data).cac_new_customer !== null)
+    )
+      throw invalid();
+    return { data: data as ReadResourceMap[K], pagination, metadata: meta };
+  }
   const parsers: {
-    [R in ReadResource]: (value: unknown) => ReadResourceMap[R];
+    [R in Exclude<ReadResource, IntelligenceResource>]: (
+      value: unknown,
+    ) => ReadResourceMap[R];
   } = {
     overview: parseOverview,
     acquisition: parseAcquisition,
@@ -392,7 +447,9 @@ export function decodeReadEnvelope<K extends ReadResource>(
     funnel: parseFunnel,
     geography: object,
   };
-  const data = parsers[resource](payload.data);
+  const data = parsers[resource as Exclude<ReadResource, IntelligenceResource>](
+    payload.data,
+  ) as ReadResourceMap[K];
   const pagination = parsePagination(payload.pagination);
   if (
     ["orders", "customers", "customerOrders", "products"].includes(resource) &&
@@ -568,6 +625,27 @@ export function createHttpApi(baseUrl: string, fetcher: typeof fetch = fetch) {
     };
   }
   return {
+    intelligence: async <K extends IntelligenceResource>(
+      resource: K,
+      scope: LiveScope,
+      entity?: string,
+      options?: ReadOptions,
+    ) => {
+      const paths: Record<IntelligenceResource, string> = {
+        performance: "/v1/performance",
+        campaigns: "/v1/campaigns",
+        campaign: `/v1/campaigns/${encodeURIComponent(entity ?? "")}`,
+        campaignCustomers: `/v1/campaigns/${encodeURIComponent(entity ?? "")}/customers`,
+        campaignOrders: `/v1/campaigns/${encodeURIComponent(entity ?? "")}/orders`,
+        customer360: `/v1/customers/${encodeURIComponent(entity ?? "")}/intelligence`,
+        timeline: `/v1/customers/${encodeURIComponent(entity ?? "")}/timeline`,
+        customerProducts: `/v1/customers/${encodeURIComponent(entity ?? "")}/products`,
+        influencedOrders: "/v1/orders/influenced",
+        influencedCustomers: "/v1/customers/influenced",
+      };
+      const response = await request(paths[resource], scope, (v) => v, options);
+      return decodeReadEnvelope(resource, response, entity);
+    },
     orders: async (scope: LiveScope, options?: ReadOptions) => {
       const response = await request(
         "/v1/orders",

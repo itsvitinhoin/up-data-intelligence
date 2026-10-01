@@ -20,7 +20,9 @@ def test_generated_schemas_match_catalog():
     manifest = json.loads(Path("infra/terraform/tables.json").read_text())
     proposed = json.loads(Path("infra/terraform/meta_tables.proposed.json").read_text())
     assert not set(manifest) & set(proposed)
-    assert set(manifest) | set(proposed) == set(TABLES) | ACTIVE_ANALYTICS_TABLES
+    from src.intelligence.live.schema import SCHEMAS as LIVE
+
+    assert set(manifest) | set(proposed) == set(TABLES) | ACTIVE_ANALYTICS_TABLES | set(LIVE)
     assert not any(s.dataset == "up_analytics" for s in TABLES.values())
 
 

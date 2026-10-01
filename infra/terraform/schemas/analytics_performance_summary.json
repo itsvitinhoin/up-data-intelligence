@@ -1,0 +1,147 @@
+[
+  {
+    "name": "row_key",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "store_id",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "account_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "policy_hash",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "generation",
+    "type": "INT64",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "currency",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "timezone",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "influence_scope",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "period_start",
+    "type": "DATE",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "period_end",
+    "type": "DATE",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "as_of",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "calculated_at",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "history_complete",
+    "type": "BOOL",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "facts_complete",
+    "type": "BOOL",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "spend_complete",
+    "type": "BOOL",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "influence_complete",
+    "type": "BOOL",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "meta_spend",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "observed_meta_spend",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "influenced_customers",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "influenced_orders",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "new_customers_influenced",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "requested_revenue_influenced",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "fulfilled_revenue_influenced",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "requested_quantity_influenced",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "fulfilled_quantity_influenced",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "roas_requested",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "roas_fulfilled",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "cac_new_customer",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "fulfillment_rate",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  }
+]

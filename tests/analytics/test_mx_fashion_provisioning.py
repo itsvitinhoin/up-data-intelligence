@@ -43,7 +43,12 @@ def test_exactly_eight_active_tables_preserve_schemas_and_existing_metadata():
     folder = ROOT / "infra/terraform"
     active = json.loads((folder / "tables.json").read_text())
     assert len(ACTIVE_ANALYTICS_TABLES) == 8
-    assert set(active) == (set(TABLES) - META_TABLE_NAMES) | ACTIVE_ANALYTICS_TABLES
+    from src.intelligence.live.schema import META_ACTIVE
+    from src.intelligence.live.schema import SCHEMAS as LIVE
+
+    assert set(active) == (
+        set(TABLES) - META_TABLE_NAMES
+    ) | ACTIVE_ANALYTICS_TABLES | META_ACTIVE | set(LIVE)
     for name, spec in TABLES.items():
         if name not in META_TABLE_NAMES:
             assert active[name] == {
@@ -64,7 +69,7 @@ def test_exactly_eight_active_tables_preserve_schemas_and_existing_metadata():
         "partition": None,
         "cluster": ["store_id", "policy_hash", "record_kind"],
     }
-    assert not set(active) & META_TABLE_NAMES
+    assert set(active) & META_TABLE_NAMES == META_ACTIVE
 
 
 def test_regeneration_keeps_table_promotion_idempotent(tmp_path, monkeypatch):

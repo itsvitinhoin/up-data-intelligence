@@ -1,4 +1,8 @@
 /** Explicit, loopback-only resource allowlist. No browser-selected upstream paths. */
+import {
+  intelligenceResources,
+  type IntelligenceResource,
+} from "./intelligence";
 import { ApiError } from "./access";
 import { inclusiveToExclusive, validDate } from "@/lib/period";
 import {
@@ -35,18 +39,23 @@ export async function handleReadBridge(
   )
     return error(403, "preview_same_origin_required");
   if (request.method !== "GET") return error(405, "method_not_allowed");
-  const period = [
-    "overview",
-    "orders",
-    "acquisition",
-    "customers",
-    "retention",
-    "products",
-    "funnel",
-  ].includes(resource);
-  const paged = ["orders", "customers", "customerOrders", "products"].includes(
-    resource,
+  const intelligence = intelligenceResources.includes(
+    resource as IntelligenceResource,
   );
+  const period =
+    intelligence ||
+    [
+      "overview",
+      "orders",
+      "acquisition",
+      "customers",
+      "retention",
+      "products",
+      "funnel",
+    ].includes(resource);
+  const paged =
+    (intelligence && !["performance", "customer360"].includes(resource)) ||
+    ["orders", "customers", "customerOrders", "products"].includes(resource);
   const allowed = new Set([
     "tenant_id",
     "workspace_operation_id",
@@ -76,7 +85,16 @@ export async function handleReadBridge(
   const binding = resolveDevOverviewBinding(scope);
   if (!binding) return error(404, "preview_binding_absent");
   if (
-    ["customer", "customerOrders"].includes(resource) &&
+    [
+      "customer",
+      "customerOrders",
+      "customer360",
+      "timeline",
+      "customerProducts",
+      "campaign",
+      "campaignCustomers",
+      "campaignOrders",
+    ].includes(resource) &&
     (!customerId ||
       customerId.length > 200 ||
       /[\/\r\n]/.test(customerId) ||
@@ -113,12 +131,23 @@ export async function handleReadBridge(
       signal: request.signal,
     };
     const readScope = toReadScope(binding);
-    const response =
-      resource === "customer"
+    const response = intelligence
+      ? await api.intelligence(
+          resource as IntelligenceResource,
+          readScope,
+          customerId,
+          options,
+        )
+      : resource === "customer"
         ? await api.customer(readScope, customerId!, options)
         : resource === "customerOrders"
           ? await api.customerOrders(readScope, customerId!, options)
-          : await api[resource](readScope, options);
+          : await api[
+              resource as Exclude<
+                ReadResource,
+                IntelligenceResource | "customer" | "customerOrders"
+              >
+            ](readScope, options);
     return Response.json(response, { headers });
   } catch (cause) {
     if (cause instanceof ApiError) {

@@ -53,3 +53,7 @@ Agregações demonstrativas de influência usam união de order_id dentro do con
 ## CHANGE #15B.2 — Preview B2B Analytics V1
 
 O modo DEV privado amplia a leitura same-origin para Pedidos, Aquisição observada, Retenção, Clientes/Summary/pedidos e Produtos. Geography mantém mapa neutro + 424; Performance aguarda materialização, sem fixtures. B2C e marcas não vinculadas seguem demo. `api = demoApi` continua global. Fonte/cobertura por página, cursor bounded, NULL e strings decimais preservados; nenhum cutover público nem camadas #08–#14 promovidas. [Runbook atual](../../docs/DASHBOARD_B2B_PREVIEW_DEV.md).
+
+## CHANGE #16
+
+`intelligence.ts` valida DTOs materializados; `http.ts` mantém demoApi separado e adiciona endpoints Customer360/Timeline/Produtos/Performance/Campaigns/Influence. Metadata leva ambos os domínios/gerações. Bridges continuam server-only/loopback, sem Meta token no browser. Nenhuma fixture é fallback na operação real vinculada. Consulte [CHANGE_16_DEV.md](../../docs/CHANGE_16_DEV.md); `npm test` e Playwright offline usam apenas fixtures sintéticas.

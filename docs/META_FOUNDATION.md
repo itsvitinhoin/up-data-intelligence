@@ -1,5 +1,7 @@
 # Fundação Meta Ads e futura atribuição — preparação offline
 
+> Proposta/reference offline histórica. O contrato físico live DEV vigente é [CHANGE #16](CHANGE_16_DEV.md): nomes Meta `meta_live_*`, generation INT64 e publicação Intelligence independente. Conteúdo anterior preservado para auditoria.
+
 Status: código e proposta aditiva de schemas, **sem integração live**, sem nova imagem,
 sem mudança no DEV.4 ou na configuração MX Fashion. Nenhum comando GCP, Terraform,
 Cloud Run, Scheduler, migration, build, deploy ou backfill faz parte desta entrega.

@@ -1,5 +1,7 @@
 # CHANGE #13 — Meta Ads Live Foundation (preparação offline)
 
+> Proposta/reference offline histórica. O contrato físico live DEV vigente é [CHANGE #16](CHANGE_16_DEV.md): nomes Meta `meta_live_*`, generation INT64 e publicação Intelligence independente. Conteúdo anterior preservado para auditoria.
+
 Apesar do nome, esta entrega **não habilita conexão live**. A estrutura Meta anterior já existia. Este change amplia o contrato de leitura e adiciona projeção/testes separados; não altera CORE existente, RAW, UP Zero, Analytics V1, Paid Influence ou Customer Intelligence. Nenhuma configuração real de conta/token foi criada.
 
 ## Arquitetura e arquivos

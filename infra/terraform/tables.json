@@ -155,6 +155,86 @@
       "store_id"
     ]
   },
+  "meta_live_accounts": {
+    "dataset": "up_core",
+    "partition": null,
+    "cluster": [
+      "store_id",
+      "account_id"
+    ]
+  },
+  "meta_live_accounts_versions": {
+    "dataset": "up_core",
+    "partition": "observed_at",
+    "cluster": [
+      "store_id",
+      "account_id"
+    ]
+  },
+  "meta_live_campaigns": {
+    "dataset": "up_core",
+    "partition": null,
+    "cluster": [
+      "store_id",
+      "account_id"
+    ]
+  },
+  "meta_live_campaigns_versions": {
+    "dataset": "up_core",
+    "partition": "observed_at",
+    "cluster": [
+      "store_id",
+      "account_id"
+    ]
+  },
+  "meta_live_adsets": {
+    "dataset": "up_core",
+    "partition": null,
+    "cluster": [
+      "store_id",
+      "account_id"
+    ]
+  },
+  "meta_live_adsets_versions": {
+    "dataset": "up_core",
+    "partition": "observed_at",
+    "cluster": [
+      "store_id",
+      "account_id"
+    ]
+  },
+  "meta_live_ads": {
+    "dataset": "up_core",
+    "partition": null,
+    "cluster": [
+      "store_id",
+      "account_id"
+    ]
+  },
+  "meta_live_ads_versions": {
+    "dataset": "up_core",
+    "partition": "observed_at",
+    "cluster": [
+      "store_id",
+      "account_id"
+    ]
+  },
+  "meta_live_insights_daily": {
+    "dataset": "up_core",
+    "partition": "date_start",
+    "cluster": [
+      "store_id",
+      "account_id"
+    ]
+  },
+  "meta_live_insights_daily_versions": {
+    "dataset": "up_core",
+    "partition": "observed_at",
+    "cluster": [
+      "store_id",
+      "account_id"
+    ]
+  },
   "analytics_store_daily": {
     "dataset": "up_analytics",
     "partition": "order_date",
@@ -217,6 +297,165 @@
     ]
   },
   "analytics_publications": {
+    "dataset": "up_analytics",
+    "partition": null,
+    "cluster": [
+      "store_id",
+      "policy_hash",
+      "record_kind"
+    ]
+  },
+  "meta_account_bindings": {
+    "dataset": "up_core",
+    "partition": null,
+    "cluster": [
+      "store_id",
+      "account_id"
+    ]
+  },
+  "meta_raw_accounts": {
+    "dataset": "up_raw",
+    "partition": "ingested_at",
+    "cluster": [
+      "store_id",
+      "source_connection_id"
+    ]
+  },
+  "meta_raw_ads": {
+    "dataset": "up_raw",
+    "partition": "ingested_at",
+    "cluster": [
+      "store_id",
+      "source_connection_id"
+    ]
+  },
+  "meta_raw_adsets": {
+    "dataset": "up_raw",
+    "partition": "ingested_at",
+    "cluster": [
+      "store_id",
+      "source_connection_id"
+    ]
+  },
+  "meta_raw_campaigns": {
+    "dataset": "up_raw",
+    "partition": "ingested_at",
+    "cluster": [
+      "store_id",
+      "source_connection_id"
+    ]
+  },
+  "meta_raw_insights": {
+    "dataset": "up_raw",
+    "partition": "ingested_at",
+    "cluster": [
+      "store_id",
+      "source_connection_id"
+    ]
+  },
+  "analytics_paid_touchpoints": {
+    "dataset": "up_analytics",
+    "partition": "occurred_at",
+    "cluster": [
+      "store_id",
+      "campaign_id",
+      "fact_id"
+    ]
+  },
+  "analytics_customer_paid_influence": {
+    "dataset": "up_analytics",
+    "partition": null,
+    "cluster": [
+      "store_id",
+      "customer_id"
+    ]
+  },
+  "analytics_order_paid_influence": {
+    "dataset": "up_analytics",
+    "partition": null,
+    "cluster": [
+      "store_id",
+      "customer_id",
+      "order_id",
+      "campaign_id"
+    ]
+  },
+  "analytics_customer_timeline": {
+    "dataset": "up_analytics",
+    "partition": "occurred_at",
+    "cluster": [
+      "store_id",
+      "customer_id",
+      "order_id"
+    ]
+  },
+  "analytics_customer_360_profile": {
+    "dataset": "up_analytics",
+    "partition": null,
+    "cluster": [
+      "store_id",
+      "customer_id"
+    ]
+  },
+  "analytics_customer_journey_summary": {
+    "dataset": "up_analytics",
+    "partition": null,
+    "cluster": [
+      "store_id",
+      "customer_id"
+    ]
+  },
+  "analytics_customer_orders_summary": {
+    "dataset": "up_analytics",
+    "partition": "created_at",
+    "cluster": [
+      "store_id",
+      "customer_id",
+      "order_id"
+    ]
+  },
+  "analytics_customer_products_summary": {
+    "dataset": "up_analytics",
+    "partition": null,
+    "cluster": [
+      "store_id",
+      "customer_id",
+      "product_key"
+    ]
+  },
+  "analytics_campaign_performance_daily": {
+    "dataset": "up_analytics",
+    "partition": "date",
+    "cluster": [
+      "store_id",
+      "account_id"
+    ]
+  },
+  "analytics_campaign_customer_performance": {
+    "dataset": "up_analytics",
+    "partition": "period_start",
+    "cluster": [
+      "store_id",
+      "account_id"
+    ]
+  },
+  "analytics_campaign_order_performance": {
+    "dataset": "up_analytics",
+    "partition": "period_start",
+    "cluster": [
+      "store_id",
+      "account_id"
+    ]
+  },
+  "analytics_performance_summary": {
+    "dataset": "up_analytics",
+    "partition": "period_start",
+    "cluster": [
+      "store_id",
+      "account_id"
+    ]
+  },
+  "analytics_intelligence_publications": {
     "dataset": "up_analytics",
     "partition": null,
     "cluster": [

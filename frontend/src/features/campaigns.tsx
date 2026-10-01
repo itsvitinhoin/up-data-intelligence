@@ -1,4 +1,6 @@
 "use client";
+import { B2BReadBoundary, usePageSource } from "@/hooks/use-dashboard-read";
+import { RealCampaigns } from "./intelligence-read-pages";
 import { ListExport } from "@/components/exports";
 import { useState } from "react";
 import Link from "next/link";
@@ -496,7 +498,7 @@ function MetaContent() {
     />
   );
 }
-export function CampaignsPage({
+function DemoCampaignsPage({
   platform = "Meta Ads",
 }: {
   platform?: CampaignPlatform;
@@ -567,6 +569,44 @@ export function CampaignsPage({
           />
         </>
       )}
+    </>
+  );
+}
+
+export function CampaignsPage(props: { platform?: CampaignPlatform }) {
+  return (
+    <B2BReadBoundary
+      real={(metadata) =>
+        props.platform && props.platform !== "Meta Ads" ? (
+          <UnavailablePlatform metadata={metadata} platform={props.platform} />
+        ) : (
+          <RealCampaigns metadata={metadata} />
+        )
+      }
+    >
+      <DemoCampaignsPage {...props} />
+    </B2BReadBoundary>
+  );
+}
+
+function UnavailablePlatform({
+  metadata,
+  platform,
+}: {
+  metadata: import("@/services/api/http").ReadMetadata;
+  platform: CampaignPlatform;
+}) {
+  usePageSource("unavailable-real", metadata);
+  return (
+    <>
+      <PageHead
+        eyebrow={platform}
+        title="Cobertura ainda não disponível"
+        description="Integração desta plataforma ainda não certificada."
+      />
+      <Notice>
+        Nenhum dado demonstrativo é combinado com a operação real.
+      </Notice>
     </>
   );
 }

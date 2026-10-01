@@ -1,5 +1,7 @@
 # CHANGE #14 — Performance Intelligence Foundation
 
+> Proposta/reference offline histórica. O contrato físico live DEV vigente é [CHANGE #16](CHANGE_16_DEV.md): nomes Meta `meta_live_*`, generation INT64 e publicação Intelligence independente. Conteúdo anterior preservado para auditoria.
+
 Somente offline. Quatro modelos propostos e referência pura em `src/performance/engine.py`, sem alterar código/schemas da Foundation, UP Zero, Analytics V1, Customer Intelligence, Paid Influence ou Meta Foundation. Não registrar job, schema ativo, API, Scheduler ou publicação remota.
 
 ## Fluxo e contratos de entrada

@@ -511,8 +511,11 @@ def test_offline_gate_and_no_deployed_config_changes():
 def test_proposed_schemas_are_separate_and_bq_date_merge_supported():
     active = json.loads(Path("infra/terraform/tables.json").read_text())
     proposed = json.loads(Path("infra/terraform/meta_tables.proposed.json").read_text())
-    assert set(proposed) == META_TABLE_NAMES and not set(active) & META_TABLE_NAMES
-    assert len(proposed) == 16
+    from src.intelligence.live.schema import META_ACTIVE
+
+    assert set(proposed) == META_TABLE_NAMES - META_ACTIVE
+    assert set(active) & META_TABLE_NAMES == META_ACTIVE
+    assert len(proposed) == 10  # Legacy current/version family only.
     for table in META_TABLE_NAMES:
         schema = json.loads(Path(f"infra/terraform/schemas/{table}.json").read_text())
         assert {c["name"]: c["type"] for c in schema} == TABLES[table].fields

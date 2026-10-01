@@ -128,6 +128,16 @@ async function mocks(page: Page) {
       return;
     }
     const path = url.pathname.replace("/api/dashboard/", "");
+    if (
+      path === "performance" ||
+      /\/(intelligence|timeline|products)$/.test(path)
+    ) {
+      await route.fulfill({
+        status: 424,
+        json: { error: { code: "intelligence_publication_unavailable" } },
+      });
+      return;
+    }
     if (path === "geography") {
       await route.fulfill({
         status: 424,
@@ -236,7 +246,9 @@ test("one-round B2B V1 traversal: real, partial and explicitly unavailable", asy
   await nav(page, "/b2b/customers");
   await realBadge(page);
   await page.locator("tbody tr a").first().click();
-  await realBadge(page);
+  await expect(page.locator(".workspace-strip .badge")).toHaveText(
+    "Cobertura ainda não disponível",
+  );
   await expect(
     page.getByRole("heading", { name: "Resumo do cliente", exact: true }),
   ).toBeVisible();
@@ -252,7 +264,9 @@ test("one-round B2B V1 traversal: real, partial and explicitly unavailable", asy
     page.getByRole("heading", { name: /Campanhas participantes/ }),
   ).toHaveCount(0);
   await expect(
-    page.getByText(/Ainda não disponível nesta geração/),
+    page.getByText(
+      "Performance e influência aguardam materialização das camadas de mídia.",
+    ),
   ).toBeVisible();
   await page.goBack();
   await realBadge(page);
@@ -360,4 +374,225 @@ test("offline cursor pagination resets after a status change; read failure never
     "Dados reais indisponíveis",
   );
   await expect(page.locator("tbody tr")).toHaveCount(0);
+});
+
+test("CHANGE16 integrated Customer360, Timeline, Meta, Performance and Influence", async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  if (!live) {
+    await mocks(page);
+    const intel = {
+      ...metadata,
+      publication_domain: "intelligence",
+      analytics_generation: metadata.generation,
+      generation: 2,
+      publication_id: "b".repeat(64),
+      meta_complete: true,
+      influence_complete: false,
+      customer_intelligence_complete: true,
+      performance_complete: true,
+      limitations: [
+        "history_incomplete",
+        "unresolved_or_unmapped_paid_influence",
+      ],
+    };
+    const campaign = {
+      campaign_id: "synthetic-campaign",
+      campaign_name: "Campanha sintética #16",
+      campaign_status: "ACTIVE",
+      spend: "5.00",
+      observed_spend: "5.00",
+      impressions: 1000,
+      clicks: 10,
+      ctr: "1.00",
+      cpc: "0.50",
+      cpm: "5.00",
+      influenced_customers: 0,
+      influenced_orders: 0,
+      requested_revenue_influenced: "0.00",
+      fulfilled_revenue_influenced: "0.00",
+      roas_requested: null,
+      roas_fulfilled: null,
+    };
+    const performance = {
+      meta_spend: "5.00",
+      observed_meta_spend: "5.00",
+      influenced_customers: 0,
+      influenced_orders: 0,
+      new_customers_influenced: null,
+      requested_revenue_influenced: "0.00",
+      fulfilled_revenue_influenced: "0.00",
+      roas_requested: null,
+      roas_fulfilled: null,
+      cac_new_customer: null,
+    };
+    const customer360 = {
+      profile: {
+        customer_id: customer.customer_id,
+        purchase_count: 1,
+        has_repurchase: false,
+        ltv_observed: "50.00",
+        last_purchase_at: customer.first_purchase_at_observed,
+      },
+      journey: { first_touch_at: null },
+      marketing: ["LIFETIME", "ACQUISITION", "REPEAT_PURCHASE"].map(
+        (influence_scope) => ({
+          influence_scope,
+          paid_media_influenced: null,
+          campaign_count: 0,
+          paid_touch_count: 0,
+          first_paid_touch_at: null,
+          last_paid_touch_at: null,
+        }),
+      ),
+      health_score: null,
+      health_status: null,
+      health_policy: "NOT_DEFINED",
+      ltv_complete: null,
+    };
+    await page.route("**/api/dashboard/**", async (route) => {
+      const path = new URL(route.request().url()).pathname.replace(
+        "/api/dashboard/",
+        "",
+      );
+      let data: unknown;
+      if (path === "performance") data = performance;
+      else if (path === "campaigns" || path === "campaigns/synthetic-campaign")
+        data = [campaign];
+      else if (path.endsWith("/intelligence")) data = customer360;
+      else if (path.endsWith("/timeline"))
+        data = [
+          {
+            event_name: "purchase",
+            occurred_at: customer.first_purchase_at_observed,
+            record_type: "ORDER",
+            campaign_id: null,
+            order_id: order.order_id,
+            value: null,
+          },
+        ];
+      else if (path === `customers/${customer.customer_id}/products`)
+        data = [
+          {
+            product_key: "synthetic-key",
+            product_id: null,
+            sku: "SYNTHETIC",
+            orders_count: 1,
+            requested_quantity: "2",
+            fulfilled_quantity: null,
+            requested_revenue: "50.00",
+            fulfilled_revenue: null,
+          },
+        ];
+      else if (
+        path.endsWith("/influenced") ||
+        path.startsWith("campaigns/synthetic-campaign/")
+      )
+        data = [];
+      else {
+        await route.fallback();
+        return;
+      }
+      await route.fulfill({
+        json: {
+          data,
+          metadata: intel,
+          pagination: Array.isArray(data)
+            ? { page_size: 25, cursor: null, has_more: false }
+            : null,
+        },
+      });
+    });
+  }
+  await login(page);
+  await realBadge(page);
+  await expect(
+    page.getByRole("region", { name: "Indicadores de Receita" }),
+  ).toContainText("86.319,62");
+  await expect(
+    page.getByRole("region", { name: "Indicadores de Receita" }),
+  ).toContainText("73.220,13");
+  for (const path of [
+    "/b2b/commercial",
+    "/b2b/acquisition",
+    "/b2b/retention",
+    "/b2b/customers",
+  ]) {
+    await nav(page, path);
+    await realBadge(page);
+  }
+  await page.locator("tbody tr a").first().click();
+  await expect(
+    page.getByRole("heading", { name: "Customer 360", exact: true }),
+  ).toBeVisible();
+  await realBadge(page);
+  for (const name of [
+    "Pedidos observados do cliente",
+    "Marketing Influence",
+    "Timeline do cliente",
+    "Produtos do cliente",
+  ])
+    await expect(
+      page.getByRole("heading", { name, exact: true }),
+    ).toBeVisible();
+  await expect(
+    page.getByText(/Health score e segmentação: NOT_DEFINED/),
+  ).toBeVisible();
+  await nav(page, "/b2b/performance");
+  await realBadge(page);
+  await expect(
+    page.getByRole("heading", {
+      name: "Performance e influência",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(
+    page.locator(".metric").filter({ hasText: "CAC" }).locator(".metric-value"),
+  ).toHaveText("—");
+  await expect(page.getByText(/aguardam materialização/)).toHaveCount(0);
+  await page.getByRole("button", { name: "Campanhas", exact: true }).click();
+  await nav(page, "/campaigns/meta");
+  await realBadge(page);
+  await expect(
+    page.getByRole("heading", { name: "Campanhas no recorte", exact: true }),
+  ).toBeVisible();
+  const campaigns = page.locator('tbody a[href^="/campaigns/"]');
+  if (await campaigns.count()) {
+    await campaigns.first().click();
+    await realBadge(page);
+    for (const name of ["Clientes participantes", "Pedidos participantes"])
+      await expect(
+        page.getByRole("heading", { name, exact: true }),
+      ).toBeVisible();
+  }
+  await nav(page, "/b2b/performance");
+  await page
+    .getByRole("link", {
+      name: "Clientes, pedidos e campanhas participantes",
+      exact: true,
+    })
+    .click();
+  await realBadge(page);
+  for (const name of ["Clientes influenciados", "Pedidos influenciados"])
+    await expect(
+      page.getByRole("heading", { name, exact: true }),
+    ).toBeVisible();
+  await nav(page, "/b2b/geography");
+  await expect(page.locator(".workspace-strip .badge")).toHaveText(
+    "Cobertura ainda não disponível",
+  );
+  await page.getByRole("combobox", { name: "Operação da marca" }).click();
+  await page
+    .getByRole("option", { name: "MX Fashion · B2C", exact: true })
+    .click();
+  await expect(page.locator(".workspace-strip .badge")).toHaveText(
+    "Dados demonstrativos",
+  );
+  await login(page, "Gestor Lume");
+  await expect(page.locator(".workspace-strip .badge")).toHaveText(
+    "Dados demonstrativos",
+  );
+  expect(errors).toEqual([]);
 });

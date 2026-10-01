@@ -1,4 +1,9 @@
 "use client";
+import { Cards, RemoteTable } from "./read-components";
+import {
+  RealIntelligencePerformance,
+  RealCustomerIntelligence,
+} from "./intelligence-read-pages";
 import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import BrazilMap from "@svg-maps/brazil";
@@ -6,7 +11,6 @@ import { useDashboardRead, usePageSource } from "@/hooks/use-dashboard-read";
 import { ApiError } from "@/services/api/access";
 import type {
   ReadMetadata,
-  ReadPagination,
   LiveOrder,
   ReadEnvelope,
   ReadResourceMap,
@@ -15,14 +19,11 @@ import { percentOfRatio, ticket } from "@/services/api/overview-presenter";
 import {
   PageHead,
   Panel,
-  MetricCard,
   Notice,
   Loading,
   Failure,
-  Empty,
   Choice,
 } from "@/components/ui-kit";
-import { Button } from "@/components/ui/button";
 import {
   Table,
   TableHeader,
@@ -32,42 +33,14 @@ import {
   TableCell,
 } from "@/components/ui/table";
 import { metric, money, date, number } from "@/lib/format";
-import { exportErp } from "@/lib/erp-export";
-import { recordColumns } from "@/lib/list-export";
-import type { Metric } from "@/types/domain";
 
-const unavailable =
-  "Ainda não disponível nesta geração de Customer Intelligence.";
-function Cards({
-  items,
-}: {
-  items: [string, string | number | null, Metric["format"], string?][];
-}) {
-  return (
-    <div className="metrics">
-      {items.map(([label, value, format, hint]) => (
-        <MetricCard
-          key={label}
-          item={{
-            label,
-            value: value === null ? null : String(value),
-            format,
-            hint:
-              hint ??
-              "Indicador observado no histórico disponível; não confirma histórico completo.",
-            displayDigits:
-              format === "currency" || format === "percent" ? 2 : undefined,
-          }}
-        />
-      ))}
-    </div>
-  );
-}
 function ReadView<T>({
   result,
   metadata,
   children,
+  track = true,
 }: {
+  track?: boolean;
   result: {
     isPending: boolean;
     isError: boolean;
@@ -86,6 +59,7 @@ function ReadView<T>({
           ? "real"
           : "partial-real",
     metadata,
+    !track,
   );
   if (result.isPending) return <Loading />;
   if (result.isError || !result.data)
@@ -96,98 +70,6 @@ function ReadView<T>({
       />
     );
   return children(result.data.data);
-}
-function RemoteTable<T>({
-  rows,
-  columns,
-  pagination,
-  previous,
-  next,
-  canPrevious,
-  rowKey,
-}: {
-  rows: T[];
-  columns: { label: string; value: (row: T) => ReactNode }[];
-  pagination: ReadPagination | null;
-  previous: () => void;
-  next: () => void;
-  canPrevious: boolean;
-  rowKey: (row: T) => string;
-}) {
-  const [exportError, setExportError] = useState(false);
-  return (
-    <>
-      <div className="no-print flex gap-2 justify-end">
-        <Button
-          variant="ghost"
-          disabled={!rows.length}
-          onClick={() =>
-            void exportErp(
-              "pagina-observada.xlsx",
-              rows,
-              recordColumns(rows),
-              false,
-            ).catch(() => setExportError(true))
-          }
-        >
-          Exportar página · Excel
-        </Button>
-        <Button
-          variant="ghost"
-          disabled={!rows.length}
-          onClick={() =>
-            void exportErp(
-              "pagina-observada.csv",
-              rows,
-              recordColumns(rows),
-              true,
-            ).catch(() => setExportError(true))
-          }
-        >
-          Exportar página · CSV
-        </Button>
-      </div>
-      {exportError && (
-        <Notice>Exportação indisponível. Tente novamente.</Notice>
-      )}
-      <Table>
-        <TableHeader>
-          <TableRow>
-            {columns.map((c) => (
-              <TableHead key={c.label}>{c.label}</TableHead>
-            ))}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {rows.map((row) => (
-            <TableRow key={rowKey(row)}>
-              {columns.map((c) => (
-                <TableCell key={c.label}>{c.value(row)}</TableCell>
-              ))}
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-      {!rows.length && <Empty />}
-      <div className="table-pagination no-print flex gap-3 items-center">
-        <Button variant="ghost" disabled={!canPrevious} onClick={previous}>
-          Anterior
-        </Button>
-        <span>Até {pagination?.page_size} registros por página</span>
-        <Button
-          variant="ghost"
-          disabled={!pagination?.has_more || !pagination.cursor}
-          onClick={next}
-        >
-          Próxima
-        </Button>
-      </div>
-      <p className="note">
-        Exportação limitada à página carregada. Não representa a totalidade da
-        base.
-      </p>
-    </>
-  );
 }
 function useCursor() {
   const [stack, setStack] = useState<(string | undefined)[]>([undefined]);
@@ -246,7 +128,7 @@ function OrderList({
     { customerId, status, cursor: cursor.cursor },
   );
   return (
-    <ReadView result={result} metadata={metadata}>
+    <ReadView result={result} metadata={metadata} track={!customerId}>
       {(rows) => (
         <RemoteTable
           rows={rows}
@@ -437,6 +319,11 @@ export function RealCustomer({
   id: string;
 }) {
   const result = useDashboardRead("customer", metadata, { customerId: id });
+  usePageSource(
+    result.isPending ? "loading-real" : "error-real",
+    metadata,
+    !result.isPending && !result.isError,
+  );
   return (
     <>
       <PageHead
@@ -444,7 +331,7 @@ export function RealCustomer({
         title="Resumo do cliente"
         description={`Todo o histórico observado disponível até ${metadata.as_of}. O filtro global não limita este resumo.`}
       />
-      <ReadView result={result} metadata={metadata}>
+      <ReadView result={result} metadata={metadata} track={false}>
         {(v) => (
           <>
             <Panel title={v.profile.name ?? v.profile.customer_id}>
@@ -478,9 +365,7 @@ export function RealCustomer({
                 ["LTV completo", v.commercial.ltv_complete, "currency"],
               ]}
             />
-            <Notice>
-              Jornada, campanhas e produtos do cliente: {unavailable}
-            </Notice>
+            <RealCustomerIntelligence metadata={metadata} id={id} />
             <Panel
               title="Pedidos observados do cliente"
               subtitle="Inclui cancelados. Histórico disponível até as_of; atendido não confirma pagamento."
@@ -766,21 +651,7 @@ export function RealGeography({ metadata }: { metadata: ReadMetadata }) {
   );
 }
 export function RealPerformance({ metadata }: { metadata: ReadMetadata }) {
-  usePageSource("unavailable-real", metadata);
-  return (
-    <>
-      <PageHead
-        eyebrow="Performance"
-        title="Mídia e influência"
-        description="Esta publicação contém somente Analytics V1."
-      />
-      <Panel title="Performance e influência">
-        <Notice>
-          Performance e influência aguardam materialização das camadas de mídia.
-        </Notice>
-      </Panel>
-    </>
-  );
+  return <RealIntelligencePerformance metadata={metadata} />;
 }
 export function RealFunnel({ metadata }: { metadata: ReadMetadata }) {
   const result = useDashboardRead("funnel", metadata);

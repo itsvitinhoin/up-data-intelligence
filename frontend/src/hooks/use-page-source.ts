@@ -8,11 +8,12 @@ import type { ReadMetadata } from "@/services/api/http";
 export function usePageSource(
   source: DashboardPageState["source"],
   metadata?: ReadMetadata,
+  disabled = false,
 ) {
   const { scope, setDashboardPageState } = useWorkspace();
   const path = usePathname(),
     scopeKey = scope ? overviewScopeKey(scope) : "";
   useEffect(() => {
-    setDashboardPageState({ path, scopeKey, source, metadata });
-  }, [path, scopeKey, source, metadata, setDashboardPageState]);
+    if (!disabled) setDashboardPageState({ path, scopeKey, source, metadata });
+  }, [path, scopeKey, source, metadata, disabled, setDashboardPageState]);
 }

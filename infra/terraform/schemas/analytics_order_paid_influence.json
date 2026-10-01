@@ -1,0 +1,132 @@
+[
+  {
+    "name": "row_key",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "store_id",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "policy_hash",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "currency",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "calculated_at",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "as_of",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "history_complete",
+    "type": "BOOL",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "facts_complete",
+    "type": "BOOL",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "order_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "customer_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "campaign_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "adset_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "ad_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "evidence_type",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "influence_scope",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "purchase_number",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "touch_count",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "first_paid_touch_at",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "last_paid_touch_at",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "requested_total",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "fulfilled_total",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "requested_items_qty",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "fulfilled_items_qty",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "identity_path",
+    "type": "JSON",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "participating_ads",
+    "type": "JSON",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "generation",
+    "type": "INT64",
+    "mode": "REQUIRED"
+  }
+]

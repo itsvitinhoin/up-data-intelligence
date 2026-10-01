@@ -17,6 +17,7 @@ from google.cloud import bigquery
 from src.analytics.config import AnalyticsPolicy
 from src.dashboard.contracts import Grant, Principal
 from src.dashboard.http import create_wsgi_app
+from src.dashboard.intelligence import IntelligenceDashboardService
 from src.dashboard.repository import BigQueryReadSession, ReadBudget
 from src.dashboard.service import DashboardService
 
@@ -47,13 +48,22 @@ def create_dev_preview_app(
         "/v1/products",
         "/v1/funnel",
         "/v1/geography",
+        "/v1/performance",
+        "/v1/orders/influenced",
+        "/v1/customers/influenced",
+        "/v1/campaigns",
     }
 
     def app(environ: Mapping[str, Any], start_response: Callable[..., Any]) -> Iterable[bytes]:
         path = str(environ.get("PATH_INFO", ""))
         allowed = (
             path in allowed_paths
-            or re.fullmatch(r"/v1/customers/[^/]{1,200}(?:/orders)?", path) is not None
+            or re.fullmatch(r"/v1/campaigns/[^/]{1,200}(?:/(?:customers|orders))?", path)
+            is not None
+            or re.fullmatch(
+                r"/v1/customers/[^/]{1,200}(?:/(?:orders|timeline|intelligence|products))?", path
+            )
+            is not None
         )
         query = parse_qs(str(environ.get("QUERY_STRING", "")), keep_blank_values=True)
         if path != f"/v1/stores/{store_id}/overview" and query.get("store_id") != [store_id]:
@@ -108,7 +118,7 @@ def main() -> int:
     cursor_key = secrets.token_bytes(32)
 
     def service_factory() -> DashboardService:
-        return DashboardService(
+        return IntelligenceDashboardService(
             args.project,
             {policy.store_id: policy},
             lambda: BigQueryReadSession(client, budget),

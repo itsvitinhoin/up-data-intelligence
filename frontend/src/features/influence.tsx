@@ -1,4 +1,5 @@
 "use client";
+import { RealCampaigns } from "./intelligence-read-pages";
 import { B2BReadBoundary } from "@/hooks/use-dashboard-read";
 import { RealOrders, RealPerformance } from "./b2b-read-pages";
 import dynamic from "next/dynamic";
@@ -174,7 +175,7 @@ function DemoInfluencePage({
     </>
   );
 }
-export function CampaignDetailPage({ id }: { id: string }) {
+function DemoCampaignDetailPage({ id }: { id: string }) {
   const q = useCampaign(id);
   const [tab, setTab] = useState("customers");
   if (q.isPending) return <Loading />;
@@ -325,6 +326,16 @@ export function CommercialPage(props: { revenue?: boolean }) {
   return (
     <B2BReadBoundary real={(metadata) => <RealOrders metadata={metadata} />}>
       <DemoCommercialPage {...props} />
+    </B2BReadBoundary>
+  );
+}
+
+export function CampaignDetailPage({ id }: { id: string }) {
+  return (
+    <B2BReadBoundary
+      real={(metadata) => <RealCampaigns metadata={metadata} id={id} />}
+    >
+      <DemoCampaignDetailPage id={id} />
     </B2BReadBoundary>
   );
 }

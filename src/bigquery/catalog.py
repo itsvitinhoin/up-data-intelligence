@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 
+from src.connectors.meta.foundation_schema import SCHEMAS as META_FOUNDATION_SCHEMAS
 from src.ingestion.metrics import COUNTERS
 
 
@@ -252,3 +253,23 @@ TABLES["meta_account_bindings"] = Table(
     ("store_id", "account_id"),
 )
 META_TABLE_NAMES.add("meta_account_bindings")
+
+# CHANGE #16 canonical Meta current/version tables. Legacy meta_* remain inactive.
+
+for legacy_name, foundation_fields in META_FOUNDATION_SCHEMAS.items():
+    live_name = legacy_name.replace("meta_", "meta_live_", 1)
+    live_fields = foundation_fields | {
+        "version_id": "STRING",
+        "payload_hash": "STRING",
+        "source_system": "STRING",
+    }
+    TABLES[live_name] = Table(
+        "up_core",
+        live_fields,
+        "date_start" if live_name.endswith("insights_daily") else None,
+        ("store_id", "account_id"),
+    )
+    TABLES[live_name + "_versions"] = Table(
+        "up_core", live_fields, "observed_at", ("store_id", "account_id")
+    )
+    META_TABLE_NAMES.update((live_name, live_name + "_versions"))

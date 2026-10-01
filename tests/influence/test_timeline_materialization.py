@@ -228,7 +228,9 @@ def test_registration_scope_conflict_and_cross_store_links():
 
 def test_no_active_schema_or_runtime_registration():
     active = Path("infra/terraform/tables.json").read_text()
-    assert "analytics_customer_timeline" not in active
+    assert (
+        "analytics_customer_timeline" in active
+    )  # Dedicated #16 runner; Foundation stays isolated.
     assert "src.influence" not in Path("src/jobs/cli.py").read_text()
 
 

@@ -233,7 +233,7 @@ def test_schema_generation_is_reproducible_and_not_active(tmp_path):
     for file in folder.rglob("*.json"):
         assert file.read_text() == (tmp_path / file).read_text()
     active = json.loads(Path("infra/terraform/tables.json").read_text())
-    assert not set(active) & set(SCHEMAS)
+    assert set(SCHEMAS) <= set(active)  # CHANGE #16 activates revised INT64 live contracts.
 
 
 def test_duplicate_fact_rejected_and_output_order_deterministic():

@@ -11,6 +11,10 @@ import {
   type ReadResource,
   type ReadMetadata,
 } from "@/services/api/http";
+import {
+  intelligenceResources,
+  type IntelligenceResource,
+} from "@/services/api/intelligence";
 import { exclusiveToInclusive } from "@/lib/period";
 import { ApiError } from "@/services/api/access";
 import { Failure, Loading } from "@/components/ui-kit";
@@ -78,6 +82,7 @@ export async function readDashboard<K extends ReadResource>(
   generation: number,
   options: {
     expectedPolicyHash?: string;
+    expectedIntelligenceGeneration?: number;
     customerId?: string;
     cursor?: string;
     status?: string;
@@ -85,6 +90,9 @@ export async function readDashboard<K extends ReadResource>(
   } = {},
   fetcher: typeof fetch = fetch,
 ) {
+  const intelligence = intelligenceResources.includes(
+    resource as IntelligenceResource,
+  );
   const params = new URLSearchParams({
     tenant_id: context.scope.tenant_id,
     workspace_operation_id: context.scope.store_id,
@@ -98,11 +106,24 @@ export async function readDashboard<K extends ReadResource>(
     params.set("from", context.filters.from);
     params.set("to", context.filters.to);
   }
-  if (["customers", "orders", "customerOrders", "products"].includes(resource))
+  if (
+    (intelligence && !["customer360", "performance"].includes(resource)) ||
+    ["customers", "orders", "customerOrders", "products"].includes(resource)
+  )
     params.set("page_size", "25");
   if (options.cursor) params.set("cursor", options.cursor);
   if (options.status) params.set("status", options.status);
   const paths: Record<ReadResource, string> = {
+    performance: "performance",
+    campaigns: "campaigns",
+    campaign: `campaigns/${encodeURIComponent(options.customerId ?? "")}`,
+    campaignCustomers: `campaigns/${encodeURIComponent(options.customerId ?? "")}/customers`,
+    campaignOrders: `campaigns/${encodeURIComponent(options.customerId ?? "")}/orders`,
+    customer360: `customers/${encodeURIComponent(options.customerId ?? "")}/intelligence`,
+    timeline: `customers/${encodeURIComponent(options.customerId ?? "")}/timeline`,
+    customerProducts: `customers/${encodeURIComponent(options.customerId ?? "")}/products`,
+    influencedOrders: "orders/influenced",
+    influencedCustomers: "customers/influenced",
     overview: "overview",
     orders: "orders",
     acquisition: "acquisition",
@@ -133,7 +154,13 @@ export async function readDashboard<K extends ReadResource>(
     options.customerId,
   );
   if (
-    envelope.metadata.generation !== generation ||
+    (intelligence
+      ? envelope.metadata.analytics_generation !== generation
+      : envelope.metadata.generation !== generation) ||
+    (intelligence &&
+      options.expectedIntelligenceGeneration !== undefined &&
+      envelope.metadata.generation !==
+        options.expectedIntelligenceGeneration) ||
     (options.expectedPolicyHash !== undefined &&
       envelope.metadata.policy_hash !== options.expectedPolicyHash)
   )
@@ -185,19 +212,82 @@ export function useDashboardRead<K extends ReadResource>(
       resource,
       context,
       metadata.generation,
-      { ...options, policy_hash: metadata.policy_hash },
+      {
+        ...options,
+        policy_hash: metadata.policy_hash,
+        publication_domain: metadata.publication_domain ?? "analytics-v1",
+        intelligence_generation:
+          metadata.publication_domain === "intelligence"
+            ? metadata.generation
+            : null,
+        analytics_generation:
+          metadata.analytics_generation ?? metadata.generation,
+      },
     ),
     queryFn: ({ signal }) =>
-      readDashboard(resource, context, metadata.generation, {
-        ...options,
-        expectedPolicyHash: metadata.policy_hash,
-        signal,
-      }),
+      readDashboard(
+        resource,
+        context,
+        metadata.analytics_generation ?? metadata.generation,
+        {
+          ...options,
+          expectedPolicyHash: metadata.policy_hash,
+          expectedIntelligenceGeneration:
+            metadata.publication_domain === "intelligence"
+              ? metadata.generation
+              : undefined,
+          signal,
+        },
+      ),
     retry: false,
   });
+  // Publication resolution is separate from the immutable generation cache.
+  const immutable = useQuery({
+    queryKey: dashboardReadKey(
+      dataMode,
+      resource,
+      context,
+      result.data?.metadata.analytics_generation ?? metadata.generation,
+      {
+        ...options,
+        publication_domain: "intelligence",
+        policy_hash: metadata.policy_hash,
+        intelligence_generation:
+          result.data?.metadata.publication_domain === "intelligence"
+            ? result.data.metadata.generation
+            : null,
+      },
+    ),
+    queryFn: async () => {
+      if (!result.data) throw new Error("Publication unresolved");
+      return result.data;
+    },
+    enabled: false,
+    initialData: result.data,
+  });
   useEffect(() => {
-    if (result.error instanceof ApiError && result.error.status === 409)
+    if (result.error instanceof ApiError && result.error.status === 409) {
       void client.invalidateQueries({ queryKey: publicationKey });
-  }, [result.error, client, publicationKey]);
-  return result;
+      void client.invalidateQueries({
+        predicate: (q) =>
+          q.queryKey[0] === dataMode &&
+          q.queryKey.includes(base.scope.store_id) &&
+          q.queryKey.includes(base.scope.tenant_id),
+      });
+    }
+  }, [
+    result.error,
+    client,
+    publicationKey,
+    dataMode,
+    base.scope.store_id,
+    base.scope.tenant_id,
+  ]);
+  return {
+    ...result,
+    data:
+      result.data?.metadata.publication_domain === "intelligence"
+        ? immutable.data
+        : result.data,
+  };
 }

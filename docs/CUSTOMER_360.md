@@ -1,5 +1,7 @@
 # Customer 360 — CHANGE #10 (offline)
 
+> Proposta/reference offline histórica. O contrato físico live DEV vigente é [CHANGE #16](CHANGE_16_DEV.md): nomes Meta `meta_live_*`, generation INT64 e publicação Intelligence independente. Conteúdo anterior preservado para auditoria.
+
 Quatro modelos propostos, sem alteração em RAW, CORE, Analytics V1, Meta ou Terraform ativo. O materializador Python trabalha com snapshots locais, reutiliza a resolução determinística da Influence Layer e gera um artefato JSON. Não consulta BigQuery nem inicializa HEAD/receipts remotos.
 
 ## Entidades e grãos

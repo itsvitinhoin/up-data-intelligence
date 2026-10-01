@@ -1,0 +1,127 @@
+[
+  {
+    "name": "row_key",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "store_id",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "policy_hash",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "generation",
+    "type": "INT64",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "currency",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "calculated_at",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "as_of",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "customer_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "order_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "order_status",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "first_campaign_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "last_campaign_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "evidence_type",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "influence_scope",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "purchase_number",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "campaign_count",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "created_at",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "paid_media_influenced",
+    "type": "BOOL",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "requested_total",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "fulfilled_total",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "requested_items_qty",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "fulfilled_items_qty",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "identity_path",
+    "type": "JSON",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "campaigns",
+    "type": "JSON",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "influence_by_scope",
+    "type": "JSON",
+    "mode": "NULLABLE"
+  }
+]

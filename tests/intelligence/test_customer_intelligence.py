@@ -226,7 +226,7 @@ def test_schemas_reproducible_and_materialized_api_rejects_core(tmp_path):
     for path in folder.rglob("*.json"):
         assert path.read_text() == (tmp_path / path).read_text()
     active = json.loads(Path("infra/terraform/tables.json").read_text())
-    assert not set(active) & set(SCHEMAS)
+    assert set(SCHEMAS) <= set(active)  # CHANGE #16 activates revised INT64 live contracts.
     a = deepcopy(make()[2])
     a["tables"]["analytics_events"] = []
     with pytest.raises(ValueError):

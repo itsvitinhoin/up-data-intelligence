@@ -1,5 +1,7 @@
 # CHANGE #09 — Customer Timeline Layer (offline)
 
+> Proposta/reference offline histórica. O contrato físico live DEV vigente é [CHANGE #16](CHANGE_16_DEV.md): nomes Meta `meta_live_*`, generation INT64 e publicação Intelligence independente. Conteúdo anterior preservado para auditoria.
+
 A timeline mostra a jornada **observada e resolvida** de cada cliente, sem inventar
 história quando a identidade não está comprovada. Mesmo resolver da influência:
 `src/influence/identity.py`. Modelo: `analytics_customer_timeline`.

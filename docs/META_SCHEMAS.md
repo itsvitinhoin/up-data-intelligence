@@ -1,5 +1,7 @@
 # Meta — schemas propostos
 
+> Proposta/reference offline histórica. O contrato físico live DEV vigente é [CHANGE #16](CHANGE_16_DEV.md): nomes Meta `meta_live_*`, generation INT64 e publicação Intelligence independente. Conteúdo anterior preservado para auditoria.
+
 16 tabelas novas; nenhum dataset novo, nenhuma mudança em colunas existentes.
 Somente row_key e store_id são REQUIRED; todas as outras colunas são NULLABLE.
 RAW e CORE são nomes lógicos nos datasets já existentes. Manifesto não ativado: `infra/terraform/meta_tables.proposed.json`.

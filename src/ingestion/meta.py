@@ -21,6 +21,19 @@ from src.utils.data import digest, now
 
 
 class MetaEngine:
+    core_names = CORE
+    auto_binding = True
+    connector_version = "meta-offline-1.0.0"
+
+    def _transform(self, raw: dict[str, Any]) -> Any:
+        return transform(raw, self.repo)
+
+    def _configuration(self, insights: Insights | None) -> dict[str, Any]:
+        return {
+            "account": self.account.snapshot(),
+            "insights": insights.snapshot() if insights else None,
+        }
+
     def __init__(
         self,
         repository: Repository,
@@ -43,7 +56,7 @@ class MetaEngine:
             "run_id": run_id,
             "store_id": self.account.store_id,
             "source": "meta",
-            "resource": CORE[resource],
+            "resource": self.core_names[resource],
             "status": "running",
             "error_summary": None,
             "plan_key": plan,
@@ -79,7 +92,7 @@ class MetaEngine:
 
     def _run(self, resource: str, insights: Insights | None, refresh: bool) -> dict[str, Any]:
         a, table = self.account, "meta_raw_" + resource
-        config = {"account": a.snapshot(), "insights": insights.snapshot() if insights else None}
+        config = self._configuration(insights)
         # Page limit belongs to extraction, not entity/Insights logical identity.
         plan = digest(["meta", resource, config, self.connector.page_limit])
         saved = self.repo.read("sync_checkpoints", a.store_id, [plan])
@@ -97,7 +110,7 @@ class MetaEngine:
         cp = {
             "row_key": plan,
             "store_id": a.store_id,
-            "resource": CORE[resource],
+            "resource": self.core_names[resource],
             "connection_id": a.connection_id,
             "plan_key": plan,
             "run_id": run["run_id"],
@@ -115,16 +128,21 @@ class MetaEngine:
             {
                 "sync_runs": [run],
                 "sync_checkpoints": [cp],
-                "meta_account_bindings": [self._binding()],
+                **({"meta_account_bindings": [self._binding()]} if self.auto_binding else {}),
             }
         )
         retry_baseline = self.connector.retries
-        event("sync_started", run_id=run["run_id"], store_id=a.store_id, resource=CORE[resource])
+        event(
+            "sync_started",
+            run_id=run["run_id"],
+            store_id=a.store_id,
+            resource=self.core_names[resource],
+        )
 
         def promote(raw: dict[str, Any]) -> bool:
             if raw.get("pagination_error"):
                 raise SafeError(raw["pagination_error"])
-            batch = transform(raw, self.repo)
+            batch = self._transform(raw)
             if batch.failed:
                 # Fail closed: no partial CORE page or cursor advance on validation failure.
                 # RAW and captured metrics remain durable; replay after a fix can recover.
@@ -175,7 +193,7 @@ class MetaEngine:
                         "request_filters": config,
                         "payload": page.payload,
                         "payload_hash": digest(page.payload),
-                        "connector_version": "meta-offline-1.0.0",
+                        "connector_version": self.connector_version,
                         "spec_version": a.api_version,
                         "spec_sha256": None,
                         "sanitization_version": POLICY_VERSION,
@@ -208,7 +226,7 @@ class MetaEngine:
             event(
                 "sync_finished",
                 run_id=run["run_id"],
-                resource=CORE[resource],
+                resource=self.core_names[resource],
                 status=run["status"],
                 source_records_read=run["source_records_read"],
                 core_records_processed=run["core_records_processed"],
@@ -244,7 +262,7 @@ class MetaEngine:
                     if raw.get("pagination_error") and not raw["payload"]["data"]:
                         raise SafeError("meta_raw_contains_failed_request_retry_sync")
                     # Source configuration, observation time and RAW identity preserved.
-                    batch = transform({**raw, "run_id": run["run_id"]}, self.repo)
+                    batch = self._transform({**raw, "run_id": run["run_id"]})
                     if batch.failed:
                         failure = dict(run)
                         failure["core_records_failed"] += batch.failed

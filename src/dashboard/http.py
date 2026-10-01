@@ -42,6 +42,52 @@ def dispatch(
 ) -> tuple[int, dict[str, Any]]:
     if method != "GET":
         raise ReadError(405, "method_not_allowed")
+    intelligence_routes: dict[str, tuple[str, str | None]] = {
+        "/v1/customers/influenced": ("influencedCustomers", None),
+        "/v1/orders/influenced": ("influencedOrders", None),
+        "/v1/performance": ("performance", None),
+        "/v1/campaigns": ("campaigns", None),
+    }
+    match = re.fullmatch(r"/v1/customers/([^/]+)/(timeline|intelligence|products)", path)
+    if match:
+        intelligence_routes[path] = (
+            {"timeline": "timeline", "intelligence": "customer360", "products": "customerProducts"}[
+                match.group(2)
+            ],
+            unquote(match.group(1)),
+        )
+    match = re.fullmatch(r"/v1/campaigns/([^/]+)(?:/(customers|orders))?", path)
+    if match:
+        intelligence_routes[path] = (
+            {None: "campaign", "customers": "campaignCustomers", "orders": "campaignOrders"}[
+                match.group(2)
+            ],
+            unquote(match.group(1)),
+        )
+    if path in intelligence_routes:
+        from src.dashboard.intelligence import IntelligenceDashboardService
+
+        if not isinstance(service, IntelligenceDashboardService):
+            raise ReadError(424, "intelligence_publication_unavailable")
+        allowed = {"tenant_id", "store_id", "operation", "from", "to", "page_size", "cursor"}
+        if set(query) - allowed:
+            raise ReadError(400, "unsupported_filter")
+        intelligence_resource, entity = intelligence_routes[path]
+        grant = Grant(
+            _value(query, "tenant_id") or "",
+            _value(query, "store_id") or "",
+            _value(query, "operation") or "",
+        )
+        return 200, service.intelligence(
+            principal,
+            grant,
+            intelligence_resource,
+            entity=entity,
+            size=_value(query, "page_size"),
+            cursor=_value(query, "cursor"),
+            from_day=_value(query, "from"),
+            to_day=_value(query, "to"),
+        )
     overview = re.fullmatch(r"/v1/stores/([^/]+)/overview", path)
     customer_orders = re.fullmatch(r"/v1/customers/([^/]+)/orders", path)
     customer = re.fullmatch(r"/v1/customers/([^/]+)", path)

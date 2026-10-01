@@ -24,6 +24,8 @@ def generate() -> None:
         ]
         (folder / (name + ".json")).write_text(json.dumps(fields, indent=2) + "\n")
         target_manifest = meta_manifest if name in META_TABLE_NAMES else manifest
+        if name.startswith("meta_live_"):
+            target_manifest = manifest
         target_manifest[name] = {
             "dataset": spec.dataset,
             "partition": spec.partition,
@@ -57,8 +59,21 @@ def generate() -> None:
         (path / (name + ".sql")).write_text(sql + ";\n")
     manifest.update(promote_tables())
     Path("infra/terraform/tables.json").write_text(json.dumps(manifest, indent=2) + "\n")
+    from src.intelligence.live.schema import promote
+
+    promote()
     Path("infra/terraform/meta_tables.proposed.json").write_text(
-        json.dumps(meta_manifest, indent=2) + "\n"
+        json.dumps(
+            {
+                k: v
+                for k, v in meta_manifest.items()
+                if k not in manifest
+                and not k.startswith("meta_raw_")
+                and k != "meta_account_bindings"
+            },
+            indent=2,
+        )
+        + "\n"
     )
 
 
