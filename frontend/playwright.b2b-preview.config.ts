@@ -6,6 +6,9 @@ export default defineConfig({
   workers: 1,
   fullyParallel: false,
   timeout: 90000,
+  // 30s bounds the functional DEV live test; it is not an application SLO.
+  // Measure query_duration_ms/bytes_processed separately; production needs its own cache/read model and SLO.
+  expect: { timeout: live ? 30000 : 5000 },
   outputDir: "test-results/b2b-preview",
   use: {
     baseURL: live ? "http://127.0.0.1:3100" : "http://127.0.0.1:3115",

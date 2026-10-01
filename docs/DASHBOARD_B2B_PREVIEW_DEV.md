@@ -124,3 +124,13 @@ Pending publica `loading-real`; erro publica `error-real`; demo publica `demo`; 
 Validação desta correção: **106 testes frontend e 3 testes Playwright offline aprovados**, além de lint, typecheck, Prettier e `git diff --check`. Os novos testes exercitam o hook compartilhado, os estados do Overview, a propagação de metadata para `PeriodFilter`/`PrintContext` e a rejeição do scope anterior. O percurso E2E existente mantém a exigência de badge real e também confere período habilitado, footer e indicador PDF após renderizar os valores do Overview. Sem aumento de timeout ou flexibilização do badge.
 
 Playwright usa somente o servidor Next isolado e respostas sintéticas interceptadas, sem Python preview ou credenciais. Warning conhecido do runner: conflito `NO_COLOR`/`FORCE_COLOR`, sem impacto nos resultados. Nenhuma operação live, query BigQuery, GCP, Terraform, build ou deploy foi executada. Python não foi alterado e não tem impacto indireto neste change; a suíte Python não foi repetida. A execução live que ficou em "Conectando dados reais" deve ser revalidada separadamente após autorização, com o novo SHA confirmado no frontend servido; esta validação offline não certifica o resultado live.
+
+## CHANGE #15B.2.2 — timeout funcional live
+
+O timeout geral de cada teste permanece em **90s**. O timeout de `expect` passa a ser **30s somente quando `DASHBOARD_E2E_LIVE=1`** e continua em **5s no modo offline**. As assertions não mudam: Overview precisa alcançar `Dados reais · Analytics V1` ou `Dados reais · Histórico parcial`; `Conectando dados reais` é apenas um estado transitório e não satisfaz o resultado final.
+
+Os 30s limitam a espera do teste funcional DEV pelo percurso Browser → Next DEV → bridge → Python → HEAD/RECEIPT → BigQuery → React Query → render/effect. **Não representam SLO da aplicação nem aprovação dessa latência para produção.** `query_duration_ms` e `bytes_processed` são medidos separadamente; produção futura deverá ter cache/read model e SLO próprio.
+
+Esta alteração modifica somente a configuração do runner e esta documentação. Nenhuma alteração de produto, API, query, budget, binding ou contrato. Validação somente offline; nenhum preview live, BigQuery, GCP ou deploy executado.
+
+Validações desta etapa: **106 testes frontend e 3 Playwright offline aprovados**; lint, typecheck, formatting e `git diff --check` aprovados. Importação local da configuração confirmou `timeout=90000ms` nos dois modos e `expect.timeout=5000ms` offline / `30000ms` live, sem iniciar o runner live. Warning conhecido: `NO_COLOR`/`FORCE_COLOR` no runner offline.
