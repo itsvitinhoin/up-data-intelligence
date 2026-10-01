@@ -128,3 +128,290 @@ Sem Graph API/GCP nesta entrega, permanecem por comprovar permissões reais, com
 - Terraform: fmt-check e validate aprovados; nenhuma execução de plan/apply. Manifesto anterior e hashes de todos os schemas existentes preservados por testes.
 - Shell wrapper: bash -n aprovado; script live não executado. git diff --check aprovado.
 - Docker, image files, navegação, policy e DEV tfvars não foram alterados. Nenhum build/deploy foi executado.
+
+## MULTI-STORE CONTROL PLANE — CHANGE #16.1
+
+Base: `628fa08a27fc5730a9743d78873e1800c43b6236`. Implementação e validação **offline**.
+Não houve provisionamento, cadastro real, seed, inicialização de HEAD, consulta real,
+Meta, build ou deploy nesta entrega.
+
+**Adding a new store requires no Terraform resources.**
+
+Nova store não cria dataset, tabela, job ou scheduler e não executa Terraform.
+As quatro camadas continuam compartilhadas. O provisionamento inicial do control
+plane é uma operação separada e ainda precisa de autorização; onboarding posterior
+é configuração administrativa, não criação de infraestrutura Terraform.
+
+### Registry e autoridade
+
+`up_ops.store_runtime_config` é a única tabela adicionada ao manifesto ativo.
+Grão: uma linha por `store_id`, sem particionamento, clustering `status,store_id`,
+mesma proteção de exclusão das tabelas ativas. `row_key`, `store_id`, `status` e
+`revision` são REQUIRED; os demais campos físicos são NULLABLE. A aplicação exige
+booleans explícitos, defaults falsos, identidade válida e estados na allowlist
+DRAFT/READY/ACTIVE/PAUSED/ERROR/DISABLED. Campos extras aos mínimos solicitados:
+
+- `row_key` técnico e `revision` para compare-and-swap;
+- `store_name`, `store_slug`, `upzero_store_identifier` e
+  `purchase_order_id_effective_at` para compor Settings sem configuração do piloto;
+- `qualifying_order_statuses`, sem default comercial e sem CANCELED;
+- `history_coverage` com evidência explícita da policy existente;
+- `facts_coverage_from/to` para impedir que `facts_complete=true` certifique uma
+  janela diferente da evidência aprovada.
+
+Não há tokens, chaves ou valores de secret no registry. A conexão UP Zero é resolvida
+em `up_core.source_connections`, deve ser única/ativa/da própria store e apontar para
+uma versão **numérica explícita** de secret UP Zero deste projeto. `latest` não é
+aceito no novo caminho. `meta_account_bindings` continua autoridade da conta, conexão,
+API version, currency e timezone. O token Meta é global UP, server-side, nunca por
+store. Os fluxos anteriores de conexão/binding continuam separados: cadastrar uma
+store não cria/conecta secret nem escolhe conta Meta.
+
+`StoreAdmin` exige um principal ADMIN_UP confiável **antes de qualquer leitura**.
+Nenhum parâmetro de browser vira autorização. A CLI é ferramenta interna DEV com
+ADC/IAM e confirmação de project/store; não oferece endpoint público nem usa uma
+flag `--role` para simular autorização. Futuro servidor administrativo deverá
+construir esse principal a partir da autenticação real. UI administrativa permanece
+inalterada; CLIENT_USER não recebe acesso ao registry.
+
+Cadastro valida unicidade sob lease global de registro + lease da store. BigQuery
+não impõe unicidade de chave; INSERT/UPDATE transacionais usam ASSERT e revision CAS.
+Leitura/inventário duplicado falha explicitamente. Update sempre retorna DRAFT,
+desabilita sync e exige revalidação. `validate-store` checa configuração/conexões e
+promove READY; `activate-store` revalida e aceita apenas READY/PAUSED; `pause-store`
+bloqueia o mesmo lease do worker e suspende novas execuções. READY valida a configuração,
+**não certifica backfill**. Somente ACTIVE + sync_enabled + pipeline_enabled entra
+no despacho. Stores com flags falsas continuam cadastradas sem execução.
+
+Timezone usa ZoneInfo; currencies têm allowlist inicial explícita no modelo
+(BRL/USD/EUR/GBP/CAD/AUD/MXN/ARS/CLP/COP/PEN/JPY/CNY/CHF/UYU/PYG/BOB/NZD).
+Outras currencies exigem extensão revisada da allowlist, não aceitação silenciosa.
+Ao menos uma operação B2B/B2C é obrigatória no cadastro. Meta/UP Zero podem ser
+habilitados independentemente; Analytics/Intelligence usam **o contrato B2B atual**,
+não inventam materialização B2C. Stores B2C/mistas podem cadastrar e usar fontes, mas
+não ativam Analytics/Intelligence enquanto não existir contrato de seleção por operação;
+esses modelos não têm discriminador de operação hoje. Histórico parcial permanece parcial.
+
+### Dispatcher e workers compartilhados
+
+`src/control_plane` separa modelo, registry/admin service, repository SQL, preflight,
+REST gateway, dispatcher, worker/actions, budget e CLIs. SQL recebe store/datas como
+parâmetros; nomes de tabelas/colunas/pipelines vêm de allowlists internas.
+
+Fluxo: scheduler central → `up-store-dispatcher` → registry elegível → preflight
+→ `jobs:run` com overrides → um worker para uma store/revision/janela explícita.
+O worker adquire **o mesmo lease por store já usado pela Foundation/Meta** e relê
+configuração/revision/eligibilidade/dependências antes de executar. Não há lote de
+stores dentro de um materializador. Os quatro jobs são:
+
+- `up-upzero-worker`;
+- `up-meta-worker`;
+- `up-analytics-worker`;
+- `up-intelligence-worker`.
+
+Sem store nos nomes, env ou args base. O dispatcher passa store/revision/cutoffs/budgets
+em overrides; defaults incompletos dos jobs falham antes de ADC se lançados diretamente.
+UP Zero reutiliza Engine/paginação/batching/idempotência, retoma checkpoints pendentes,
+faz incremental/open-order reconcile e não sobrescreve conexões de outras integrações.
+Pending UP Zero retoma os filtros/page-limit persistidos, sem recalcular seu plan_key.
+Meta reutiliza o contrato canônico e retoma pending RAW inclusive de janela anterior
+antes de refresh; mudança de binding/page-limit incompatível com pending exige recovery.
+RAW continua antes de CORE. Nenhum checkpoint incompleto é tratado como source completa.
+
+`max_parallel_stores=2` por padrão DEV (1..10 configurável). O pool espera **término da
+execução remota**, não somente aceite do POST. Uma lease global `store-dispatch-global`
+serializa dispatchers de todos os pipelines para que dois despachos não dobrem o limite.
+Uma falha/bloqueio conhecido de store não impede outras; resposta de lançamento/poll
+incerta interrompe novos lançamentos e mantém a lease global. POST não é repetido
+automaticamente. A execução pode existir: reconciliar Cloud Run antes de liberar lease.
+Crash/kill pode deixar lease persistente. Nunca há takeover por TTL, limpeza cega ou
+retry ilimitado; limite de 24h do dispatcher/3900s de observação por worker é operacional,
+não SLO. Confirmar terminalidade de TODAS as execuções pendentes antes de recuperação.
+
+Janela é `--window-mode explicit` com todos os cinco campos, ou escolha explícita
+`previous-closed-day`. Esta última calcula **por timezone da store** o dia local
+anterior fechado, as_of no midnight final, snapshot/calculated_at capturados uma vez
+pelo dispatcher. Não depende da janela de setembro nem da policy MX Fashion.
+A flag facts_complete só vale dentro de facts_coverage_from/to; evidência ausente
+ou fora do intervalo bloqueia a execução que declararia cobertura completa.
+
+Preflight é repetido dentro do worker:
+
+- UP Zero: conexão/versão de secret aprovada; não depende de Meta;
+- Meta: binding explícita; não depende do materializador V1;
+- Analytics V1: policy dinâmica + UP Zero completo. Clientes exigem scan incremental
+  concluído após as_of; Orders/Facts exigem união **sem gaps** dos intervalos dos
+  checkpoints desde history_from até as_of. Filtros/connection/run são conferidos;
+  pending/status incompleto ou `core_records_failed` não zero bloqueia. `completed_to`
+  sozinho não prova cobertura DATE; Orders considera o timezone da store;
+- Intelligence: mesmas fontes UP Zero, Meta Insights com configuração/janela exata,
+  catálogo Meta concluído sem pending, V1 HEAD/RECEIPT completed da janela e HEAD ainda
+  igual após o snapshot. Sem DAG complexo; corrida/incompletude falha fechada e pode
+  ser reavaliada no próximo despacho autorizado.
+
+Analytics reutiliza Reader/Writer/runner V1, com refresh completo **apenas da store/policy**:
+dias explícitos e grupos comerciais, transação CAS e receipts existentes. Não faz DROP,
+DDL de tabela física nem DELETE de outra store/policy. O caminho compartilhado pode
+inicializar singleton HEAD vazio **sob lease** para uma store ACTIVE aprovada; registro
+ou validação não inicializam HEAD. HEAD>0 exige receipt compatível e generation máxima.
+Retry com os mesmos store/revision/snapshot/janela reconcilia o mesmo publication_id.
+V1 mantém o comportamento existente de substituição transacional de recortes; não se
+promete retenção de gerações V1 inteiras fora do time travel. Intelligence reutiliza
+publicação imutável/CAS do #16. A policy versionada do piloto e seu validator continuam
+válidos como dev tooling, mas não entram nos workers compartilhados.
+
+### Budgets, observabilidade e limites de escala
+
+Ceiling proposto: **1 GiB/query**, envelope conservador **128 GiB/store execution**,
+configuráveis em Terraform/CLI. Cada submissão reserva seu ceiling, inclusive erro;
+exceder o envelope bloqueia, nunca aumenta automaticamente. `BoundedClient` cerca
+inclusive queries da Repository legada e do reader V1 usado por Intelligence.
+Todos os jobs, inclusive reads legadas, usam `job_retry=None` e submissão sem retry
+SDK implícito: relançamentos invisíveis não podem escapar do envelope. O writer
+continua seu retry explícito por job_id; reattach não cria query nova e custo conhecido
+é contado uma vez por job_id. Rejeição local por budget antes de submissão é definitiva:
+não inventa job pendente nem retém lease como escrita incerta. Se uma mutação já ficou
+incerta, essa incerteza prevalece e exige recovery. Custo desconhecido continua NULL. O preflight do dispatcher
+tem cliente/envelope independente por store, além do envelope do worker; não é gratuito.
+
+Log de término inclui store_id/pipeline/duration_ms/query_count/bytes_processed/status,
+sem customer/order IDs, payload, tokens ou SQL com valores. Budgets limitam custo, não
+provam performance; os limites de snapshots/rows/payload existentes continuam valendo.
+Facts V1 continua usando chunks/spool. Intelligence permanece com o limite revisado de
+100k linhas/32 MiB; stores maiores falham explicitamente até a futura expansão do read
+model/chunking. Isto prepara fan-out multi-store; não comprova SLO de 100 lojas em DEV.
+
+### Terraform aditivo e segurança
+
+`infra/terraform/control_plane.tf` contém inventário fixo de pipelines, não for_each
+por store. Novas SAs por papel, grants de tabela e lease, jobUser, dispatcher permission
+`run.jobs.runWithOverrides` **restrita aos quatro jobs** e leitura de operações são
+separados. Scheduler SA só invoca o dispatcher. Writer custom role permite get/getData/
+updateData; nenhuma tabela/data set recebe nova permissão de criação/exclusão do worker.
+UP Zero accessor tem condition limitada ao namespace `up-intelligence-upzero-*` deste
+projeto; Meta accessor cobre somente o container global já preparado no #16. Nenhuma
+secret version é criada. Admin server member é opcional/null; só ganha registry writer,
+leitura de conexões/binding, jobUser e lease, nunca credenciais via frontend.
+
+Schedulers centrais `up-upzero-dispatch`, `up-meta-dispatch`, `up-analytics-dispatch`,
+`up-intelligence-dispatch` são sempre **paused=true**. Os horários UTC são propostas;
+recorrência só pode ser habilitada em change autorizado posterior. Dependências,
+notas de filas e atrasos precisam de métricas antes disso.
+
+`control_plane_image=null` mantém os cinco jobs/quatro schedulers ausentes até fornecer
+uma **nova imagem imutável aprovada** que contenha estes módulos; não reutiliza DEV.4
+ou altera digest/config atual. SAs/IAM/registry já estão descritos no Terraform. Uma
+versão numérica global Meta também precisa de aprovação quando Meta for habilitado.
+Nenhuma variável DEV existente foi modificada. `main.tf`, `analytics_runtime.tf` e
+`change16.tf` ficam byte a byte preservados: recursos do piloto são legado mantido para
+cumprir zero destroy/replacement, **não são o caminho de onboarding**. Sua retirada
+futura exige mudança e aprovação separadas. IAM amplo legado existente não é revogado
+neste change; novos workers só recebem os grants aqui descritos.
+
+Fixtures `tests/fixtures/change161` guardam manifesto/hashes de schemas/Terraform da base.
+Somente a tabela registry é acrescentada; todas as definições anteriores permanecem.
+`scripts/control_plane_plan_guard.py` revisa **um JSON de plan futuro salvo offline** e
+rejeita update/delete/replacement, dataset novo, tabela fora do registry, drift e scheduler
+ativo. Isto é guarda adicional, não substitui revisão humana do plan. **Nenhum plan foi
+executado**: não se afirma quantidade real de adds nem ausência de drift no GCP.
+O guard específico de #16.1 pressupõe que a base aprovada já esteja provisionada.
+Se #16 também estiver pendente, o plan conjunto conterá suas adições anteriores e
+exigirá revisão explícita desse escopo; não ignorar uma rejeição do guard.
+
+### Runbook futuro — NÃO executado nesta entrega
+
+1. Revisar/provisionar uma vez a infraestrutura compartilhada após nova imagem aprovada,
+   sob plan exclusivamente aditivo. Manter todos os schedulers pausados. Não adicionar
+   store em tfvars/for_each. API/IAM/provider/REST ainda requerem validação DEV autorizada;
+   Terraform validate não verifica permissões reais nem disponibilidade das fontes.
+2. Usar principal interno ADMIN_UP com ADC/IAM, sem arquivos de credenciais no Git.
+3. Cadastrar configuração não-secreta DRAFT (exemplo sintético abaixo). Conexões e
+   bindings devem ser preparados por seu fluxo próprio explicitamente autorizado.
+   Para UP Zero, inclusive Secret Manager fora deste registry: não há criação de
+   secrets por cadastro. Meta utiliza o token global; nunca criar token por cliente.
+4. Validar → READY; ativar → ACTIVE. Esta ativação **autoriza** o caminho compartilhado
+   a inicializar seu HEAD e materializar quando as fontes estiverem completas. Nesta
+   entrega nenhuma store foi cadastrada/ativada e nenhum HEAD foi inicializado.
+5. Lançar dispatcher manual em janela explícita aprovada, com budgets. Só mais tarde,
+   após métricas/revisão, considerar habilitar schedulers centrais.
+
+Arquivo local não-secreto, valores comerciais próprios precisam de aprovação:
+
+```json
+{
+  "store_id": "brand-example",
+  "store_name": "Brand Example",
+  "store_slug": "brand-example",
+  "operation_b2b": true,
+  "operation_b2c": false,
+  "timezone": "America/Sao_Paulo",
+  "currency": "BRL",
+  "history_from": "2026-09-01T00:00:00Z",
+  "history_complete": false,
+  "facts_complete": false,
+  "policy_version": "1.0.0",
+  "qualifying_order_statuses": ["CONFIRMED", "SHIPPED"],
+  "upzero_enabled": false,
+  "meta_enabled": false,
+  "analytics_enabled": false,
+  "intelligence_enabled": false
+}
+```
+
+Comandos futuros de registro, a partir da raiz do checkout no Cloud Shell. Eles fazem
+DML registry e requerem autorização live posterior; não foram executados aqui:
+
+```bash
+UP_STORE_ID=brand-example
+UP_ADMIN_ARGS=(
+  --live --project up-data-intelligence-dev
+  --confirm-project up-data-intelligence-dev
+  --location southamerica-east1
+  --lease-bucket up-data-intelligence-dev-876521886531-leases
+  --store-id "$UP_STORE_ID" --confirm-store "$UP_STORE_ID"
+)
+.venv/bin/python -m src.control_plane.cli register-store "${UP_ADMIN_ARGS[@]}" --request /tmp/store-config.json
+.venv/bin/python -m src.control_plane.cli read-store "${UP_ADMIN_ARGS[@]}"
+# Depois das conexões autorizadas e update-store com flags/refs não-secretas:
+.venv/bin/python -m src.control_plane.cli update-store "${UP_ADMIN_ARGS[@]}" --request /tmp/store-update.json
+.venv/bin/python -m src.control_plane.cli validate-store "${UP_ADMIN_ARGS[@]}"
+.venv/bin/python -m src.control_plane.cli activate-store "${UP_ADMIN_ARGS[@]}"
+# Suspender novas execuções (esperar/cancelar worker existente antes, se necessário):
+.venv/bin/python -m src.control_plane.cli pause-store "${UP_ADMIN_ARGS[@]}"
+```
+
+Não habilitar pipelines sem policy/statuses/coverage aprovados, versões numéricas de
+secrets e fontes reais completas. O arquivo acima tem todas as flags falsas, portanto
+READY/ACTIVE não lança nenhum pipeline. Não usar estes valores comerciais sintéticos
+como policy de outra marca.
+
+Exemplo de argumentos de **override** futuro do dispatcher no job `up-store-dispatcher`:
+
+```bash
+UP_DISPATCH_ARGS="--live,--project,up-data-intelligence-dev,--confirm-project,up-data-intelligence-dev,--location,southamerica-east1,--lease-bucket,up-data-intelligence-dev-876521886531-leases,--pipeline,analytics,--max-parallel-stores,2,--window-mode,explicit,--report-from,2026-09-01,--report-to,2026-09-02,--as-of,2026-09-02T03:00:00Z,--source-snapshot-at,<SNAPSHOT_UTC_APROVADO>,--calculated-at,<CALCULATED_AT_UTC_APROVADO>"
+# SOMENTE após autorização live, fontes certificadas e substituir placeholders:
+gcloud run jobs execute up-store-dispatcher \
+  --project=up-data-intelligence-dev --region=southamerica-east1 \
+  --args="$UP_DISPATCH_ARGS" --wait
+```
+
+O dispatcher só processa stores ACTIVE elegíveis; não usa um `store_id` padrão. Datas
+acima são exemplos, não janela configurada em Terraform. O worker/scheduler gera ou
+recebe janela explícita com os cutoffs aprovados. Primeira operação DEV deve revisar
+registry/cobertura e binding, não simplesmente ativar recorrência.
+
+Validação offline: suíte Python completa, testes novos de ciclo/admin/isolamento,
+coverage/dependências, pending RAW, leases, fan-out real até terminalidade, envelopes,
+gateway parametrizado/sem retry POST, schemas estáveis e plan guard; ruff, formatting,
+mypy, Terraform fmt/validate e diff check. Frontend não mudou. O validator do piloto
+`scripts/change16_dev_validate.sh` continua preservado.
+
+Referências do protocolo consultadas sem operações cloud: [Cloud Run jobs.run/Overrides](https://docs.cloud.google.com/run/docs/reference/rest/v2/projects.locations.jobs/run)
+e [Execution metadata](https://docs.cloud.google.com/run/docs/reference/rest/v2/projects.locations.jobs.executions).
+O gateway valida tanto project ID quanto seu número explicitamente configurado por
+Terraform (`--project-number`), pois nomes retornados podem ser canônicos; nunca
+segue operation/execution de outro projeto, região ou job. Não aplica retries ao POST.
+
+Resultado desta entrega: **737 testes Python aprovados**, incluindo **65 testes novos**
+do control plane; ruff lint/format, mypy (118 arquivos), Terraform fmt/validate e
+git diff --check aprovados. Frontend não foi alterado e não foi executado.

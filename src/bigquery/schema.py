@@ -6,6 +6,7 @@ from typing import Any
 
 from src.analytics.provisioning import promote_tables
 from src.bigquery.catalog import META_TABLE_NAMES, TABLES
+from src.control_plane.model import REGISTRY
 
 
 def generate() -> None:
@@ -14,11 +15,12 @@ def generate() -> None:
     manifest: dict[str, Any] = {}
     meta_manifest: dict[str, Any] = {}
     for name, spec in TABLES.items():
+        required = {"row_key", "store_id"} | ({"status", "revision"} if name == REGISTRY else set())
         fields = [
             {
                 "name": k,
                 "type": t,
-                "mode": "REQUIRED" if k in {"row_key", "store_id"} else "NULLABLE",
+                "mode": "REQUIRED" if k in required else "NULLABLE",
             }
             for k, t in spec.fields.items()
         ]
@@ -34,7 +36,7 @@ def generate() -> None:
         sql = "CREATE TABLE IF NOT EXISTS `${project_id}." + spec.dataset + "." + name + "` (\n"
         sql += (
             ",\n".join(
-                f"  `{k}` {t}" + (" NOT NULL" if k in {"row_key", "store_id"} else "")
+                f"  `{k}` {t}" + (" NOT NULL" if k in required else "")
                 for k, t in spec.fields.items()
             )
             + "\n)"

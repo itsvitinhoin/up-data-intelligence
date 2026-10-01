@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 
 from src.connectors.meta.foundation_schema import SCHEMAS as META_FOUNDATION_SCHEMAS
+from src.control_plane.model import REGISTRY, REGISTRY_FIELDS
 from src.ingestion.metrics import COUNTERS
 
 
@@ -273,3 +274,5 @@ for legacy_name, foundation_fields in META_FOUNDATION_SCHEMAS.items():
         "up_core", live_fields, "observed_at", ("store_id", "account_id")
     )
     META_TABLE_NAMES.update((live_name, live_name + "_versions"))
+
+TABLES[REGISTRY] = Table("up_ops", REGISTRY_FIELDS, None, ("status", "store_id"))

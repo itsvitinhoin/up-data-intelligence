@@ -38,7 +38,11 @@ def cloud_lease(bucket: str, store: str) -> Iterator[None]:
     try:
         yield
     except SafeError as exc:
-        uncertain = exc.code == "bigquery_write_outcome_unknown"
+        uncertain = exc.code in {
+            "bigquery_write_outcome_unknown",
+            "worker_execution_outcome_unknown",
+            "registry_write_outcome_unknown",
+        }
         raise
     finally:
         if uncertain:

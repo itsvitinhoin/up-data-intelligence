@@ -209,3 +209,10 @@ Os modelos de `src/scale` não estão conectados ao runtime; piloto e Terraform 
 ## CHANGE #16 — DEV Customer Intelligence / Performance
 
 Implementação offline do runner Meta gated, publicação atômica independente e leitura B2B materializada. Contratos, IAM, limites, pré-requisitos e rodada futura em [docs/CHANGE_16_DEV.md](docs/CHANGE_16_DEV.md). Nenhuma operação live é executada por imports/tests/geração de schemas. O roteiro exige aprovação explícita para apply/publicação e binding prévia.
+
+### Shared multi-store control plane (#16.1)
+
+Registry administrativo dinâmico, dispatcher limitado e quatro workers compartilhados,
+com schedulers centrais pausados. Adding a new store requires no Terraform resources.
+Implementação validada offline; provisionamento/execução requerem aprovação separada.
+Veja [MULTI-STORE CONTROL PLANE](docs/CHANGE_16_DEV.md#multi-store-control-plane--change-161).

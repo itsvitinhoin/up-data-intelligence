@@ -235,14 +235,6 @@
       "account_id"
     ]
   },
-  "store_runtime_config": {
-    "dataset": "up_ops",
-    "partition": null,
-    "cluster": [
-      "status",
-      "store_id"
-    ]
-  },
   "analytics_store_daily": {
     "dataset": "up_analytics",
     "partition": "order_date",

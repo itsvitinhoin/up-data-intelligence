@@ -1,0 +1,157 @@
+[
+  {
+    "name": "row_key",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "store_id",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "status",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "revision",
+    "type": "INT64",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "store_name",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "store_slug",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "timezone",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "currency",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "policy_version",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "upzero_connection_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "meta_connection_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "meta_account_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "meta_api_version",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "upzero_store_identifier",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "operation_b2b",
+    "type": "BOOL",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "operation_b2c",
+    "type": "BOOL",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "history_complete",
+    "type": "BOOL",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "facts_complete",
+    "type": "BOOL",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "upzero_enabled",
+    "type": "BOOL",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "meta_enabled",
+    "type": "BOOL",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "analytics_enabled",
+    "type": "BOOL",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "intelligence_enabled",
+    "type": "BOOL",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "sync_enabled",
+    "type": "BOOL",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "history_from",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "facts_coverage_from",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "facts_coverage_to",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "purchase_order_id_effective_at",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "created_at",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "updated_at",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "qualifying_order_statuses",
+    "type": "JSON",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "history_coverage",
+    "type": "JSON",
+    "mode": "NULLABLE"
+  }
+]
