@@ -1,8 +1,10 @@
-"""Offline review of a future saved plan: additions only; no existing-resource drift."""
+"""Offline review of a future saved plan: additions only; explicit operational drift only."""
 
 import json
 import sys
 from pathlib import Path
+
+from scripts.terraform_drift_guard import review_drift
 
 ALLOWED = {
     "google_service_account.control_plane",
@@ -50,9 +52,8 @@ def check(plan: dict) -> dict:
         if resource["type"] == "google_cloud_scheduler_job" and after.get("paused") is not True:
             raise ValueError("SCHEDULER_MUST_REMAIN_PAUSED")
         adds += 1
-    if any(r["change"]["actions"] != ["no-op"] for r in plan.get("resource_drift", [])):
-        raise ValueError("EXISTING_INFRASTRUCTURE_DRIFT")
-    return {"add": adds, "change": 0, "destroy": 0}
+    drift = review_drift(plan.get("resource_drift", []))
+    return {"add": adds, "change": 0, "destroy": 0, **drift}
 
 
 if __name__ == "__main__":

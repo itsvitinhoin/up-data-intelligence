@@ -109,7 +109,7 @@ export CHANGE16_APPROVED_SHA='<SHA_COMPLETO_APROVADO_DE_MAIN>'
 bash scripts/change16_dev_validate.sh
 ```
 
-Não usar o script antes de aprovar conta/token/binding/provisionamento. A configuração Terraform padrão tem **29 novas tabelas e IAM/identidades/container adicionais**, não somente 29 recursos no plan. `change16_plan_guard.py` rejeita qualquer update/destroy/replacement, drift existente, Scheduler ou criação fora da allowlist #16. Não houve plan nesta tarefa; o total real depende das variáveis opcionais e state remoto.
+Não usar o script antes de aprovar conta/token/binding/provisionamento. A configuração Terraform padrão tem **29 novas tabelas e IAM/identidades/container adicionais**, não somente 29 recursos no plan. `change16_plan_guard.py` rejeita qualquer update/destroy/replacement planejado, drift material, Scheduler ou criação fora da allowlist #16. A exceção operacional estrita de drift é documentada no CHANGE #16.1.2 abaixo. Não houve plan nesta tarefa; o total real depende das variáveis opcionais e state remoto.
 
 Para replay Meta após falha, usar `meta-sync --resource <recurso> --replay-run <UUID>` com confirmações/binding/lease iguais, sem token/API externa. Para retomar checkpoint pendente, repetir sync sem `--refresh`; RAW persistido é promovido antes da próxima página. Refresh só depois do checkpoint complete. Para repetir materialização sem mudar identidade lógica, reutilizar os mesmos source_snapshot_at/calculated_at controlados registrados pela rodada. Não apagar RAW/CORE.
 
@@ -318,12 +318,57 @@ neste change; novos workers só recebem os grants aqui descritos.
 Fixtures `tests/fixtures/change161` guardam manifesto/hashes de schemas/Terraform da base.
 Somente a tabela registry é acrescentada; todas as definições anteriores permanecem.
 `scripts/control_plane_plan_guard.py` revisa **um JSON de plan futuro salvo offline** e
-rejeita update/delete/replacement, dataset novo, tabela fora do registry, drift e scheduler
-ativo. Isto é guarda adicional, não substitui revisão humana do plan. **Nenhum plan foi
+rejeita update/delete/replacement planejado, dataset novo, tabela fora do registry,
+drift material e scheduler ativo. Isto é guarda adicional, não substitui revisão humana do plan. **Nenhum plan foi
 executado**: não se afirma quantidade real de adds nem ausência de drift no GCP.
 O guard específico de #16.1 pressupõe que a base aprovada já esteja provisionada.
 Se #16 também estiver pendente, o plan conjunto conterá suas adições anteriores e
 exigirá revisão explícita desse escopo; não ignorar uma rejeição do guard.
+
+### CHANGE #16.1.2 — Drift operacional estritamente permitido
+
+Os dois guards usam `scripts/terraform_drift_guard.py` para comparar recursivamente
+`change.before` e `change.after`. O diff é determinístico, distingue campo ausente de
+`null` e preserva alterações de membros/índices de listas. Toda entrada de drift
+alterada exige `actions=["update"]`, tipo suportado e **todos** os paths autorizados:
+
+- `google_bigquery_table`: somente `etag`, `last_modified_time`, `num_bytes`, `num_rows`.
+- `google_project_iam_member`: somente `etag`.
+- `google_cloud_run_v2_job`: `execution_count`, `latest_created_execution` (incluindo
+  seus metadados internos), `terminal_condition.*.last_transition_time`.
+- No mesmo Cloud Run Job: `annotations`, `labels`, `template.0.annotations` e
+  `template.0.labels` somente para `null ↔ {}`; e
+  `template.0.template.0.containers.*.depends_on` somente para `null ↔ []`.
+
+`*` aceita índices de lista somente nas posições declaradas. Não há wildcard amplo
+sobre configuração do Job. Alteração de conteúdo real de labels/annotations ou
+`depends_on`, inclusão/remoção de containers/condições, tipos desconhecidos, snapshots
+ausentes e valores futuros desconhecidos continuam rejeitados. Um único path material
+misturado com metadados benignos bloqueia o plan com `EXISTING_INFRASTRUCTURE_DRIFT`.
+Entradas `no-op` sem diferenças não contam como drift; `no-op` com valores diferentes
+é rejeitado.
+
+Schema, clustering, proteção contra remoção, imagem, env/args/command, recursos CPU/memória,
+service account, VPC, IAM role/member/condition e todo atributo fora da lista permanecem
+protegidos. **Updates planejados continuam proibidos**, inclusive updates nos próprios
+campos computados; delete/replacement também permanecem proibidos. As allowlists de
+criações #16 e control plane são independentes e não foram ampliadas. Não usar
+`-refresh=false` para contornar a revisão.
+
+O retorno aprovado contém `add`, `change`, `destroy`, `benign_drift` (contado por recurso,
+não por path) e `material_drift=0`. Drift material causa rejeição, não aprovação com
+warning. O plan relatado pelo operador (214 adds e 14 entradas operacionais) **não foi
+executado ou revalidado live nesta entrega**; fixtures sintéticas cobrem esse padrão de
+14 entradas. Cada guard ainda valida apenas sua própria allowlist de criações.
+
+Revisão offline de JSON salvo, na raiz do repositório:
+
+```bash
+.venv/bin/python -m scripts.change16_plan_guard /caminho/local/plan.json
+.venv/bin/python -m scripts.control_plane_plan_guard /caminho/local/plan.json
+```
+
+Esses comandos não geram plan nem acessam GCP. Não publicar JSON/plan/state real no Git.
 
 ### Runbook futuro — NÃO executado nesta entrega
 

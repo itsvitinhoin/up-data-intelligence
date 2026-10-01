@@ -4,6 +4,7 @@ import json
 import sys
 from pathlib import Path
 
+from scripts.terraform_drift_guard import review_drift
 from src.intelligence.live.schema import META_ACTIVE, SCHEMAS
 
 ALLOWED = {
@@ -37,10 +38,8 @@ def check(plan: dict) -> dict:
         elif base not in ALLOWED:
             raise ValueError("UNAPPROVED_RESOURCE")
         adds += 1
-    for r in plan.get("resource_drift", []):
-        if r["change"]["actions"] != ["no-op"]:
-            raise ValueError("EXISTING_INFRASTRUCTURE_DRIFT")
-    return {"add": adds, "change": 0, "destroy": 0}
+    drift = review_drift(plan.get("resource_drift", []))
+    return {"add": adds, "change": 0, "destroy": 0, **drift}
 
 
 if __name__ == "__main__":

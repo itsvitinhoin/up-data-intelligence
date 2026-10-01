@@ -932,6 +932,8 @@ def test_saved_plan_guard_only_registry_and_paused_central_schedulers():
         "add": 2,
         "change": 0,
         "destroy": 0,
+        "benign_drift": 0,
+        "material_drift": 0,
     }
     scheduler["change"]["after"]["paused"] = False
     with pytest.raises(ValueError, match="SCHEDULER_MUST_REMAIN_PAUSED"):
