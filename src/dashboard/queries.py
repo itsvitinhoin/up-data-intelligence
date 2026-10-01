@@ -49,6 +49,7 @@ def build(project: str, name: str, **values: object) -> Query:
         sql = f"""/* dashboard:head */
 SELECT h.store_id,h.policy_hash,h.generation,h.publication_id,h.status,
  h.as_of,h.report_from,h.report_to,h.source_watermark,
+ r.store_id AS receipt_store_id,r.policy_hash AS receipt_policy_hash,
  r.publication_id AS receipt_id,r.generation AS receipt_generation,
  r.status AS receipt_status,r.analytics_version AS receipt_version,
  r.source_watermark AS receipt_watermark,

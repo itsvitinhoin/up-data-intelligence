@@ -1,6 +1,7 @@
 """Synthetic-only contract tests; no GCP client or customer records."""
 
 import json
+from dataclasses import replace
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -38,9 +39,11 @@ def head(policy: AnalyticsPolicy) -> dict[str, Any]:
         "publication_id": "a" * 64,
         "status": "completed",
         "as_of": policy.as_of,
-        "report_from": policy.report_from,
-        "report_to": policy.report_to,
+        "report_from": None,
+        "report_to": None,
         "source_watermark": "b" * 64,
+        "receipt_store_id": policy.store_id,
+        "receipt_policy_hash": policy.policy_hash,
         "receipt_id": "a" * 64,
         "receipt_generation": 4,
         "receipt_status": "completed",
@@ -306,6 +309,67 @@ def test_invalid_head_fails_closed(
         service.customers(PRINCIPAL, GRANT)
 
 
+def test_receipt_window_resolves_null_head_without_extra_query(
+    setup: tuple[DashboardService, FakeReader],
+):
+    service, reader = setup
+    result = service.customers(PRINCIPAL, GRANT)
+    assert result["metadata"]["report_from"] == reader.policy.report_from
+    assert result["metadata"]["report_to"] == reader.policy.report_to
+    assert [call.name for call in reader.calls] == ["head", "customers"]
+    sql = reader.calls[0].sql
+    assert "r.record_kind='RECEIPT'" in sql
+    assert "r.store_id=h.store_id" in sql
+    assert "r.policy_hash=h.policy_hash" in sql
+    assert "r.publication_id=h.publication_id" in sql
+
+
+def test_matching_head_window_remains_valid(setup: tuple[DashboardService, FakeReader]):
+    service, reader = setup
+    reader.override["head"] = [
+        {
+            **head(reader.policy),
+            "report_from": reader.policy.report_from,
+            "report_to": reader.policy.report_to,
+        }
+    ]
+    result = service.customers(PRINCIPAL, GRANT)
+    assert result["metadata"]["report_from"] == reader.policy.report_from
+    assert result["metadata"]["report_to"] == reader.policy.report_to
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"report_from": "2026-09-02"},
+        {"report_to": "2026-09-27"},
+        {"receipt_from": None},
+        {"receipt_to": None},
+        {"receipt_from": "not-a-date"},
+        {"receipt_to": "2026-09-01"},
+        {"receipt_store_id": "another-store"},
+        {"receipt_policy_hash": "c" * 64},
+        {"receipt_watermark": "c" * 64},
+        {"receipt_as_of": "2026-09-27T03:00:00Z"},
+    ],
+)
+def test_inconsistent_publication_fails_closed(
+    setup: tuple[DashboardService, FakeReader], change: dict[str, Any]
+):
+    service, reader = setup
+    reader.override["head"] = [{**head(reader.policy), **change}]
+    with pytest.raises(ReadError, match="publication_head_invalid"):
+        service.customers(PRINCIPAL, GRANT)
+    assert [call.name for call in reader.calls] == ["head"]
+
+
+def test_receipt_window_must_match_approved_policy(setup: tuple[DashboardService, FakeReader]):
+    service, reader = setup
+    reader.override["head"] = [{**head(reader.policy), "receipt_from": "2026-09-02"}]
+    with pytest.raises(ReadError, match="invalid_publication"):
+        service.customers(PRINCIPAL, GRANT)
+
+
 def test_head_missing_and_duplicate(setup: tuple[DashboardService, FakeReader]):
     service, reader = setup
     reader.override["head"] = []
@@ -314,6 +378,46 @@ def test_head_missing_and_duplicate(setup: tuple[DashboardService, FakeReader]):
     reader.override["head"] = [head(reader.policy), head(reader.policy)]
     with pytest.raises(ReadError, match="publication_head_duplicate_or_invalid"):
         service.customers(PRINCIPAL, GRANT)
+
+
+def test_duplicate_receipt_join_fails_closed(setup: tuple[DashboardService, FakeReader]):
+    service, reader = setup
+    # A duplicate RECEIPT produces two joined rows for the same HEAD.
+    reader.override["head"] = [
+        head(reader.policy),
+        {**head(reader.policy), "receipt_to": "2026-09-27"},
+    ]
+    with pytest.raises(ReadError, match="publication_head_duplicate_or_invalid"):
+        service.customers(PRINCIPAL, GRANT)
+
+
+def test_publication_resolution_is_store_and_generation_agnostic(policy: AnalyticsPolicy):
+    another = replace(
+        policy,
+        store_id="synthetic-second-store",
+        report_from="2026-09-02",
+        report_to="2026-09-05",
+    )
+    grant = Grant("synthetic-second-tenant", another.store_id, "B2B")
+    principal = Principal("synthetic-second-user", "CLIENT_USER", frozenset({grant}))
+    reader = FakeReader(another)
+    reader.override["head"] = [
+        {
+            **head(another),
+            "generation": 9,
+            "receipt_generation": 9,
+            "publication_id": "c" * 64,
+            "receipt_id": "c" * 64,
+        }
+    ]
+    service = DashboardService(PROJECT, {another.store_id: another}, lambda: reader, KEY)
+    result = service.customers(principal, grant)
+    assert result["metadata"]["store_id"] == another.store_id
+    assert result["metadata"]["generation"] == 9
+    assert result["metadata"]["report_from"] == another.report_from
+    assert result["metadata"]["report_to"] == another.report_to
+    assert reader.calls[0].parameters["store"][1] == another.store_id
+    assert reader.calls[0].parameters["policy"][1] == another.policy_hash
 
 
 def test_customer_cursor_and_isolation(setup: tuple[DashboardService, FakeReader]):

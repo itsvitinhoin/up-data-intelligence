@@ -34,6 +34,19 @@ def _timestamp(value: Any) -> str:
     return value.isoformat().replace("+00:00", "Z") if hasattr(value, "isoformat") else str(value)
 
 
+def _publication_date(value: Any) -> str:
+    """Require a real, canonical DATE from a publication row (never a policy fallback)."""
+    if type(value) is date:
+        return value.isoformat()
+    if isinstance(value, str):
+        try:
+            if date.fromisoformat(value).isoformat() == value:
+                return value
+        except ValueError:
+            pass
+    raise ReadError(503, "publication_head_invalid")
+
+
 def _sum_money(rows: list[dict[str, Any]], field: str) -> str | None:
     amounts = [decimal_string(row.get(field)) for row in rows]
     if any(value is None for value in amounts):
@@ -111,12 +124,26 @@ class DashboardService:
             row.get("status") != "completed"
             or row.get("receipt_status") != "completed"
             or row.get("receipt_version") != ANALYTICS_VERSION
+            or row.get("store_id") != row.get("receipt_store_id")
+            or row.get("policy_hash") != row.get("receipt_policy_hash")
             or row.get("publication_id") != row.get("receipt_id")
             or row.get("generation") != row.get("receipt_generation")
             or row.get("source_watermark") != row.get("receipt_watermark")
             or _timestamp(row.get("as_of")) != _timestamp(row.get("receipt_as_of"))
-            or _date(row.get("report_from")) != _date(row.get("receipt_from"))
-            or _date(row.get("report_to")) != _date(row.get("receipt_to"))
+        ):
+            raise ReadError(503, "publication_head_invalid")
+        receipt_from = _publication_date(row.get("receipt_from"))
+        receipt_to = _publication_date(row.get("receipt_to"))
+        if (
+            receipt_from >= receipt_to
+            or (
+                row.get("report_from") is not None
+                and _publication_date(row["report_from"]) != receipt_from
+            )
+            or (
+                row.get("report_to") is not None
+                and _publication_date(row["report_to"]) != receipt_to
+            )
         ):
             raise ReadError(503, "publication_head_invalid")
         generation = integer(row.get("generation"))
@@ -129,8 +156,8 @@ class DashboardService:
             publication_id=str(row.get("publication_id")),
             snapshot_at=_timestamp(row.get("snapshot_at")),
             as_of=_timestamp(row.get("as_of")),
-            report_from=_date(row.get("report_from")),
-            report_to=_date(row.get("report_to")),
+            report_from=receipt_from,
+            report_to=receipt_to,
         )
         self.publication.validate(self.policy)
 
