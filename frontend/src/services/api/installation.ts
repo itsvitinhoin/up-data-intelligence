@@ -250,6 +250,7 @@ export function parseInstallation(
                 "incremental",
                 "open_orders",
                 "replay",
+                "reconcile",
               ] as const),
         records_read: count(s.records_read),
         records_processed: count(s.records_processed),

@@ -96,6 +96,20 @@ describe("installation contract / UI", () => {
     ready.data.history_complete = false;
     expect(() => parseInstallation(ready)).toThrow();
   });
+  it.each([
+    "backfill",
+    "incremental",
+    "open_orders",
+    "replay",
+    "reconcile",
+  ] as const)("preserves Orders mode %s", (mode) => {
+    const fixture = installationFixture();
+    fixture.data.resources.find((r) => r.resource === "orders")!.mode = mode;
+    const orders = parseInstallation(fixture).data.resources.find(
+      (r) => r.resource === "orders",
+    );
+    expect(orders?.mode).toBe(mode);
+  });
   it("only allows certified exclusive-boundary periods", () => {
     const data = installationFixture().data;
     expect(

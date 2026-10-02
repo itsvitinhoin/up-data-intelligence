@@ -31,7 +31,8 @@ export type InstallationResource = {
   latest_run_id: string | null;
   latest_run_status:
     "running" | "completed" | "completed_with_errors" | "failed" | null;
-  mode: "backfill" | "incremental" | "open_orders" | "replay" | null;
+  mode:
+    "backfill" | "incremental" | "open_orders" | "replay" | "reconcile" | null;
   records_read: number | null;
   records_processed: number | null;
   records_failed: number | null;

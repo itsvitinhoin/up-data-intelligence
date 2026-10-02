@@ -201,6 +201,13 @@ def test_resource_lifecycle(
     assert row["overall_state"] == ("BLOCKED" if blocked else "PARTIAL")
 
 
+@pytest.mark.parametrize("mode", ["backfill", "incremental", "open_orders", "replay", "reconcile"])
+def test_orders_known_mode_is_preserved(reader: Reader, mode: str) -> None:
+    next(r for r in reader.resources if r["resource"] == "orders")["mode"] = mode
+    orders = next(r for r in read(reader)["resources"] if r["resource"] == "orders")
+    assert orders["mode"] == mode
+
+
 def test_pending_raw_is_boolean_without_raw_identifier(reader: Reader) -> None:
     reader.resources[2].update(pending_raw=True, pending_raw_count=1, pending_count=1)
     row = read(reader)

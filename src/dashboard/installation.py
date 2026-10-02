@@ -293,7 +293,8 @@ class InstallationReader:
                         in {"running", "completed", "completed_with_errors", "failed"}
                         else None,
                         r["mode"]
-                        if r.get("mode") in {"backfill", "incremental", "open_orders", "replay"}
+                        if r.get("mode")
+                        in {"backfill", "incremental", "open_orders", "replay", "reconcile"}
                         else None,
                         count(r.get("source_records_read")) if modern else None,
                         count(r.get("core_records_processed")) if modern else None,
