@@ -290,7 +290,7 @@ class Actions:
             # Only the leased ACTIVE worker may initialize its own new publication domain.
             try:
                 self.transport.query(
-                    f"INSERT INTO {target}(row_key,record_kind,store_id,policy_hash,generation,status) SELECT @head,'HEAD',@store,@policy,0,'initialized' WHERE NOT EXISTS(SELECT 1 FROM {target} WHERE store_id=@store AND policy_hash=@policy)",
+                    f"INSERT INTO {target}(row_key,record_kind,store_id,policy_hash,generation,status) SELECT @head,'HEAD',@store,@policy,0,'initialized' FROM UNNEST([1]) WHERE NOT EXISTS(SELECT 1 FROM {target} WHERE store_id=@store AND policy_hash=@policy)",
                     params
                     + [scalar("head", "STRING", digest([c.store_id, policy.policy_hash, "HEAD"]))],
                 )

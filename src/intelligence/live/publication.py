@@ -21,7 +21,7 @@ def commit_sql(project: str) -> str:
     head = "record_kind='HEAD' AND store_id=@store AND policy_hash=@policy"
     sql = [
         "BEGIN TRANSACTION;",
-        f"IF @initialize_head THEN INSERT INTO {pub}(row_key,record_kind,store_id,policy_hash,generation,status) SELECT @head,'HEAD',@store,@policy,0,'initialized' WHERE NOT EXISTS(SELECT 1 FROM {pub} WHERE store_id=@store AND policy_hash=@policy); END IF;",
+        f"IF @initialize_head THEN INSERT INTO {pub}(row_key,record_kind,store_id,policy_hash,generation,status) SELECT @head,'HEAD',@store,@policy,0,'initialized' FROM UNNEST([1]) WHERE NOT EXISTS(SELECT 1 FROM {pub} WHERE store_id=@store AND policy_hash=@policy); END IF;",
         f"ASSERT (SELECT COUNT(*) FROM {pub} WHERE {head})=1 AS 'intelligence_head_required';",
         f"ASSERT (SELECT generation FROM {pub} WHERE {head})=@expected AS 'intelligence_generation_changed';",
         f"ASSERT (SELECT COALESCE(MAX(generation),0)+1 FROM {pub} WHERE store_id=@store AND policy_hash=@policy AND record_kind='RECEIPT')=@generation AS 'intelligence_sequence_changed';",

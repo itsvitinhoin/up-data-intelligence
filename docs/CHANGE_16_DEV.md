@@ -785,3 +785,92 @@ ruff check/format, mypy (123 arquivos), Terraform fmt/validate e
 `git diff --check` aprovados. Terraform validate usou somente o provider local;
 nenhum plan/apply ou recurso remoto foi consultado/criado. Publicação Git somente
 do código, testes e documentação deste change.
+
+## CHANGE #16.2.3 — inicialização HEAD com SQL BigQuery válido
+
+### Resultado live #16.2.2 informado pelo operador
+
+No snapshot `2026-10-02T00:38:13.061947+00:00`, a execução percorreu novamente
+**111.891 evidências, 504 anchors e 333.117 eventos**, completou streaming e
+ultrapassou o bloqueio antigo do execution budget. Chegou à publicação, mas
+retornou `bigquery_write_outcome_unknown`. Reconciliation retornou
+`analytics_intelligence_publications = []`: nenhum HEAD, RECEIPT ou geração
+publicada segundo a auditoria fornecida.
+
+INFORMATION_SCHEMA identificou o parent job
+`intelligence_c2aa98a9afec4bdb94b1b6e165de4cdd` como SCRIPT/DONE, com
+`error_result.reason=invalidQuery`. O SCRIPT e seu child INSERT reportaram
+`Query without FROM clause cannot have a WHERE clause` (respectivamente
+`[2:225]` e `[1:200]`). Essa evidência estabelece falha sintática definitiva,
+embora o Writer continue expondo a classificação conservadora atual durante
+committing. **Reconciliation/error semantics não foram modificados.** Nenhuma
+consulta GCP foi executada para produzir esta documentação.
+
+### Correção e auditoria
+
+Foram corrigidos somente os dois inicializadores com o padrão inválido:
+
+- `src/intelligence/live/publication.py`, em `commit_sql()`;
+- `src/control_plane/worker.py`, em `Actions.analytics()`.
+
+Nos dois, o trecho passa de `SELECT @head,'HEAD',@store,@policy,0,'initialized'
+WHERE NOT EXISTS (...)` para:
+
+```sql
+SELECT @head, 'HEAD', @store, @policy, 0, 'initialized'
+FROM UNNEST([1])
+WHERE NOT EXISTS (
+  SELECT 1 FROM target
+  WHERE store_id = @store AND policy_hash = @policy
+)
+```
+
+A relação singleton fornece o FROM exigido por BigQuery e somente uma linha
+candidata. Os parâmetros, row_key, status, geração zero e predicate NOT EXISTS
+foram preservados, incluindo a recusa de inicializar sobre um domínio que já
+possua RECEIPT órfão. Domínio existente não recebe outro HEAD; duplicate HEAD
+continua bloqueado pelos guards existentes. Exclusão mútua continua dependendo
+do **shared store lease existente**, conforme o contrato do Writer/worker;
+BigQuery não ganhou uma constraint de unicidade.
+
+A busca por WHERE NOT EXISTS encontrou também:
+`sql/analytics/cloud_proposed/initialize_head.sql` (já usa `FROM (SELECT 1)`),
+`src/analytics/cloud/writer.py` e seu SQL versionado
+`sql/analytics/cloud_proposed/publication.sql` (WHERE pertence a subqueries com
+FROM válido), além do teste `tests/analytics/test_initial_live.py`. Esses arquivos
+não precisaram de alteração. Auditoria lexical complementar examinou 256
+fragmentos SQL/strings contendo SELECT em src/sql/scripts após a correção, sem
+outro candidato SELECT sem FROM seguido de WHERE. Essa auditoria é offline e
+não substitui um parser/dry-run BigQuery autorizado posteriormente.
+
+### Idempotência, atomicidade e testes
+
+Em Intelligence, inicialização permanece **dentro do mesmo BEGIN/COMMIT** que
+valida HEAD count/generation, receipt sequence, base Analytics, staging, grava
+modelos/RECEIPT e atualiza HEAD por expected generation. Uma falha em qualquer
+ASSERT/INSERT/UPDATE desfaz também o HEAD generation 0 inicializado; não existe
+inicialização Intelligence em uma query separada. A ordem e todos os ASSERTs
+foram preservados. No Control Plane, o inicializador Analytics continua um único
+INSERT idempotente sob o lease, antes da materialização, conforme o fluxo anterior.
+
+Novos testes inspecionam o SELECT externo do inicializador, exigem
+`FROM UNNEST([1])` antes de WHERE NOT EXISTS e rejeitam explicitamente o SQL antigo.
+Um transporte **exclusivamente de teste** executa DML/SELECT guards gerados em
+SQLite, traduzindo apenas scripting/session/JSON/singleton syntax para verificar
+transações locais. Ele não certifica o dialeto BigQuery live. Os cenários cobrem:
+primeiro HEAD, initialize_head=false sem HEAD, HEAD existente, duplicado,
+generation/receipt sequence/base/stage inválidos, rollback após INSERT de modelo,
+RECEIPT e atualização HEAD, retry e reconcile idempotentes. Também executam
+localmente o inicializador Analytics com domínio vazio/existente. Os testes e a
+implementação QueryBudget #16.2.2 permanecem intactos.
+
+Nenhuma regra de negócio, schema físico, Terraform, frontend, streaming, reader,
+Identity, Influence, Customer360, Performance, Meta ou Read API mudou. Não há
+migration. Nova imagem será necessária posteriormente; nenhum build, deploy,
+materialização, BigQuery live, GCP ou Terraform plan/apply foi executado.
+
+Resultado offline final do CHANGE #16.2.3: **1.218 testes aprovados** (15 novos),
+Ruff check/format, mypy (123 arquivos), Terraform fmt/validate e
+`git diff --check` aprovados. Validação Terraform somente local, sem plan/apply.
+Patch de produção restrito à inclusão de FROM singleton nos dois inicializadores;
+nenhum QueryBudget, schema, Terraform, frontend ou comportamento comercial mudou.
