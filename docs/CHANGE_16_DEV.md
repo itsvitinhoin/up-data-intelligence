@@ -874,3 +874,114 @@ Ruff check/format, mypy (123 arquivos), Terraform fmt/validate e
 `git diff --check` aprovados. Validação Terraform somente local, sem plan/apply.
 Patch de produção restrito à inclusão de FROM singleton nos dois inicializadores;
 nenhum QueryBudget, schema, Terraform, frontend ou comportamento comercial mudou.
+
+## CHANGE #16.2.4 — invariantes Intelligence sem subqueries correlacionadas
+
+### Resultado live #16.2.3 informado pelo operador
+
+A primeira materialização Intelligence MX Fashion foi **COMPLETED**, geração 1.
+Analytics generation 1/publication_id
+`6a70891ac41d0cc2a8441888aa31b7f41ed6835fbc4728c2b06dadbe2c559d74` é a base da
+Intelligence publication_id
+`5e726d57021af24c8cac70ca6d3983c219419a24bdb7fe522590cc2cbf203517`.
+A auditoria fornecida encontrou exatamente HEAD e RECEIPT generation 1/completed,
+com publication/base/window/snapshot/account/row_counts/completeness compatíveis.
+
+A publicação cobre `2026-09-01` até `2026-09-28` exclusivo,
+as_of `2026-09-28T03:00:00Z`. Flags: history_complete=false, facts_complete=true,
+meta_complete=true, influence_complete=false, customer_intelligence_complete=true,
+performance_complete=true. Limitações: history_incomplete e
+unresolved_or_unmapped_paid_influence. Existem 163.175 paid touchpoints, mas zero
+pedidos/clientes influenciados comprovados. Spend Meta observado é R$ 2.627,41;
+receitas influenciadas são zero e ROAS/CAC continuam NULL. Isso é compatível com
+paid touchpoints sem identidade determinística suficiente; não convertemos esse
+estado em influence_complete=true nem inferimos pedidos influenciados.
+
+O validator passou por Analytics HEAD/store_daily/customer-period/customer parity
+e Intelligence HEAD. O diagnóstico isolado de `_intelligence_scope()` também
+passou: HEAD/RECEIPT/base/policy foram aceitos. A falha ficou **somente na query de
+invariants**, com BigQuery 400/invalidQuery:
+`Correlated subqueries that reference other tables are not supported unless they
+can be de-correlated`. A causa são agregações correlacionadas ao alias externo
+performance summary em `summary:dedupe_revenue_null_roas` e
+`summary:distinct_order_finance`. Este relato usa somente evidência fornecida;
+nenhuma operação live foi executada nesta entrega.
+
+### CTEs e JOINs read-only
+
+Somente `sql(project)` em `src/intelligence/live/validation.py` foi reescrito.
+CTEs locais à consulta (não são tabelas/materializações físicas):
+
+- `performance`: summary filtrado por store/policy/generation;
+- `lifetime_orders`: customer orders LIFETIME com paid_media_influenced IS TRUE,
+  filtrados pelos mesmos parâmetros;
+- `influenced_order_counts`: COUNT(DISTINCT order_id), singleton sem GROUP BY;
+- `distinct_influenced_orders`: GROUP BY order_id e ANY_VALUE dos dois totais;
+- `influenced_finance`: soma das receitas por pedido único, singleton sem GROUP BY;
+- `customer_profile`: identidade canônica no mesmo store/policy/generation;
+- `meta_insights`: fonte CORE com FOR SYSTEM_TIME AS OF @snapshot, store/account/
+  configuration/window explícitos e report_to exclusivo;
+- `meta_spend`: singleton de spend sobre essa fonte filtrada.
+
+Os summary invariants usam CROSS JOIN com os singletons; nenhuma agregação precisa
+referenciar o alias externo. Meta-spend também usa CROSS JOIN, eliminando a scalar
+subquery desnecessária. Timeline usa LEFT JOIN por store/policy/generation/customer
+com `p.customer_id IS NULL`, equivalente ao NOT EXISTS anterior, incluindo IDs
+NULL e ausência de perfil autorizado. Profile com row_key duplicado continua sendo acusado
+pelo invariant de row_key, sem mudar o resultado do anti-join para matched rows.
+Os subselects não correlacionados de GROUP BY/HAVING para duplicate-key e grãos
+order/campaign continuam válidos. A auditoria de toda a função não encontrou
+outras correlações externas remanescentes.
+
+### Semântica preservada
+
+A consulta mantém as mesmas 19 rows `invariant STRING / failures INT64` e os
+mesmos nomes/regras. `validate()` e seu contrato de sucesso/erro não mudaram.
+
+COUNT(DISTINCT order_id) considera somente LIFETIME/IS TRUE; FALSE/NULL e outros
+scopes não são promovidos a influência comprovada. Receita usa ANY_VALUE por
+order_id e soma **uma vez por pedido**, nunca campanhas participantes. Os campos
+requested e fulfilled mantêm propagação de NULL independentemente: qualquer
+representante de pedido com total desconhecido torna aquela soma NULL. A seleção
+ANY_VALUE continua a mesma da query anterior, sem introduzir nova regra para
+linhas conflitantes do mesmo pedido.
+
+Sem linhas de pedidos influenciados, COUNT retorna zero e COALESCE(SUM,0) retorna
+zero: não ocorre perda da singleton relation nem NULL indevido. Spend também
+mantém NULL quando algum spend é desconhecido e zero quando a fonte é vazia.
+Com history_complete=false, new_customers/CAC conhecidos continuam violação;
+com influence_complete=false, ROAS conhecido continua violação. ROAS requested
+quando complete conserva SAFE_DIVIDE, IS DISTINCT FROM, ABS(diff)>0.000000001 e
+a lógica SQL de três valores existente, inclusive quando divisão/ROAS são NULL;
+este patch não amplia ou fortalece regras comerciais.
+
+### Testes e limites da validação offline
+
+`tests/fixtures/change16/validation_correlated_reference.sql` congela o SQL
+anterior **somente como referência de teste local**, com aviso explícito de que
+não é válido para BigQuery live. Os testes executam antes/depois sobre as mesmas
+fixtures sintéticas em SQLite com adaptações pequenas de funções/time travel,
+comparando exatamente todos os failure counts. Isso verifica equivalência
+semântica offline, não certifica o dialeto/planner BigQuery nem sua precisão NUMERIC.
+
+São cobertos publicação válida e histórico parcial, duplicate keys em todos os
+modelos, foreign customer/store/policy/generation/NULL ID, grãos duplicados,
+Meta configuration/day duplicado, spend mismatch/NULL e filtros de conta/janela,
+contagens influenciadas, ausência indevida de NULLs, receita por pedido único,
+participação em múltiplas campanhas, NULL por campo/pedido, tolerância de ROAS,
+zero orders e shape de 163.175 touchpoints sem influência de cliente. Testes
+estruturais exigem os oito CTEs e JOINs, verificam ausência de referências s/t em
+subselects balanceados e rejeitam a referência correlacionada antiga. O wrapper
+validate continua retornando completed/generation/invariants_checked ou
+`intelligence_invariant_failed`, sem expor SQL/dados de clientes em novos logs.
+
+Nenhuma materialização, publication, dado publicado, schema, Terraform, frontend,
+QueryBudget, Control Plane ou cálculo comercial mudou. Não é necessário repetir a
+materialização nem fazer migration por este patch de validação. Não foram feitos
+BigQuery live, Meta, GCP, plan/apply, build, deploy, Cloud Run ou Scheduler.
+
+Resultado offline final do CHANGE #16.2.4: **1.273 testes aprovados** (55 novos),
+Ruff check/format, mypy (123 arquivos), Terraform fmt/validate e
+`git diff --check` aprovados. O corpo de validate() permaneceu idêntico ao HEAD
+obrigatório e a referência SQL foi conferida contra esse mesmo commit.
+Nenhuma operação live foi executada; publicação Git somente deste patch/testes/docs.

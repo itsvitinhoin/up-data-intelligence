@@ -11,35 +11,76 @@ from src.intelligence.live.schema import PUBLICATION, SCHEMAS
 
 
 def sql(project: str) -> str:
+    prefix = f"`{project}.up_analytics."
+    scope = "store_id=@store AND policy_hash=@policy AND generation=@generation"
+    # Every aggregate is independent of the summary row. Aggregates without
+    # GROUP BY remain singleton relations, including for an empty order set.
+    ctes = f"""WITH
+    performance AS (
+      SELECT * FROM {prefix}analytics_performance_summary` WHERE {scope}
+    ),
+    lifetime_orders AS (
+      SELECT order_id,requested_total,fulfilled_total
+      FROM {prefix}analytics_customer_orders_summary`
+      WHERE {scope} AND influence_scope='LIFETIME' AND paid_media_influenced IS TRUE
+    ),
+    influenced_order_counts AS (
+      SELECT COUNT(DISTINCT order_id) influenced_orders FROM lifetime_orders
+    ),
+    distinct_influenced_orders AS (
+      SELECT order_id,ANY_VALUE(requested_total) requested_total,
+             ANY_VALUE(fulfilled_total) fulfilled_total
+      FROM lifetime_orders GROUP BY order_id
+    ),
+    influenced_finance AS (
+      SELECT IF(COUNTIF(requested_total IS NULL)>0,NULL,COALESCE(SUM(requested_total),0)) requested,
+             IF(COUNTIF(fulfilled_total IS NULL)>0,NULL,COALESCE(SUM(fulfilled_total),0)) fulfilled
+      FROM distinct_influenced_orders
+    ),
+    customer_profile AS (
+      SELECT store_id,policy_hash,generation,customer_id
+      FROM {prefix}analytics_customer_360_profile` WHERE {scope}
+    ),
+    meta_insights AS (
+      SELECT campaign_id,date_start,configuration_hash,spend
+      FROM `{project}.up_core.meta_live_insights_daily` FOR SYSTEM_TIME AS OF @snapshot
+      WHERE store_id=@store AND account_id=@account AND configuration_hash=@configuration
+        AND date_start>=@from AND date_start<@to
+    ),
+    meta_spend AS (
+      SELECT IF(COUNTIF(spend IS NULL)>0,NULL,COALESCE(SUM(spend),0)) spend FROM meta_insights
+    )
+    """
     pieces = []
     for name in SCHEMAS:
         if name == PUBLICATION:
             continue
         table = f"`{project}.up_analytics.{name}`"
         pieces.append(
-            f"SELECT '{name}:duplicate_key' invariant,COUNT(*) failures FROM (SELECT row_key FROM {table} WHERE store_id=@store AND policy_hash=@policy AND generation=@generation GROUP BY row_key HAVING COUNT(*)>1)"
+            f"SELECT '{name}:duplicate_key' invariant,COUNT(*) failures FROM (SELECT row_key FROM {table} WHERE {scope} GROUP BY row_key HAVING COUNT(*)>1)"
         )
-    prefix = f"`{project}.up_analytics."
-    scope = "store_id=@store AND policy_hash=@policy AND generation=@generation"
     pieces += [
-        f"SELECT 'timeline:foreign_customer',COUNT(*) FROM {prefix}analytics_customer_timeline` AS t WHERE t.{scope.replace(' AND ', ' AND t.')} AND NOT EXISTS(SELECT 1 FROM {prefix}analytics_customer_360_profile` p WHERE p.store_id=t.store_id AND p.policy_hash=t.policy_hash AND p.generation=t.generation AND p.customer_id=t.customer_id)",
+        f"SELECT 'timeline:foreign_customer',COUNT(*) FROM {prefix}analytics_customer_timeline` AS t LEFT JOIN customer_profile p ON p.store_id=t.store_id AND p.policy_hash=t.policy_hash AND p.generation=t.generation AND p.customer_id=t.customer_id WHERE t.{scope.replace(' AND ', ' AND t.')} AND p.customer_id IS NULL",
         f"SELECT 'campaign:duplicate_order',COUNT(*) FROM (SELECT campaign_id,order_id,influence_scope FROM {prefix}analytics_campaign_order_performance` WHERE {scope} GROUP BY campaign_id,order_id,influence_scope HAVING COUNT(*)>1)",
         f"SELECT 'influence:duplicate_order_campaign',COUNT(*) FROM (SELECT order_id,campaign_id,influence_scope FROM {prefix}analytics_order_paid_influence` WHERE {scope} GROUP BY order_id,campaign_id,influence_scope HAVING COUNT(*)>1)",
-        f"SELECT 'meta:duplicate_campaign_day_config',COUNT(*) FROM (SELECT campaign_id,date_start,configuration_hash FROM `{project}.up_core.meta_live_insights_daily` FOR SYSTEM_TIME AS OF @snapshot WHERE store_id=@store AND account_id=@account AND configuration_hash=@configuration AND date_start>=@from AND date_start<@to GROUP BY campaign_id,date_start,configuration_hash HAVING COUNT(*)>1)",
-        f"SELECT 'summary:meta_spend',COUNT(*) FROM {prefix}analytics_performance_summary` s WHERE s.{scope.replace(' AND ', ' AND s.')} AND s.meta_spend IS DISTINCT FROM (SELECT IF(COUNTIF(spend IS NULL)>0,NULL,COALESCE(SUM(spend),0)) FROM `{project}.up_core.meta_live_insights_daily` FOR SYSTEM_TIME AS OF @snapshot WHERE store_id=@store AND account_id=@account AND configuration_hash=@configuration AND date_start>=@from AND date_start<@to)",
-        f"SELECT 'summary:dedupe_revenue_null_roas',COUNT(*) FROM {prefix}analytics_performance_summary` s WHERE s.{scope.replace(' AND ', ' AND s.')} AND (influenced_customers>influenced_orders OR (NOT history_complete AND (new_customers_influenced IS NOT NULL OR cac_new_customer IS NOT NULL)) OR (NOT influence_complete AND (roas_requested IS NOT NULL OR roas_fulfilled IS NOT NULL)) OR influenced_orders IS DISTINCT FROM (SELECT COUNT(DISTINCT order_id) FROM {prefix}analytics_customer_orders_summary` o WHERE o.store_id=s.store_id AND o.policy_hash=s.policy_hash AND o.generation=s.generation AND o.influence_scope='LIFETIME' AND o.paid_media_influenced IS TRUE))",
+        "SELECT 'meta:duplicate_campaign_day_config',COUNT(*) FROM (SELECT campaign_id,date_start,configuration_hash FROM meta_insights GROUP BY campaign_id,date_start,configuration_hash HAVING COUNT(*)>1)",
+        "SELECT 'summary:meta_spend',COUNT(*) FROM performance s CROSS JOIN meta_spend m WHERE s.meta_spend IS DISTINCT FROM m.spend",
+        """SELECT 'summary:dedupe_revenue_null_roas',COUNT(*)
+          FROM performance s CROSS JOIN influenced_order_counts c
+          WHERE s.influenced_customers>s.influenced_orders
+           OR (NOT s.history_complete AND (s.new_customers_influenced IS NOT NULL OR s.cac_new_customer IS NOT NULL))
+           OR (NOT s.influence_complete AND (s.roas_requested IS NOT NULL OR s.roas_fulfilled IS NOT NULL))
+           OR s.influenced_orders IS DISTINCT FROM c.influenced_orders""",
+        # Select revenue once per order, never sum campaign participation. Keep
+        # the existing three-valued ROAS predicate and its numeric tolerance.
+        """SELECT 'summary:distinct_order_finance',COUNT(*)
+          FROM performance s CROSS JOIN influenced_finance v
+          WHERE v.requested IS DISTINCT FROM s.requested_revenue_influenced
+           OR v.fulfilled IS DISTINCT FROM s.fulfilled_revenue_influenced
+           OR s.influence_complete AND SAFE_DIVIDE(v.requested,s.meta_spend) IS DISTINCT FROM s.roas_requested
+              AND ABS(SAFE_DIVIDE(v.requested,s.meta_spend)-s.roas_requested)>0.000000001""",
     ]
-    # Revenue is selected once per order, never summed across campaign participation.
-    pieces.append(f"""SELECT 'summary:distinct_order_finance',COUNT(*) FROM {prefix}analytics_performance_summary` s
-      WHERE s.{scope.replace(" AND ", " AND s.")} AND EXISTS(
-       SELECT 1 FROM (SELECT IF(COUNTIF(requested_total IS NULL)>0,NULL,COALESCE(SUM(requested_total),0)) requested,
-                             IF(COUNTIF(fulfilled_total IS NULL)>0,NULL,COALESCE(SUM(fulfilled_total),0)) fulfilled
-        FROM (SELECT order_id,ANY_VALUE(requested_total) requested_total,ANY_VALUE(fulfilled_total) fulfilled_total
-         FROM {prefix}analytics_customer_orders_summary` o WHERE o.store_id=s.store_id AND o.policy_hash=s.policy_hash AND o.generation=s.generation AND influence_scope='LIFETIME' AND paid_media_influenced IS TRUE GROUP BY order_id)) v
-       WHERE v.requested IS DISTINCT FROM s.requested_revenue_influenced OR v.fulfilled IS DISTINCT FROM s.fulfilled_revenue_influenced
-        OR s.influence_complete AND SAFE_DIVIDE(v.requested,s.meta_spend) IS DISTINCT FROM s.roas_requested AND ABS(SAFE_DIVIDE(v.requested,s.meta_spend)-s.roas_requested)>0.000000001)
-    """)
-    return " UNION ALL ".join(pieces)
+    return ctes + " UNION ALL ".join(pieces)
 
 
 def validate(transport: Transport, policy: AnalyticsPolicy, *, tenant: str) -> dict[str, Any]:
