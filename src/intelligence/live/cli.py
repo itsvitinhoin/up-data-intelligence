@@ -259,6 +259,7 @@ def main() -> int:
                     generation=result["generation"],
                     query_count=transport.query_count,
                     reserved_query_bytes=transport.reserved_query_bytes,
+                    **transport.query_budget.metrics(),
                     bytes_processed=transport.bytes_processed,
                     query_duration_ms=transport.duration_ms,
                     rows_read=transport.rows_read,

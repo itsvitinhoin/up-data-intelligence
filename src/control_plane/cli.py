@@ -99,6 +99,7 @@ def worker_main() -> int:
             lambda: {
                 "query_count": client.query_count,
                 "reserved_query_bytes": client.reserved_bytes,
+                **client.query_budget.metrics(),
                 "bytes_processed": client.bytes_processed,
                 "query_duration_ms": client.duration_ms,
             },

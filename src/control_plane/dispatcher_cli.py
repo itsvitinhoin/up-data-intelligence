@@ -96,6 +96,7 @@ def main() -> int:
                         query_count=meter.query_count,
                         query_duration_ms=meter.duration_ms,
                         bytes_processed=meter.bytes_processed,
+                        **meter.query_budget.metrics(),
                     )
 
             dispatcher = Dispatcher(

@@ -9,6 +9,7 @@ from typing import Any
 from google.cloud import bigquery
 
 from src.analytics.engine import Row
+from src.bigquery.query_budget import QueryBudget, QueryBudgetExceeded
 
 
 @dataclass(frozen=True)
@@ -45,8 +46,32 @@ class Transport:
         self.bytes_processed: int | None = 0
         self.duration_ms = 0
         self.rows_read = 0
-        self.reserved_query_bytes = 0
+        self.query_budget = QueryBudget(config.maximum_total_bytes_billed)
         self.query_count = 0
+
+    @property
+    def reserved_query_bytes(self) -> int:
+        """Compatibility alias for settled billing plus unresolved reservations."""
+        return self.query_budget.accounted_bytes
+
+    @reserved_query_bytes.setter
+    def reserved_query_bytes(self, value: int) -> None:
+        try:
+            self.query_budget.import_accounted(value)
+        except QueryBudgetExceeded as exc:
+            raise ValueError("analytics_execution_query_budget_exhausted") from exc
+
+    @property
+    def settled_billed_bytes(self) -> int:
+        return self.query_budget.settled_billed_bytes
+
+    @property
+    def unresolved_reserved_bytes(self) -> int:
+        return self.query_budget.unresolved_reserved_bytes
+
+    @property
+    def budget_accounted_bytes(self) -> int:
+        return self.query_budget.accounted_bytes
 
     def query(
         self,
@@ -58,13 +83,10 @@ class Transport:
         job_id: str | None = None,
     ) -> tuple[list[Row], str | None]:
         ceiling = self.config.maximum_bytes_billed
-        if self.config.maximum_total_bytes_billed is not None:
-            remaining = self.config.maximum_total_bytes_billed - self.reserved_query_bytes
-            if remaining < ceiling:
-                raise ValueError("analytics_execution_query_budget_exhausted")
-        # Conservative operational envelope: reserve each submitted job ceiling.
-        # Failed/unknown jobs retain their reservation; no fictional zero cost.
-        self.reserved_query_bytes += ceiling
+        try:
+            reservation = self.query_budget.reserve(ceiling)
+        except QueryBudgetExceeded as exc:
+            raise ValueError("analytics_execution_query_budget_exhausted") from exc
         self.query_count += 1
         cfg = bigquery.QueryJobConfig(
             query_parameters=parameters,
@@ -100,6 +122,10 @@ class Transport:
             if self.bytes_processed is not None and measured is not None
             else None
         )
+        try:
+            self.query_budget.settle(reservation, getattr(job, "total_bytes_billed", None))
+        except QueryBudgetExceeded as exc:
+            raise ValueError("analytics_execution_query_budget_exhausted") from exc
         self.duration_ms += int((time.monotonic() - started) * 1000)
         rows: list[Row] = []
         payload_bytes = 0

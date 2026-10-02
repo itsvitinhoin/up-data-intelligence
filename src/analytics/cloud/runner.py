@@ -77,6 +77,7 @@ def materialize(
             start = before[key]
             end = transport.bytes_processed
             measured.append(end - start if start is not None and end is not None else None)
+        budgets = [t.query_budget.metrics() for t in transports.values()]
         event(
             "analytics_execution_finished",
             status="completed",
@@ -85,6 +86,14 @@ def materialize(
             rows_failed=0,
             query_count=sum(t.query_count for t in transports.values()),
             reserved_query_bytes=sum(t.reserved_query_bytes for t in transports.values()),
+            **{
+                metric: sum(budget[metric] for budget in budgets)
+                for metric in (
+                    "settled_billed_bytes",
+                    "unresolved_reserved_bytes",
+                    "budget_accounted_bytes",
+                )
+            },
             bytes_processed=sum(v for v in measured if v is not None)
             if all(v is not None for v in measured)
             else None,

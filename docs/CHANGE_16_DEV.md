@@ -695,3 +695,93 @@ Resultado offline final do CHANGE #16.2.1: **1.122 testes aprovados** (39 novos)
 ruff check/format, mypy (122 arquivos), Terraform fmt/validate e
 `git diff --check` aprovados. Push autorizado somente deste código/documentação;
 nenhuma operação live foi executada.
+
+## CHANGE #16.2.2 — execução contabilizada por billing confirmado
+
+### Incidente fornecido pelo operador (nenhuma consulta live nesta entrega)
+
+O streaming #16.2.1 da MX Fashion percorreu **111.891 identity evidence rows,
+504 anchors e 333.117 analytics events**. Depois dos chunks, a execução falhou
+com `analytics_execution_query_budget_exhausted`. A auditoria fornecida encontrou
+Intelligence publications vazia: nenhum HEAD/RECEIPT ou geração parcial.
+
+Na janela `2026-10-01T23:44:00Z`–`2026-10-02T00:15:00Z`, INFORMATION_SCHEMA
+registrou 141 query jobs DONE, zero failed, **2,435 GiB processed e 2,602 GiB
+billed**, com maior query **0,180 GiB processed**. A janela inclui diagnósticos
+posteriores: 141 **não é a contagem exclusiva da materialização**. O consumo
+observado ficou muito abaixo de 128 GiB; a causa do bloqueio local foi a reserva
+permanente de 1 GiB por query, também presente em BoundedClient, independentemente
+do billing real. Maior processed não é uma medida de maior billed.
+
+### Reserva e settlement
+
+`src/bigquery/query_budget.py` centraliza a implementação usada por Transport e
+BoundedClient, com reserva/settlement atômicos e tokens pertencentes ao tracker:
+
+- Antes da submissão: `settled_billed_bytes + unresolved_reserved_bytes +
+  next_query_ceiling <= maximum_total_bytes_billed`. Se não couber, nenhuma query
+  é submetida. O teto integral continua reservado enquanto o resultado é pendente.
+- Após `job.result()` bem-sucedido: somente `total_bytes_billed` do tipo inteiro
+  (sem bool), não negativo e até o teto reservado substitui a reserva. Processed
+  continua uma métrica de observabilidade, nunca substitui billing.
+- Billing zero libera integralmente a reserva. None, metadata ausente ou tipo/valor
+  inválido retêm o teto inteiro. Falha de submission/result (inclusive terminal
+  definitiva) também retém o teto pelo restante da execução. Uma reconciliação
+  posterior bem-sucedida não libera uma reserva anteriormente retida por falha.
+- Billing maior que o teto invalida o tracker e bloqueia novas submissões e
+  settlements; não reduz accounting. BoundedClient marca `budget_exhausted` e
+  preserva seu contrato BadRequest/ExecutionBudgetExceeded; Transport mantém
+  `ValueError("analytics_execution_query_budget_exhausted")`.
+- `MeasuredJob.result()` mede e finaliza a reserva somente uma vez, incluindo
+  chamadas concorrentes/repetidas. `get_job()` não reserva nem liquida custo de
+  outro wrapper/tracker. Reservas externas ou já settled não podem ser liberadas.
+
+Invariante: `budget_accounted_bytes = settled_billed_bytes +
+unresolved_reserved_bytes`, com counters não negativos. `reserved_query_bytes`
+(Transport) e `reserved_bytes` (BoundedClient) são aliases compatíveis do custo
+**atualmente contabilizado**, não de `query_count × ceiling`. Escritas legadas
+nesses aliases só podem acrescentar custo desconhecido, respeitando o limite;
+nunca podem diminuir custo já contabilizado.
+
+### Composição, consumidores e observabilidade
+
+`Transport(BoundedClient(sdk))` mantém trackers independentes com o mesmo helper.
+Não soma os dois budgets: o log do worker usa o tracker BoundedClient, cobrindo
+inclusive consultas legadas feitas diretamente no SDK limitado. Analytics runner
+continua deduplicando Transport por identidade de objeto. Intelligence CLI usa o
+Transport existente. Logs dessas execuções/preflight incluem os três counters
+explícitos, sem SQL, IDs de clientes, payloads ou PII. `query_count`,
+`bytes_processed`, duração e os aliases antigos permanecem disponíveis.
+
+O scope HEAD da Read API atual usa seu reader separado e importa conservadoramente
+as reservas legadas no Transport Intelligence como custo desconhecido. A Read API
+não foi alterada neste change e esse import não recebe billing estimado. Registry,
+worker e dispatcher continuam escolhendo store/pipeline/concorrência como antes;
+nenhum consumidor passa a somar contadores das camadas aninhadas.
+
+**Limites financeiros não aumentaram:** 1 GiB/query (`1073741824`) e 128 GiB por
+execução do Control Plane (`137438953472`); concorrência continua 2 stores. Mesmo
+que queries normalmente custem poucos MiB, um saldo de 0,5 GiB continua bloqueando
+uma próxima query com ceiling de 1 GiB. Cada execução/store tem envelope próprio;
+não foi criado fleet/global daily budget.
+
+### Validação e próxima etapa
+
+Testes sintéticos cobrem 200 queries de 10 MiB (a 129ª passa), 127 GiB settled mais
+uma query de 0,5 GiB (a próxima é bloqueada antes do SDK), zero/unknown/invalid,
+failure, tokens estrangeiros, double settlement, concorrência, get_job e a
+composição aninhada. O workload MX-shaped tem 150 queries, aproximadamente 3 GiB
+billed, maior query abaixo de 0,2 GiB e completa offline. Não contém dados reais.
+
+Nenhuma semântica Identity/Influence/Customer360/Performance/Meta/Analytics V1,
+source_snapshot_hash v3, publication_id, spool, partition reader, Read API,
+frontend, schema, policy ou infraestrutura foi alterada. **Nenhuma migration é
+necessária.** Nova imagem será necessária posteriormente para executar a correção;
+este change não faz build, deploy, materialização, queries live, Meta, GCP ou
+Terraform plan/apply. A próxima execução depende de autorização separada.
+
+Resultado offline final do CHANGE #16.2.2: **1.203 testes aprovados** (81 novos),
+ruff check/format, mypy (123 arquivos), Terraform fmt/validate e
+`git diff --check` aprovados. Terraform validate usou somente o provider local;
+nenhum plan/apply ou recurso remoto foi consultado/criado. Publicação Git somente
+do código, testes e documentação deste change.
