@@ -221,7 +221,7 @@ resource "google_cloud_run_v2_job" "control_plane_dispatcher" {
 resource "google_project_iam_custom_role" "control_plane_run" {
   role_id     = "upControlPlaneRun_${var.environment}"
   title       = "Run shared jobs with overrides"
-  permissions = ["run.jobs.runWithOverrides", "run.jobs.get", "run.executions.get"]
+  permissions = ["run.jobs.run", "run.jobs.runWithOverrides", "run.jobs.get", "run.executions.get"]
 }
 resource "google_project_iam_custom_role" "control_plane_poll" {
   role_id     = "upControlPlanePoll_${var.environment}"

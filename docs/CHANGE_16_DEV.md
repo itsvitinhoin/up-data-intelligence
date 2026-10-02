@@ -1078,3 +1078,82 @@ check (173 arquivos), mypy (123 arquivos), Terraform fmt/validate e
 `git diff --check` passaram. `has_unknown()` e as funções de diff/shape/review
 existentes foram comparadas à base e permanecem idênticas; somente a allowlist
 e o dispatch de `allowed_path()` foram expandidos.
+
+## CHANGE #17D.1.1 — permissão RunJob com overrides
+
+Base obrigatória: `2b7b000fbbbe415f7065dfdf40d83e5ad7a9319f`.
+Segundo a evidência fornecida pelo responsável, o Control Plane compartilhado
+foi provisionado em DEV no #17C com **14 added / 0 changed / 0 destroyed**.
+Na primeira execução manual real do dispatcher UP Zero,
+`up-store-dispatcher-dfgzb`, a task terminou com **exit code 1 / failedCount 1**.
+Nenhuma execução de `up-upzero-worker` foi criada, nenhum worker rodou e nenhuma
+ingestão UP Zero ocorreu. Os quatro schedulers permaneceram **PAUSED**.
+Esses fatos históricos não foram consultados novamente durante este patch.
+
+### Correção IAM mínima
+
+A causa identificada é a ausência de `run.jobs.run` no custom role
+`google_project_iam_custom_role.control_plane_run`: ele possuía
+`run.jobs.runWithOverrides`, `run.jobs.get` e `run.executions.get`, mas não a
+permissão básica de RunJob. O dispatcher envia o POST `jobs/{worker}:run` com
+`overrides.containerOverrides`. O gateway existente classifica rejeições
+400/401/403/404 como `worker_launch_rejected`; o dispatcher converte SafeError
+comum em status `blocked`, coerente com a falha relatada sem worker criado.
+O incidente não foi reexecutado neste patch; o efeito live da correção dependerá
+de provisionamento e validação posteriores explicitamente autorizados.
+
+Foi adicionada **somente** `run.jobs.run`. O conjunto final exato é:
+
+```hcl
+permissions = [
+  "run.jobs.run",
+  "run.jobs.runWithOverrides",
+  "run.jobs.get",
+  "run.executions.get"
+]
+```
+
+Não mudaram role_id/title, outros roles ou qualquer binding. A nova permissão
+continua vinculada somente aos jobs pelos grants existentes: dispatcher →
+workers autorizados e scheduler → dispatcher. Não houve grant adicional no
+projeto nem inclusão de run.admin/developer, editor/owner, create/update/delete,
+run.services ou iam.serviceAccounts.actAs.
+
+O gateway, os overrides, a ausência de retry no POST, `submitted=True` e os
+resultados `worker_execution_outcome_unknown`/`worker_launch_rejected` permanecem
+intactos. Drift guard e allowlists de criações também permanecem intactos.
+
+### Estrutura e validação offline
+
+O novo teste `test_control_plane_run_role_has_exact_job_override_permissions`
+isola o bloco Terraform desse custom role e exige exatamente as quatro
+permissões, sem extras ou duplicatas. Ele falhou na base anterior (três
+permissões) e passou após o patch; remover `run.jobs.run` volta a fazê-lo falhar.
+Os testes existentes de isolamento, gateway, inventário compartilhado e
+schedulers pausados foram preservados.
+
+O Terraform mudou em uma única linha de permissions. Os schedulers continuam
+com `paused=true`, timezone `Etc/UTC` e horários inalterados:
+
+| Pipeline | Cron UTC |
+| --- | --- |
+| upzero | `0 3 * * *` |
+| meta | `0 4 * * *` |
+| analytics | `0 5 * * *` |
+| intelligence | `0 6 * * *` |
+
+Nenhum outro recurso Terraform, nome, service account, job, imagem/digest, registry, policy,
+budget, secret ou dado foi alterado. Nenhum Python runtime ou frontend mudou.
+Nenhuma infraestrutura foi alterada neste patch de código; nenhum plan/apply/
+refresh, Cloud Run Job, ativação de scheduler, query BigQuery, API externa,
+materialização, build ou deploy foi executado. Nenhuma credencial/secret value
+foi lida ou exibida.
+
+Resultado offline final: **1.731 testes aprovados**, incluindo o novo teste de
+contrato IAM; **80 testes do Control Plane** aprovados. Ruff check, Ruff format
+check (173 arquivos), mypy (123 arquivos), Terraform fmt/validate e
+`git diff --check` passaram. Foi usado o binário Terraform local já existente
+em `../terraform-bin/terraform`, pois `/usr/local/bin/terraform` não existe
+neste ambiente; não houve instalação, init, plan, apply ou refresh.
+A comparação com a base confirmou que todo o restante de `control_plane.tf`
+permanece byte a byte idêntico, incluindo bindings e schedulers.

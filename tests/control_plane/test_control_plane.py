@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import re
 import threading
 import time
 from contextlib import nullcontext
@@ -547,6 +548,26 @@ def test_shared_schema_is_only_addition_and_old_terraform_preserved():
         Path("tests/fixtures/change161/base_terraform_hashes.json").read_text()
     ).items():
         assert hashlib.sha256((root / name).read_bytes()).hexdigest() == sha
+
+
+def test_control_plane_run_role_has_exact_job_override_permissions():
+    source = Path("infra/terraform/control_plane.tf").read_text()
+    roles = re.findall(
+        r'^resource "google_project_iam_custom_role" "control_plane_run" \{\n(.*?)^\}',
+        source,
+        re.MULTILINE | re.DOTALL,
+    )
+    assert len(roles) == 1
+    permissions = re.findall(r"^\s*permissions\s*=\s*(\[.*?\])", roles[0], re.MULTILINE | re.DOTALL)
+    assert len(permissions) == 1
+    actual = json.loads(permissions[0])
+    assert len(actual) == 4
+    assert set(actual) == {
+        "run.jobs.run",
+        "run.jobs.runWithOverrides",
+        "run.jobs.get",
+        "run.executions.get",
+    }
 
 
 def test_shared_terraform_constant_pipeline_inventory_and_paused_schedulers():
