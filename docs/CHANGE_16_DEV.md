@@ -985,3 +985,96 @@ Ruff check/format, mypy (123 arquivos), Terraform fmt/validate e
 `git diff --check` aprovados. O corpo de validate() permaneceu idêntico ao HEAD
 obrigatório e a referência SQL foi conferida contra esse mesmo commit.
 Nenhuma operação live foi executada; publicação Git somente deste patch/testes/docs.
+
+## CHANGE #17B.1 — allowlist estrita de drift do provider
+
+Base obrigatória: `279c5cba3ea7f74e308f2f74349d0ff27801e7f8`.
+O plano #17B informado pelo responsável resultou em **14 add / 0 change /
+0 destroy**: quatro workers (upzero, meta, analytics, intelligence), um
+dispatcher, quatro bindings dispatcher → workers, um binding scheduler →
+dispatcher e quatro schedulers com `paused=true`. O guard rejeitou o plano por
+metadata/normalização em `resource_drift` do Google provider 8.4.0. Esses números
+do plano real são evidência fornecida; não foi gerado um plano nesta entrega.
+
+### Novas permissões de drift: tipo + caminho exato + shape
+
+| Tipo de recurso | Caminho top-level | Única transformação nova permitida |
+| --- | --- | --- |
+| `google_bigquery_table` | `labels`, `resource_tags` | `null ↔ {}` |
+| `google_bigquery_table_iam_member` | `etag` | string → string |
+| `google_secret_manager_secret` | `annotations`, `version_aliases` | `null ↔ {}` |
+| `google_secret_manager_secret_iam_member` | `etag` | string → string |
+| `google_storage_bucket` | `updated` | string → string (timestamp computado) |
+| `google_storage_bucket_iam_member` | `etag` | string → string |
+
+Os quatro campos de mapas reutilizam `null_empty(..., dict)` simetricamente.
+Mapas com conteúdo, listas, valores de outro tipo e caminhos ausentes não são
+aceitos. Os três novos tipos IAM aceitam somente `etag` presente como string
+nos dois snapshots; o bucket aceita somente `updated` presente como string
+nos dois snapshots. Não há validação nova de formato de timestamp: o guard
+valida o shape observado no JSON do provider, sem ampliar a lista de caminhos.
+Campos homônimos aninhados ou em tipos diferentes não recebem permissão.
+
+`_SUPPORTED` contém exatamente oito tipos: os seis tipos da tabela acima mais
+`google_cloud_run_v2_job` e `google_project_iam_member`. BigQuery table já era
+suportado; foram acrescentados somente os outros cinco tipos da tabela.
+As regras operacionais anteriores de BigQuery, Cloud Run e project IAM foram
+preservadas. Nenhum campo arbitrário recebe permissão por ser metadata.
+
+### Proteções preservadas
+
+Todos os `changed_paths` devem ser permitidos no mesmo recurso e a ação de drift
+deve ser `update`. Um único caminho material junto de um etag/updated/mapa vazio
+continua rejeitando o plano. `has_unknown()` permanece intacto: qualquer indicação
+de unknown rejeita o drift; máscaras contendo apenas `false`/`null` continuam
+sem indicar unknown. `no-op` só passa sem diferenças e sem unknowns. Create,
+delete, replacement e read em drift continuam bloqueados.
+
+Continuam bloqueados: schema/dataset/table/partition/clustering/proteção BigQuery;
+labels e resource tags reais; IAM member/role/condition e identificadores de
+dataset/table/secret/bucket; secret replication/labels/secret_id/proteção e
+annotations/version_aliases reais; bucket location/retention/uniform access/
+force_destroy/labels/versioning/lifecycle/public access. Não se alterou a
+allowlist de **criações** de `control_plane_plan_guard.py` ou
+`change16_plan_guard.py`: updates/destroys/replacements planejados permanecem
+rejeitados, e schedulers novos precisam continuar pausados.
+
+### Reprodução sintética e conferência local do plano salvo
+
+Os testes usam apenas valores sintéticos. A fixture representa 30 BigQuery
+tables com os dois mapas normalizados, 106 BigQuery table IAM etags, um Secret
+com os dois mapas normalizados, um Secret IAM etag, um bucket updated e quatro
+bucket IAM etags. São **143 recursos de drift benigno**, contados por recurso,
+não por campo. Isso não afirma que o plano real contém exatamente 143 recursos:
+campos por tipo podem estar distribuídos diferentemente no JSON real.
+
+Os dois guards aceitam a fixture compartilhada. O teste do Control Plane combina
+esses drifts com exatamente as 14 criações esperadas e obtém **14 add / 0 change /
+0 destroy / 143 benign_drift / 0 material_drift**. Casos negativos comprovam que
+configuração material, ação destrutiva, criação fora da allowlist e scheduler
+ativo continuam rejeitando o plano. A suíte também cobre simetria de empty maps,
+strings nos dois snapshots, caminhos ausentes/aninhados, todos os tipos suportados
+com unknown, unsupported types e no-op com/sem diferenças.
+
+O arquivo `/tmp/up-di-control-plane-17b.json` não está disponível neste checkout.
+Portanto, o plano real não foi validado localmente. Depois do pull no ambiente
+onde o arquivo **já existe**, a conferência offline autorizada é:
+
+```bash
+.venv/bin/python -m scripts.control_plane_plan_guard \
+  /tmp/up-di-control-plane-17b.json
+```
+
+Esse comando lê o JSON existente; não invoca Terraform, GCP ou apply. Resultado
+esperado: `add=14`, `change=0`, `destroy=0`, `material_drift=0`; a quantidade de
+`benign_drift` depende dos recursos efetivamente presentes no JSON.
+
+Nenhum Terraform, aplicação, Control Plane, frontend, imagem, budget, IAM real ou
+infraestrutura foi alterado. Não houve novo plan, apply ou operação live.
+
+Validação offline final: **1.730 testes aprovados** (457 novos casos
+parametrizados; 746 testes focados no drift guard). Ruff check, Ruff format
+check (173 arquivos), mypy (123 arquivos), Terraform fmt/validate e
+`git diff --check` passaram. `has_unknown()` e as funções de diff/shape/review
+existentes foram comparadas à base e permanecem idênticas; somente a allowlist
+e o dispatch de `allowed_path()` foram expandidos.

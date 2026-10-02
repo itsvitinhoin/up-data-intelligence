@@ -5,9 +5,27 @@ from typing import Any
 Path = tuple[str | int, ...]
 _MISSING = object()
 _SUPPORTED = frozenset(
-    {"google_bigquery_table", "google_cloud_run_v2_job", "google_project_iam_member"}
+    {
+        "google_bigquery_table",
+        "google_cloud_run_v2_job",
+        "google_project_iam_member",
+        "google_bigquery_table_iam_member",
+        "google_secret_manager_secret",
+        "google_secret_manager_secret_iam_member",
+        "google_storage_bucket",
+        "google_storage_bucket_iam_member",
+    }
 )
 _BIGQUERY = frozenset({("etag",), ("last_modified_time",), ("num_bytes",), ("num_rows",)})
+_BIGQUERY_EMPTY_MAPS = frozenset({("labels",), ("resource_tags",)})
+_SECRET_EMPTY_MAPS = frozenset({("annotations",), ("version_aliases",)})
+_IAM_ETAGS = frozenset(
+    {
+        "google_bigquery_table_iam_member",
+        "google_secret_manager_secret_iam_member",
+        "google_storage_bucket_iam_member",
+    }
+)
 _EMPTY_MAPS = frozenset(
     {("annotations",), ("labels",), ("template", 0, "annotations"), ("template", 0, "labels")}
 )
@@ -57,9 +75,28 @@ def null_empty(before: Any, after: Any, kind: type) -> bool:
 
 def allowed_path(resource_type: str, path: Path, before: Any, after: Any) -> bool:
     if resource_type == "google_bigquery_table":
-        return path in _BIGQUERY
+        return path in _BIGQUERY or (
+            path in _BIGQUERY_EMPTY_MAPS
+            and null_empty(value_at(before, path), value_at(after, path), dict)
+        )
     if resource_type == "google_project_iam_member":
         return path == ("etag",)
+    if resource_type in _IAM_ETAGS:
+        return (
+            path == ("etag",)
+            and type(value_at(before, path)) is str
+            and type(value_at(after, path)) is str
+        )
+    if resource_type == "google_secret_manager_secret":
+        return path in _SECRET_EMPTY_MAPS and null_empty(
+            value_at(before, path), value_at(after, path), dict
+        )
+    if resource_type == "google_storage_bucket":
+        return (
+            path == ("updated",)
+            and type(value_at(before, path)) is str
+            and type(value_at(after, path)) is str
+        )
     if resource_type != "google_cloud_run_v2_job":
         return False
     if path in _EMPTY_MAPS:
