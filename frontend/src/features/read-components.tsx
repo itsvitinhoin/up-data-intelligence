@@ -17,25 +17,31 @@ import type { ReadPagination } from "@/services/api/http";
 export function Cards({
   items,
 }: {
-  items: [string, string | number | null, Metric["format"], string?][];
+  items: ([string, string | number | null, Metric["format"], string?] & {
+    comparison?: Metric["comparison"];
+  })[];
 }) {
   return (
     <div className="metrics">
-      {items.map(([label, value, format, hint]) => (
-        <MetricCard
-          key={label}
-          item={{
-            label,
-            value: value === null ? null : String(value),
-            format,
-            hint:
-              hint ??
-              "Indicador observado no histórico disponível; não confirma histórico completo.",
-            displayDigits:
-              format === "currency" || format === "percent" ? 2 : undefined,
-          }}
-        />
-      ))}
+      {items.map((entry) => {
+        const [label, value, format, hint] = entry;
+        return (
+          <MetricCard
+            key={label}
+            item={{
+              label,
+              comparison: entry.comparison,
+              value: value === null ? null : String(value),
+              format,
+              hint:
+                hint ??
+                "Indicador observado no histórico disponível; não confirma histórico completo.",
+              displayDigits:
+                format === "currency" || format === "percent" ? 2 : undefined,
+            }}
+          />
+        );
+      })}
     </div>
   );
 }

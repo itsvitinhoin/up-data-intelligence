@@ -177,40 +177,47 @@ function LegacyProductsPage({ inventory = false }: { inventory?: boolean }) {
       ) : (
         <>
           <div className="metrics">
-            {[
-              {
-                label: "Produtos no recorte",
-                value: String(q.data.length),
-                format: "number" as const,
-                hint: "Catálogo demonstrativo",
-              },
-              {
-                label: "Peças em estoque",
-                value: String(q.data.reduce((s, p) => s + p.stock, 0)),
-                format: "number" as const,
-                hint: "Disponibilidade sintética",
-              },
-              {
-                label: "Grades completas",
-                value: String(
-                  q.data.filter((p) => Object.values(p.sizes).every(Boolean))
-                    .length,
-                ),
-                format: "number" as const,
-                hint: "Todos os tamanhos disponíveis",
-              },
-              {
-                label: "Grades quebradas",
-                value: String(
-                  q.data.filter((p) => !Object.values(p.sizes).every(Boolean))
-                    .length,
-                ),
-                format: "number" as const,
-                hint: "Ao menos um tamanho indisponível",
-              },
-            ].map((m, i) => (
-              <MetricCard key={m.label} item={m} index={i} />
-            ))}
+            {q
+              .compare((data) => {
+                return [
+                  {
+                    label: "Produtos no recorte",
+                    value: String(data.length),
+                    format: "number" as const,
+                    hint: "Catálogo demonstrativo",
+                  },
+                  {
+                    label: "Peças em estoque",
+                    comparisonBasis: "snapshot" as const,
+                    value: String(data.reduce((s, p) => s + p.stock, 0)),
+                    format: "number" as const,
+                    hint: "Disponibilidade sintética",
+                  },
+                  {
+                    label: "Grades completas",
+                    comparisonBasis: "snapshot" as const,
+                    value: String(
+                      data.filter((p) => Object.values(p.sizes).every(Boolean))
+                        .length,
+                    ),
+                    format: "number" as const,
+                    hint: "Todos os tamanhos disponíveis",
+                  },
+                  {
+                    label: "Grades quebradas",
+                    comparisonBasis: "snapshot" as const,
+                    value: String(
+                      data.filter((p) => !Object.values(p.sizes).every(Boolean))
+                        .length,
+                    ),
+                    format: "number" as const,
+                    hint: "Ao menos um tamanho indisponível",
+                  },
+                ];
+              })
+              .map((m, i) => (
+                <MetricCard key={m.label} item={m} index={i} />
+              ))}
           </div>
           <Panel
             title={inventory ? "Estoque e grade" : "Ranking de produtos"}

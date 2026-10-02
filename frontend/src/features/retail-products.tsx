@@ -129,29 +129,11 @@ const inventoryColumns: ColumnDef<Product>[] = [
           : "Não informado",
   },
 ];
-export function RetailProductsPage({
-  inventory = false,
-}: {
-  inventory?: boolean;
-}) {
-  const q = useResource(inventory ? "inventory_products" : "products");
-  const [curve, setCurve] = useState("all"),
-    [activity, setActivity] = useState("all");
-  const rows = q.data ?? [];
+export function retailProductMetrics(
+  rows: Product[],
+  inventory: boolean,
+): Metric[] {
   const active = rows.filter((p) => p.active === true);
-  const visible = inventory
-    ? rows.filter(
-        (p) =>
-          activity === "all" ||
-          (activity === "active" && p.active === true) ||
-          (activity === "inactive" && p.active === false),
-      )
-    : rows.filter(
-        (p) =>
-          curve === "all" ||
-          p.abc === curve ||
-          (curve === "promising" && promising(p, rows)),
-      );
   const stock = active.reduce((sum, p) => sum + p.stock, 0),
     sold = active.reduce((sum, p) => sum + p.units, 0);
   const power = stockPower(rows);
@@ -214,6 +196,36 @@ export function RetailProductsPage({
           "Produtos ativos com ao menos um tamanho sem estoque / produtos ativos × 100.",
         ),
       ];
+
+  return metrics.map((item) =>
+    inventory || ["% de Grade Quebrada", "% de Giro"].includes(item.label)
+      ? { ...item, comparisonBasis: "snapshot" }
+      : item,
+  );
+}
+export function RetailProductsPage({
+  inventory = false,
+}: {
+  inventory?: boolean;
+}) {
+  const q = useResource(inventory ? "inventory_products" : "products");
+  const [curve, setCurve] = useState("all"),
+    [activity, setActivity] = useState("all");
+  const rows = q.data ?? [];
+  const visible = inventory
+    ? rows.filter(
+        (p) =>
+          activity === "all" ||
+          (activity === "active" && p.active === true) ||
+          (activity === "inactive" && p.active === false),
+      )
+    : rows.filter(
+        (p) =>
+          curve === "all" ||
+          p.abc === curve ||
+          (curve === "promising" && promising(p, rows)),
+      );
+  const metrics = q.compare((rows) => retailProductMetrics(rows, inventory));
   const rankingColumns: ColumnDef<Product>[] = [
     {
       accessorKey: "name",

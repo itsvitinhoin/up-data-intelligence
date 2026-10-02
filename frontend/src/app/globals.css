@@ -2275,3 +2275,24 @@ button:disabled {
     margin-bottom: 14px;
   }
 }
+
+/* Period comparison follows the existing compact metric typography. */
+.metric-comparison {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 10px;
+}
+.metric-comparison .metric-row {
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 0;
+}
+.delta--neutral {
+  color: var(--ink-3);
+  background: rgba(255, 255, 255, 0.04);
+}
+.metric-secondary .metric-comparison {
+  width: 100%;
+  font-size: 11px;
+}

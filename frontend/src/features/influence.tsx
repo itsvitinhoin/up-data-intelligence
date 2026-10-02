@@ -59,11 +59,6 @@ function DemoInfluencePage({
   performance?: boolean;
 }) {
   const q = useResource("influence");
-  const spend =
-    q.data?.campaigns.reduce(
-      (sum, campaign) => sum + Number(campaign.spend),
-      0,
-    ) ?? 0;
   return (
     <>
       <PageHead
@@ -100,59 +95,75 @@ function DemoInfluencePage({
       ) : (
         <>
           <div className="metrics">
-            {[
-              {
-                label: "Clientes influenciados",
-                value: String(q.data.customers.length),
-                format: "number" as const,
-              },
-              {
-                label: "Pedidos influenciados",
-                value: String(q.data.orders.length),
-                format: "number" as const,
-              },
-              {
-                label: "Receita Solicitada Influenciada",
-                value: q.data.requested,
-                format: "currency" as const,
-              },
-              {
-                label: "Receita Atendida Influenciada",
-                value: q.data.fulfilled,
-                format: "currency" as const,
-              },
-              ...(performance
-                ? [
-                    {
-                      label: "Investimento em mídias",
-                      value: String(spend),
-                      format: "currency" as const,
-                    },
-                    {
-                      label: "ROAS solicitado influenciado",
-                      value:
-                        spend > 0
-                          ? String(Number(q.data.requested) / spend)
-                          : null,
-                      format: "ratio" as const,
-                    },
-                    {
-                      label: "ROAS atendido influenciado",
-                      value:
-                        spend > 0
-                          ? String(Number(q.data.fulfilled) / spend)
-                          : null,
-                      format: "ratio" as const,
-                    },
-                    { label: "ROI", value: null, format: "percent" as const },
-                  ]
-                : []),
-            ].map((m) => (
-              <MetricCard
-                key={m.label}
-                item={{ ...m, hint: "Deduplicado na operação selecionada" }}
-              />
-            ))}
+            {q
+              .compare((data) => {
+                const previousSpend = data.campaigns.reduce(
+                  (sum, campaign) => sum + Number(campaign.spend),
+                  0,
+                );
+                return [
+                  {
+                    hint: "Deduplicado na operação selecionada",
+                    label: "Clientes influenciados",
+                    value: String(data.customers.length),
+                    format: "number" as const,
+                  },
+                  {
+                    label: "Pedidos influenciados",
+                    value: String(data.orders.length),
+                    format: "number" as const,
+                  },
+                  {
+                    label: "Receita Solicitada Influenciada",
+                    value: data.requested,
+                    format: "currency" as const,
+                  },
+                  {
+                    label: "Receita Atendida Influenciada",
+                    value: data.fulfilled,
+                    format: "currency" as const,
+                  },
+                  ...(performance
+                    ? [
+                        {
+                          label: "Investimento em mídias",
+                          value: String(previousSpend),
+                          format: "currency" as const,
+                        },
+                        {
+                          label: "ROAS solicitado influenciado",
+                          value:
+                            previousSpend > 0
+                              ? String(Number(data.requested) / previousSpend)
+                              : null,
+                          format: "ratio" as const,
+                        },
+                        {
+                          label: "ROAS atendido influenciado",
+                          value:
+                            previousSpend > 0
+                              ? String(Number(data.fulfilled) / previousSpend)
+                              : null,
+                          format: "ratio" as const,
+                        },
+                        {
+                          label: "ROI",
+                          value: null,
+                          format: "percent" as const,
+                        },
+                      ]
+                    : []),
+                ].map((m) => ({
+                  ...m,
+                  hint: "Deduplicado na operação selecionada",
+                }));
+              })
+              .map((m) => (
+                <MetricCard
+                  key={m.label}
+                  item={{ ...m, hint: "Deduplicado na operação selecionada" }}
+                />
+              ))}
           </div>
           {performance && <PerformanceTrend />}
           {acquisition && <ConversionVelocity />}
@@ -202,20 +213,37 @@ function DemoCampaignDetailPage({ id }: { id: string }) {
         entre campanhas.
       </Notice>
       <div className="metrics">
-        {[
-          { label: "Spend", value: d.campaign.spend },
-          { label: "Receita Solicitada", value: d.requested },
-          { label: "Receita Atendida", value: d.fulfilled },
-        ].map((m) => (
-          <MetricCard
-            key={m.label}
-            item={{
-              ...m,
-              format: "currency",
-              hint: "Participação demonstrativa",
-            }}
-          />
-        ))}
+        {q
+          .compare((data) => [
+            {
+              label: "Spend",
+              value: data.campaign.spend,
+              format: "currency" as const,
+              hint: "Campanha no recorte",
+            },
+            {
+              label: "Receita Solicitada",
+              value: data.requested,
+              format: "currency" as const,
+              hint: "Campanha no recorte",
+            },
+            {
+              label: "Receita Atendida",
+              value: data.fulfilled,
+              format: "currency" as const,
+              hint: "Campanha no recorte",
+            },
+          ])
+          .map((m) => (
+            <MetricCard
+              key={m.label}
+              item={{
+                ...m,
+                format: "currency",
+                hint: "Participação demonstrativa",
+              }}
+            />
+          ))}
       </div>
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="tab-list glass">

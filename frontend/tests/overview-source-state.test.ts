@@ -147,7 +147,15 @@ describe("Overview canonical page source", () => {
         isError: false,
         data,
       });
-      expect(result.data).toBe(data);
+      expect(result.data?.source).toBe(data.source);
+      if (result.data?.source !== "real") throw new Error("Expected real data");
+      expect(result.data.overview.metadata).toEqual(data.overview.metadata);
+      expect(result.data.overview.data.revenue[0].value).toBe(
+        data.overview.data.revenue[0].value,
+      );
+      expect(result.data.overview.data.revenue[0].comparison?.state).toBe(
+        "unavailable",
+      );
       expect(result.data?.source).toBe("real");
       expect(state?.source).toBe(source);
       expect(state?.metadata).toBe(data.overview.metadata);

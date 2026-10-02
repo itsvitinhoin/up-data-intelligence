@@ -38,6 +38,9 @@ export interface Filters {
   media?: string;
 }
 export interface Metric {
+  comparison?: import("@/lib/metric-comparison").MetricComparison;
+  comparisonBasis?: "period" | "snapshot";
+  comparisonDirection?: "higher" | "lower" | "neutral";
   group?: "Receita" | "Pedidos" | "Clientes" | "Mídia";
   label: string;
   value: string | null;
@@ -45,7 +48,12 @@ export interface Metric {
   displayDigits?: number;
   delta?: number;
   hint: string;
-  secondary?: { label: string; value: string | null; hint: string };
+  secondary?: {
+    label: string;
+    value: string | null;
+    hint: string;
+    comparison?: import("@/lib/metric-comparison").MetricComparison;
+  };
 }
 export interface Customer {
   id: string;

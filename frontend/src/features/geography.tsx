@@ -2,6 +2,8 @@
 import { B2BReadBoundary } from "@/hooks/use-dashboard-read";
 import { RealGeography } from "./b2b-read-pages";
 
+import { MetricComparisonLine } from "@/components/metric-comparison";
+import type { Metric } from "@/types/domain";
 import { ListExport } from "@/components/exports";
 import { useState } from "react";
 import Link from "next/link";
@@ -204,41 +206,47 @@ function DemoGeographyPage() {
                 </strong>
               </div>
               <dl className="detail-list" aria-label="Resumo do estado">
-                <div>
-                  <dt>Clientes</dt>
-                  <dd>{current?.customers ?? "—"}</dd>
-                </div>
-                <div>
-                  <dt>Receita Solicitada</dt>
-                  <dd>{money(current?.requested ?? null)}</dd>
-                </div>
-                <div>
-                  <dt>Receita Atendida</dt>
-                  <dd>{money(current?.fulfilled ?? null)}</dd>
-                </div>
-                <div>
-                  <dt>Pedidos</dt>
-                  <dd>{current?.orders ?? "—"}</dd>
-                </div>
-                <div>
-                  <dt>Ticket médio solicitado</dt>
-                  <dd>{money(current?.averageTicket ?? null)}</dd>
-                </div>
-                <div>
-                  <dt>Cadastros Aprovados (Sem Compra)</dt>
-                  <dd>{number(current?.approvedWithoutPurchase ?? null)}</dd>
-                </div>
-                <div>
-                  <dt>% de Conversão</dt>
-                  <dd>
-                    {formatMetric(
-                      current?.conversionRate == null
-                        ? null
-                        : String(current.conversionRate),
-                      "percent",
-                    )}
-                  </dd>
-                </div>
+                {q
+                  .compare((rows) => {
+                    const state = rows.find((r) => r.uf === selected);
+                    return (
+                      [
+                        ["Clientes", state?.customers, "number"],
+                        ["Receita Solicitada", state?.requested, "currency"],
+                        ["Receita Atendida", state?.fulfilled, "currency"],
+                        ["Pedidos", state?.orders, "number"],
+                        [
+                          "Ticket médio solicitado",
+                          state?.averageTicket,
+                          "currency",
+                        ],
+                        [
+                          "Cadastros Aprovados (Sem Compra)",
+                          state?.approvedWithoutPurchase,
+                          "number",
+                        ],
+                        ["% de Conversão", state?.conversionRate, "percent"],
+                      ] as [
+                        string,
+                        number | null | undefined,
+                        Metric["format"],
+                      ][]
+                    ).map(([label, value, format]) => ({
+                      label,
+                      value: value == null ? null : String(value),
+                      format,
+                      hint: "Mesmo estado e mesmos filtros no período anterior.",
+                    }));
+                  })
+                  .map((item) => (
+                    <div key={item.label}>
+                      <dt>{item.label}</dt>
+                      <dd>
+                        {formatMetric(item.value, item.format)}
+                        <MetricComparisonLine item={item} />
+                      </dd>
+                    </div>
+                  ))}
               </dl>
               <p className="metric-hint mb-4">
                 Cadastros da marca no período, aprovados até o fim do recorte.

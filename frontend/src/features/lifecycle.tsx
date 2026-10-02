@@ -2,6 +2,7 @@
 import { B2BReadBoundary } from "@/hooks/use-dashboard-read";
 import { RealRetention } from "./b2b-read-pages";
 
+import { MetricComparisonLine } from "@/components/metric-comparison";
 import { ListExport } from "@/components/exports";
 import { RetentionMetrics } from "@/features/retention-metrics";
 import { useResource } from "@/hooks/use-resource";
@@ -14,7 +15,7 @@ import {
   Empty,
 } from "@/components/ui-kit";
 import { FiltersBar } from "@/components/shell";
-import { money, number } from "@/lib/format";
+import { money, number, metric } from "@/lib/format";
 const decimal = (value: number | null) =>
   value === null
     ? "—"
@@ -237,30 +238,47 @@ export function ConversionVelocity() {
           </p>
         </Panel>
         <div className="conversion-summary">
-          {[
-            {
-              label: "Compram na primeira semana",
-              value: percent(c.buyers ? (c.withinWeek / c.buyers) * 100 : null),
-              detail: `${c.withinWeek} lojistas`,
-            },
-            {
-              label: "Compram em até 30 dias",
-              value: percent(
-                c.buyers ? (c.withinMonth / c.buyers) * 100 : null,
-              ),
-              detail: `${c.withinMonth} lojistas`,
-            },
-            {
-              label: "Mediana até o pedido",
-              value: `${decimal(c.median)} dias`,
-              detail: `Média de ${decimal(c.mean)} dias`,
-            },
-          ].map((item) => (
-            <Panel key={item.label} title={item.label}>
-              <strong className="conversion-number num">{item.value}</strong>
-              <p className="card-sub">{item.detail}</p>
-            </Panel>
-          ))}
+          {q
+            .compare(({ conversion: c }) => [
+              {
+                label: "Compram na primeira semana",
+                value: c.buyers
+                  ? String((c.withinWeek / c.buyers) * 100)
+                  : null,
+                format: "percent",
+                hint: "Participação dos compradores observados com primeira compra até sete dias após aprovação.",
+              },
+              {
+                label: "Compram em até 30 dias",
+                value: c.buyers
+                  ? String((c.withinMonth / c.buyers) * 100)
+                  : null,
+                format: "percent",
+                hint: "Participação dos compradores observados com primeira compra até trinta dias após aprovação.",
+              },
+              {
+                label: "Mediana até o pedido",
+                value: c.median === null ? null : String(c.median),
+                format: "days",
+                hint: "Mediana em dias da aprovação até a primeira compra qualificante observada.",
+                comparisonDirection: "lower",
+              },
+            ])
+            .map((item, index) => (
+              <Panel key={item.label} title={item.label}>
+                <strong className="conversion-number num">
+                  {metric(item.value, item.format)}
+                </strong>
+                <p className="card-sub">
+                  {index === 0
+                    ? `${c.withinWeek} lojistas`
+                    : index === 1
+                      ? `${c.withinMonth} lojistas`
+                      : `Média de ${decimal(c.mean)} dias`}
+                </p>
+                <MetricComparisonLine item={item} />
+              </Panel>
+            ))}
         </div>
       </div>
     </section>

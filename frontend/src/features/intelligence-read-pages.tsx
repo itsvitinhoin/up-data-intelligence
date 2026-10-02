@@ -15,6 +15,7 @@ import { ApiError } from "@/services/api/access";
 import { Cards, RemoteTable } from "./read-components";
 import { PageHead, Panel, Notice, Loading, Failure } from "@/components/ui-kit";
 import { money, date } from "@/lib/format";
+import type { MetricItems } from "@/lib/metric-comparison";
 import type { Metric } from "@/types/domain";
 const participation =
   "Participação na jornada, sem atribuição exclusiva. Não some receita entre campanhas. Atendido não confirma pagamento.";
@@ -51,6 +52,9 @@ function Read<K extends IntelligenceResource>({
     data: ReadResourceMap[K],
     metadata: ReadMetadata,
     pagination: ReadPagination | null,
+    compare: (
+      select: (data: ReadResourceMap[K]) => MetricItems,
+    ) => (MetricItems[number] & { comparison?: Metric["comparison"] })[],
   ) => ReactNode;
 }) {
   const result = useDashboardRead(resource, metadata, {
@@ -81,7 +85,12 @@ function Read<K extends IntelligenceResource>({
       ) : result.isError || !result.data ? (
         <Failure retry={() => void result.refetch()} />
       ) : (
-        children(result.data.data, current, result.data.pagination)
+        children(
+          result.data.data,
+          current,
+          result.data.pagination,
+          result.compareCards,
+        )
       )}
     </ReadState>
   );
@@ -173,15 +182,17 @@ export function RealIntelligencePerformance({
       </Link>
       <Panel title="Performance e influência">
         <Read resource="performance" metadata={metadata}>
-          {(r, m) => (
+          {(r, m, _pagination, compare) => (
             <>
               <Cards
-                items={performanceCards.map(([label, key, format]) => [
-                  label,
-                  value(r, key),
-                  format,
-                  participation,
-                ])}
+                items={compare((r) =>
+                  performanceCards.map(([label, key, format]) => [
+                    label,
+                    value(r, key),
+                    format,
+                    participation,
+                  ]),
+                )}
               />
               <Notice>
                 Spend observado:{" "}
@@ -228,11 +239,11 @@ export function RealCustomerIntelligence({
 }) {
   return (
     <Read resource="customer360" metadata={metadata} entity={id}>
-      {(r, m) => (
+      {(r, m, _pagination, compare) => (
         <>
           <Panel title="Customer 360">
             <Cards
-              items={[
+              items={compare((r) => [
                 [
                   "Compras observadas",
                   value(r.profile, "purchase_count"),
@@ -245,7 +256,7 @@ export function RealCustomerIntelligence({
                 ],
                 ["LTV observado", value(r.profile, "ltv_observed"), "currency"],
                 ["LTV completo", r.ltv_complete, "currency"],
-              ]}
+              ])}
             />
             <p>
               Recompra: {flag(r.profile, "has_repurchase")} · Última compra
@@ -334,7 +345,7 @@ export function RealCampaigns({
       />
       {id ? (
         <Read resource="campaign" metadata={metadata} entity={id}>
-          {(rows, m) => (
+          {(rows, m, _pagination, compare) => (
             <>
               <Panel
                 title={rows[0] ? text(rows[0], "campaign_name") : "Campanha"}
@@ -344,12 +355,14 @@ export function RealCampaigns({
                 </p>
                 {rows[0] && (
                   <Cards
-                    items={campaignCards.map(([label, key, format]) => [
-                      label,
-                      value(rows[0], key),
-                      format,
-                      participation,
-                    ])}
+                    items={compare((rows) =>
+                      campaignCards.map(([label, key, format]) => [
+                        label,
+                        value(rows[0], key),
+                        format,
+                        participation,
+                      ]),
+                    )}
                   />
                 )}
               </Panel>

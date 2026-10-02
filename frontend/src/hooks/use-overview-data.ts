@@ -1,4 +1,14 @@
 "use client";
+import {
+  usePeriodComparison,
+  demoComparisonAvailable,
+} from "./use-period-comparison";
+import {
+  previousPeriod,
+  periodCovered,
+  sameComparisonPublication,
+} from "@/lib/metric-comparison";
+import { exclusiveToInclusive } from "@/lib/period";
 import { useQuery } from "@tanstack/react-query";
 import { useWorkspace } from "@/features/providers";
 import { usePageSource } from "./use-page-source";
@@ -79,6 +89,53 @@ export function useOverviewData() {
     queryFn: ({ signal }) => readOverview(dataMode, { ...context, signal }),
     retry: false,
   });
+  const publication =
+    result.data?.source === "real" ? result.data.overview.metadata : undefined;
+  const currentRange =
+    publication && !context.filters.from
+      ? {
+          ...context.filters,
+          from: publication.report_from,
+          to: exclusiveToInclusive(publication.report_to),
+        }
+      : context.filters;
+  const comparison = usePeriodComparison({
+    current: result.data,
+    filters: currentRange,
+    queryKey: [
+      ...overviewQueryKey(dataMode, context),
+      result.data?.source,
+      publication?.generation,
+      publication?.policy_hash,
+      publication?.as_of,
+      publication?.currency,
+      publication?.reporting_timezone,
+    ],
+    available: publication
+      ? periodCovered(
+          previousPeriod(currentRange),
+          publication.report_from,
+          publication.report_to,
+        )
+      : result.data?.source === "demo" && demoComparisonAvailable(currentRange),
+    reason: "Período anterior fora da cobertura publicada.",
+    read: async (filters, signal) => {
+      const prior = await readOverview(dataMode, {
+        ...context,
+        filters,
+        signal,
+      });
+      if (result.data?.source !== prior.source)
+        throw new Error("Comparison source changed");
+      if (
+        publication &&
+        (prior.source !== "real" ||
+          !sameComparisonPublication(prior.overview.metadata, publication))
+      )
+        throw new Error("Comparison publication changed");
+      return prior;
+    },
+  });
   usePageSource(
     result.isPending
       ? "loading-real"
@@ -91,5 +148,5 @@ export function useOverviewData() {
           : "demo",
     result.data?.source === "real" ? result.data.overview.metadata : undefined,
   );
-  return result;
+  return { ...result, data: comparison.data } as typeof result;
 }

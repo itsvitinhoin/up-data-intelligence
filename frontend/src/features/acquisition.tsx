@@ -44,67 +44,65 @@ const firstOrderColumns: ColumnDef<Order>[] = orderColumns.map<
 );
 function DemoAcquisitionPage() {
   const q = useResource("acquisition");
-  const metrics: Metric[] = q.data
-    ? [
-        {
-          label: "Clientes compradores",
-          value: String(q.data.buyerCount),
-          format: "number",
-          hint: "Todos os compradores da marca no período",
-        },
-        {
-          label: "Primeiras compras observadas",
-          value: String(q.data.customers.length),
-          format: "number",
-          hint: "Clientes cuja primeira compra observada está no recorte",
-        },
-        {
-          label: "Novos clientes confirmados",
-          value:
-            q.data.confirmedNewCustomers === null
-              ? null
-              : String(q.data.confirmedNewCustomers),
-          format: "number",
-          hint: "Exige histórico comercial completo",
-        },
-        {
-          label: "% primeiras compras observadas",
-          value: q.data.buyerCount
-            ? String((q.data.customers.length / q.data.buyerCount) * 100)
-            : null,
-          format: "percent",
-          hint: "Primeiras compras observadas / compradores do período",
-        },
-        {
-          label: "Receita solicitada · primeira compra",
-          value: q.data.requested,
-          format: "currency",
-          hint: "Somente o primeiro pedido qualificante observado",
-        },
-        {
-          label: "Receita atendida · primeira compra",
-          value: q.data.fulfilled,
-          format: "currency",
-          hint: "Atendimento comercial não confirma pagamento",
-        },
-        {
-          label: "Ticket solicitado · primeira compra",
-          value: q.data.firstOrders.length
-            ? String(Number(q.data.requested) / q.data.firstOrders.length)
-            : null,
-          format: "currency",
-          hint: "Solicitado / primeiros pedidos observados",
-        },
-        {
-          label: "Ticket atendido · primeira compra",
-          value: q.data.firstOrders.length
-            ? String(Number(q.data.fulfilled) / q.data.firstOrders.length)
-            : null,
-          format: "currency",
-          hint: "Atendido / primeiros pedidos observados",
-        },
-      ]
-    : [];
+  const metrics: Metric[] = q.compare((data) => [
+    {
+      label: "Clientes compradores",
+      value: String(data.buyerCount),
+      format: "number",
+      hint: "Todos os compradores da marca no período",
+    },
+    {
+      label: "Primeiras compras observadas",
+      value: String(data.customers.length),
+      format: "number",
+      hint: "Clientes cuja primeira compra observada está no recorte",
+    },
+    {
+      label: "Novos clientes confirmados",
+      value:
+        data.confirmedNewCustomers === null
+          ? null
+          : String(data.confirmedNewCustomers),
+      format: "number",
+      hint: "Exige histórico comercial completo",
+    },
+    {
+      label: "% primeiras compras observadas",
+      value: data.buyerCount
+        ? String((data.customers.length / data.buyerCount) * 100)
+        : null,
+      format: "percent",
+      hint: "Primeiras compras observadas / compradores do período",
+    },
+    {
+      label: "Receita solicitada · primeira compra",
+      value: data.requested,
+      format: "currency",
+      hint: "Somente o primeiro pedido qualificante observado",
+    },
+    {
+      label: "Receita atendida · primeira compra",
+      value: data.fulfilled,
+      format: "currency",
+      hint: "Atendimento comercial não confirma pagamento",
+    },
+    {
+      label: "Ticket solicitado · primeira compra",
+      value: data.firstOrders.length
+        ? String(Number(data.requested) / data.firstOrders.length)
+        : null,
+      format: "currency",
+      hint: "Solicitado / primeiros pedidos observados",
+    },
+    {
+      label: "Ticket atendido · primeira compra",
+      value: data.firstOrders.length
+        ? String(Number(data.fulfilled) / data.firstOrders.length)
+        : null,
+      format: "currency",
+      hint: "Atendido / primeiros pedidos observados",
+    },
+  ]);
   return (
     <>
       <PageHead

@@ -8,6 +8,10 @@ import Image from "next/image";
 import dynamic from "next/dynamic";
 import type { ColumnDef } from "@tanstack/react-table";
 import { ArrowUpRight, MousePointer2, Target, Users } from "lucide-react";
+import {
+  usePeriodComparison,
+  demoComparisonAvailable,
+} from "@/hooks/use-period-comparison";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/services/api";
 import { queryKey, useRequestContext } from "@/hooks/use-resource";
@@ -134,16 +138,12 @@ function CreativeRank({
     </Panel>
   );
 }
-function MarketingContent({ data, b2c }: { data: Marketing; b2c: boolean }) {
-  const [selected, setSelected] = useState<MarketingCreative | null>(null);
-  const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("all");
+export function marketingMetrics(data: Marketing): Metric[] {
   const sum = (
     key:
       "spend" | "leads" | "approved" | "purchases" | "clicks" | "impressions",
   ) => data.creatives.reduce((s, ad) => s + ad[key], 0);
   const spend = sum("spend"),
-    leads = sum("leads"),
     purchases = sum("purchases");
   // The series contains deduplicated order revenue; campaign revenue is not additive.
 
@@ -208,6 +208,26 @@ function MarketingContent({ data, b2c }: { data: Marketing; b2c: boolean }) {
       "Investimento / compras reportadas pela plataforma, sem conciliação com pedidos.",
     ),
   ];
+
+  return metrics;
+}
+function MarketingContent({
+  data,
+  b2c,
+  compare,
+}: {
+  data: Marketing;
+  b2c: boolean;
+  compare: (select: (data: Marketing) => Metric[]) => Metric[];
+}) {
+  const [selected, setSelected] = useState<MarketingCreative | null>(null);
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState("all");
+  const metrics = compare(marketingMetrics);
+  const sum = (key: "spend" | "leads" | "clicks" | "impressions") =>
+    data.creatives.reduce((sum, ad) => sum + ad[key], 0);
+  const spend = sum("spend"),
+    leads = sum("leads");
   type Row = Marketing["campaigns"][number];
   const columns: ColumnDef<Row>[] = [
     {
@@ -486,6 +506,15 @@ function MetaContent() {
     queryKey: queryKey("marketing", selected),
     queryFn: ({ signal }) => api.read("marketing", { ...selected, signal }),
   });
+  const comparison = usePeriodComparison({
+    current: q.data,
+    filters: selected.filters,
+    queryKey: queryKey("marketing", selected),
+    available: demoComparisonAvailable(selected.filters),
+    reason: "Período anterior fora da cobertura demonstrativa.",
+    read: (filters, signal) =>
+      api.read("marketing", { ...selected, filters, signal }),
+  });
   return q.isPending ? (
     <Loading />
   ) : q.isError ? (
@@ -494,6 +523,7 @@ function MetaContent() {
     <MarketingContent
       key={`${scope?.store_id}:${JSON.stringify(filters)}`}
       data={q.data}
+      compare={comparison.compare}
       b2c={scope?.operation === "B2C"}
     />
   );

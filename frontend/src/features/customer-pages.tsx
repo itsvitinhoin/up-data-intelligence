@@ -119,6 +119,40 @@ function DemoCustomersPage() {
         }
       />
       <FiltersBar />
+      {q.data && (
+        <section className="metrics" aria-label="Indicadores de clientes">
+          {q
+            .compare((rows) => [
+              {
+                label: "Clientes no recorte",
+                value: String(rows.length),
+                format: "number",
+                hint: "Clientes com pedidos observados no período e nos filtros selecionados.",
+              },
+              {
+                label: "Recorrentes observados",
+                value: String(rows.filter((c) => c.orders > 1).length),
+                format: "number",
+                hint: "Compradores do recorte com mais de uma compra no histórico observado. Não confirma histórico completo.",
+              },
+              {
+                label: "Sem recompra observada",
+                value: String(rows.filter((c) => c.orders <= 1).length),
+                format: "number",
+                hint: "Compradores do recorte sem segunda compra no histórico demonstrativo observado; não confirma cliente novo definitivo.",
+              },
+              {
+                label: "Novos confirmados",
+                value: null,
+                format: "number",
+                hint: "Exige histórico comercial completo.",
+              },
+            ])
+            .map((item) => (
+              <MetricCard key={item.label} item={item} />
+            ))}
+        </section>
+      )}
       <Panel
         title="Sua carteira"
         subtitle={
@@ -262,44 +296,49 @@ function DemoCustomerDetailPage({ id }: { id: string }) {
         </div>
       </div>
       <section className="metrics">
-        {[
-          {
-            label: "Pedidos",
-            value: String(d.customer.orders),
-            format: "number" as const,
-            hint: "Compras observadas",
-          },
-          {
-            label: "Receita solicitada",
-            value: d.customer.requested,
-            format: "currency" as const,
-            hint: "Histórico comercial",
-          },
-          {
-            label: "Receita atendida",
-            value: d.customer.fulfilled,
-            format: "currency" as const,
-            hint: "Não representa receita paga",
-          },
-          {
-            label: "Peças Solicitadas",
-            value: String(
-              d.orders.reduce((s, o) => s + o.requestedQuantity, 0),
-            ),
-            format: "number" as const,
-            hint: "Peças nos pedidos observados",
-          },
-          {
-            label: "Peças Atendidas",
-            value: String(
-              d.orders.reduce((s, o) => s + o.fulfilledQuantity, 0),
-            ),
-            format: "number" as const,
-            hint: "Peças atendidas",
-          },
-        ].map((m) => (
-          <MetricCard key={m.label} item={m} />
-        ))}
+        {q
+          .compare((data) => [
+            {
+              label: "Pedidos",
+              comparisonBasis: "snapshot" as const,
+              value: String(data.customer.orders),
+              format: "number" as const,
+              hint: "Compras observadas",
+            },
+            {
+              label: "Receita solicitada",
+              comparisonBasis: "snapshot" as const,
+              value: data.customer.requested,
+              format: "currency" as const,
+              hint: "Histórico comercial",
+            },
+            {
+              label: "Receita atendida",
+              comparisonBasis: "snapshot" as const,
+              value: data.customer.fulfilled,
+              format: "currency" as const,
+              hint: "Não representa receita paga",
+            },
+            {
+              label: "Peças Solicitadas",
+              value: String(
+                data.orders.reduce((s, o) => s + o.requestedQuantity, 0),
+              ),
+              format: "number" as const,
+              hint: "Peças nos pedidos observados",
+            },
+            {
+              label: "Peças Atendidas",
+              value: String(
+                data.orders.reduce((s, o) => s + o.fulfilledQuantity, 0),
+              ),
+              format: "number" as const,
+              hint: "Peças atendidas",
+            },
+          ])
+          .map((m) => (
+            <MetricCard key={m.label} item={m} />
+          ))}
       </section>
       <Notice>
         Histórico completo ainda não confirmado. A primeira compra observada não

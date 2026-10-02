@@ -197,10 +197,10 @@ export function RealAcquisition({ metadata }: { metadata: ReadMetadata }) {
         description="A primeira compra é resolvida no histórico disponível inteiro e depois selecionada pelo período."
       />
       <ReadView result={result} metadata={metadata}>
-        {(v) => (
+        {() => (
           <>
             <Cards
-              items={[
+              items={result.compareCards((v) => [
                 ["Compradores observados", v.buyers_observed, "number"],
                 [
                   "Primeira compra · clientes observados",
@@ -236,7 +236,7 @@ export function RealAcquisition({ metadata }: { metadata: ReadMetadata }) {
                   ),
                   "currency",
                 ],
-              ]}
+              ])}
             />
             <Notice>
               Leads gerados, aprovados, CPA e velocidade aprovação → compra
@@ -252,6 +252,7 @@ export function RealAcquisition({ metadata }: { metadata: ReadMetadata }) {
 export function RealCustomers({ metadata }: { metadata: ReadMetadata }) {
   const cursor = useCursor(),
     result = useDashboardRead("customers", metadata, { cursor: cursor.cursor });
+  const summary = useDashboardRead("overview", metadata);
   return (
     <>
       <PageHead
@@ -263,6 +264,27 @@ export function RealCustomers({ metadata }: { metadata: ReadMetadata }) {
         Busca global, segmentação e influência ainda não estão disponíveis.
         Dados pessoais sensíveis não são projetados.
       </Notice>
+      <ReadView result={summary} metadata={metadata} track={false}>
+        {() => (
+          <Cards
+            items={summary.compareCards((v) => [
+              ["Compradores observados", v.buyers_observed, "number"],
+              ["Recorrentes observados", v.recurring_buyers_observed, "number"],
+              [
+                "Novos confirmados",
+                v.new_customers_confirmed,
+                "number",
+                "Histórico parcial não confirma aquisição definitiva.",
+              ],
+              [
+                "Frequência observada",
+                v.purchase_frequency_observed,
+                "decimal",
+              ],
+            ])}
+          />
+        )}
+      </ReadView>
       <Panel title="Clientes no recorte">
         <ReadView result={result} metadata={metadata}>
           {(rows) => (
@@ -346,7 +368,7 @@ export function RealCustomer({
               </p>
             </Panel>
             <Cards
-              items={[
+              items={result.compareCards((v) => [
                 [
                   "Pedidos qualificantes observados",
                   v.commercial.qualifying_orders_observed,
@@ -363,7 +385,7 @@ export function RealCustomer({
                   "currency",
                 ],
                 ["LTV completo", v.commercial.ltv_complete, "currency"],
-              ]}
+              ])}
             />
             <RealCustomerIntelligence metadata={metadata} id={id} />
             <Panel
@@ -455,7 +477,7 @@ export function RealRetention({ metadata }: { metadata: ReadMetadata }) {
         {(v) => (
           <>
             <Cards
-              items={[
+              items={result.compareCards((v) => [
                 ["Compradores", v.buyers_observed, "number"],
                 [
                   "Compradores Recorrentes",
@@ -473,7 +495,7 @@ export function RealRetention({ metadata }: { metadata: ReadMetadata }) {
                   "currency",
                 ],
                 ["Frequência observada", v.frequency_observed, "decimal"],
-              ]}
+              ])}
             />
             <Panel
               title="Progressão de compras"
@@ -663,17 +685,19 @@ export function RealFunnel({ metadata }: { metadata: ReadMetadata }) {
         description="Eventos de navegação não representam pedidos financeiros."
       />
       <ReadView result={result} metadata={metadata}>
-        {(v) => (
+        {() => (
           <>
             <Cards
-              items={Object.entries(v.totals).map(([key, value]) => [
-                key,
-                value,
-                "number",
-              ])}
+              items={result.compareCards((v) =>
+                Object.entries(v.totals).map(([key, value]) => [
+                  key,
+                  value,
+                  "number",
+                ]),
+              )}
             />
             <Cards
-              items={[
+              items={result.compareCards((v) => [
                 [
                   "Sessão → Carrinho",
                   percentOfRatio(v.session_to_cart_rate),
@@ -689,7 +713,7 @@ export function RealFunnel({ metadata }: { metadata: ReadMetadata }) {
                   percentOfRatio(v.checkout_to_purchase_rate),
                   "percent",
                 ],
-              ]}
+              ])}
             />
           </>
         )}

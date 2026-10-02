@@ -1,4 +1,10 @@
 "use client";
+import { usePeriodComparison } from "./use-period-comparison";
+import {
+  previousPeriod,
+  periodCovered,
+  sameComparisonPublication,
+} from "@/lib/metric-comparison";
 import { useEffect, useMemo, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { usePathname } from "next/navigation";
@@ -241,6 +247,65 @@ export function useDashboardRead<K extends ReadResource>(
       ),
     retry: false,
   });
+  const comparable = [
+    "overview",
+    "acquisition",
+    "retention",
+    "funnel",
+    "performance",
+    "campaign",
+  ].includes(resource);
+  // Resolve the resource's publication first. Intelligence can have its own
+  // generation even when the Analytics generation used by the page is unchanged.
+  const comparisonPublication = result.data?.metadata;
+  const comparison = usePeriodComparison({
+    current: result.data?.data,
+    filters: context.filters,
+    queryKey: [
+      ...dashboardReadKey(dataMode, resource, context, metadata.generation, {
+        ...options,
+        policy_hash: metadata.policy_hash,
+      }),
+      comparisonPublication?.publication_domain,
+      comparisonPublication?.generation,
+      comparisonPublication?.analytics_generation,
+      comparisonPublication?.as_of,
+    ],
+    available:
+      comparable &&
+      Boolean(comparisonPublication) &&
+      periodCovered(
+        previousPeriod(context.filters),
+        comparisonPublication?.report_from ?? metadata.report_from,
+        comparisonPublication?.report_to ?? metadata.report_to,
+      ),
+    reason: comparable
+      ? "Período anterior fora da cobertura publicada."
+      : "Resumo histórico ou lista paginada; não há agregado anterior comparável neste contrato.",
+    read: async (filters, signal) => {
+      if (!comparisonPublication)
+        throw new ApiError(409, "Publicação da comparação não resolvida.");
+      const previous = await readDashboard(
+        resource,
+        { ...context, filters },
+        comparisonPublication.analytics_generation ??
+          comparisonPublication.generation,
+        {
+          ...options,
+          cursor: undefined,
+          expectedPolicyHash: comparisonPublication.policy_hash,
+          expectedIntelligenceGeneration:
+            comparisonPublication.publication_domain === "intelligence"
+              ? comparisonPublication.generation
+              : undefined,
+          signal,
+        },
+      );
+      if (!sameComparisonPublication(previous.metadata, comparisonPublication))
+        throw new ApiError(409, "Publicação da comparação mudou.");
+      return previous.data;
+    },
+  });
   // Publication resolution is separate from the immutable generation cache.
   const immutable = useQuery({
     queryKey: dashboardReadKey(
@@ -285,6 +350,8 @@ export function useDashboardRead<K extends ReadResource>(
   ]);
   return {
     ...result,
+    compare: comparison.compare,
+    compareCards: comparison.compareCards,
     data:
       result.data?.metadata.publication_domain === "intelligence"
         ? immutable.data

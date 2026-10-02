@@ -12,32 +12,32 @@ export function RetentionMetrics() {
   if (q.isPending) return <Loading />;
   if (q.isError) return <Failure retry={() => void q.refetch()} />;
   const d = q.data;
-  const metrics: Metric[] = [
+  const metrics: Metric[] = q.compare((data) => [
     {
       label: "Compradores",
-      value: String(d.buyers),
+      value: String(data.buyers),
       format: "number",
       hint: "Clientes distintos com compra qualificante no período.",
     },
     {
       label: "Compradores Recorrentes",
-      value: String(d.recurring),
+      value: String(data.recurring),
       format: "number",
       hint: "Compradores com recompra no período e uma compra anterior observada, inclusive antes do recorte.",
     },
     {
       label: "% de Retenção",
-      value: d.rate === null ? null : String(d.rate),
+      value: data.rate === null ? null : String(data.rate),
       format: "percent",
       hint: "Compradores recorrentes / compradores do período. Não é retenção por coorte.",
     },
     {
       label: "Ticket Médio de Retenção",
-      value: d.ticket === null ? null : String(d.ticket),
+      value: data.ticket === null ? null : String(data.ticket),
       format: "currency",
       hint: "Receita atendida de recompras / pedidos de recompra no período; não confirma pagamento.",
     },
-  ];
+  ]);
   return (
     <>
       <section className="metrics" aria-label="Indicadores de Retenção">

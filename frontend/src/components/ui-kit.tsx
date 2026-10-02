@@ -1,11 +1,5 @@
 "use client";
-import {
-  ArrowUpRight,
-  ArrowDownRight,
-  Info,
-  RefreshCw,
-  SearchX,
-} from "lucide-react";
+import { Info, RefreshCw, SearchX } from "lucide-react";
 import { Tooltip } from "radix-ui";
 import { motion } from "framer-motion";
 import { Card } from "@/components/ui/card";
@@ -20,6 +14,7 @@ import {
 } from "@/components/ui/select";
 import { metric } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { MetricComparisonLine } from "./metric-comparison";
 import type { Metric } from "@/types/domain";
 export function Panel({
   title,
@@ -148,37 +143,16 @@ export function MetricCard({
         <div className="metric-value num">
           {metric(item.value, item.format, item.displayDigits)}
         </div>
-        <div className="metric-row">
-          {item.delta !== undefined ? (
-            <span
-              className={cn(
-                "delta",
-                item.delta >= 0 ? "delta--good" : "delta--bad",
-              )}
-            >
-              {item.delta >= 0 ? (
-                <ArrowUpRight size={13} />
-              ) : (
-                <ArrowDownRight size={13} />
-              )}{" "}
-              {Math.abs(item.delta).toLocaleString("pt-BR")}%
-            </span>
-          ) : (
-            <span className="metric-hint">
-              {item.value === null ? "Não confirmado" : "Base observada"}
-            </span>
-          )}
-          {item.delta !== undefined && (
-            <span className="metric-hint">vs. período anterior</span>
-          )}
-        </div>
+        <MetricComparisonLine item={item} />
         {item.secondary && (
           <div className="metric-secondary" title={item.secondary.hint}>
             <span>{item.secondary.label}</span>
             <strong className="num">
               {metric(item.secondary.value, "currency")}
             </strong>
-            {item.secondary.value === null && <small>Não confirmado</small>}
+            <MetricComparisonLine
+              item={{ ...item, ...item.secondary, format: "currency" }}
+            />
           </div>
         )}
         <svg className="spark" viewBox="0 0 220 38" aria-hidden="true">

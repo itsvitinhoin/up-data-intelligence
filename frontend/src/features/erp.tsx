@@ -223,62 +223,65 @@ function OrderItems({ order }: { order: ErpOrderRow }) {
     </section>
   );
 }
-function Overview({ data }: { data: ErpData }) {
-  const k = data.dashboard.kpis;
+type CompareErp = (select: (data: ErpData) => Metric[]) => Metric[];
+function Overview({ data, compare }: { data: ErpData; compare: CompareErp }) {
   const b = data.dashboard.breakdowns;
   return (
     <>
       <Metrics
-        items={[
-          m(
-            "Faturamento líquido",
-            k.netRevenue,
-            "currency",
-            `Bruto: ${money(k.grossRevenue)}`,
-          ),
-          m(
-            "Pedidos",
-            k.orders,
-            "number",
-            `Ticket médio: ${money(k.avgTicket)}`,
-          ),
-          m(
-            "Compradores",
-            k.uniqueCustomers,
-            "number",
-            `Recorrentes: ${k.returningCustomers}`,
-          ),
-          m(
-            "Retenção",
-            k.retentionPct,
-            "percent",
-            "Recorrentes observados / compradores. Novos históricos não confirmados.",
-          ),
-          m(
-            "Peças vendidas",
-            k.totalQuantity,
-            "number",
-            `Média por pedido: ${k.avgItemsPerOrder.toFixed(1)}`,
-          ),
-          m(
-            "Descontos",
-            k.discountAmount,
-            "currency",
-            `${pct(k.discountRatePct)} do bruto`,
-          ),
-          m(
-            "Devoluções",
-            k.returnAmount,
-            "currency",
-            `${pct(k.returnRatePct)} do bruto · ${k.returnedQuantity} peças`,
-          ),
-          m(
-            "Cancelamentos",
-            k.cancelledOrders,
-            "number",
-            `Valor: ${money(k.cancelledAmount)}`,
-          ),
-        ]}
+        items={compare((data) => {
+          const k = data.dashboard.kpis;
+          return [
+            m(
+              "Faturamento líquido",
+              k.netRevenue,
+              "currency",
+              `Bruto: ${money(k.grossRevenue)}`,
+            ),
+            m(
+              "Pedidos",
+              k.orders,
+              "number",
+              `Ticket médio: ${money(k.avgTicket)}`,
+            ),
+            m(
+              "Compradores",
+              k.uniqueCustomers,
+              "number",
+              `Recorrentes: ${k.returningCustomers}`,
+            ),
+            m(
+              "Retenção",
+              k.retentionPct,
+              "percent",
+              "Recorrentes observados / compradores. Novos históricos não confirmados.",
+            ),
+            m(
+              "Peças vendidas",
+              k.totalQuantity,
+              "number",
+              `Média por pedido: ${k.avgItemsPerOrder.toFixed(1)}`,
+            ),
+            m(
+              "Descontos",
+              k.discountAmount,
+              "currency",
+              `${pct(k.discountRatePct)} do bruto`,
+            ),
+            m(
+              "Devoluções",
+              k.returnAmount,
+              "currency",
+              `${pct(k.returnRatePct)} do bruto · ${k.returnedQuantity} peças`,
+            ),
+            m(
+              "Cancelamentos",
+              k.cancelledOrders,
+              "number",
+              `Valor: ${money(k.cancelledAmount)}`,
+            ),
+          ];
+        })}
       />
       <div className="erp-two">
         <Panel
@@ -359,10 +362,9 @@ function Overview({ data }: { data: ErpData }) {
     </>
   );
 }
-function Orders({ data }: { data: ErpData }) {
+function Orders({ data, compare }: { data: ErpData; compare: CompareErp }) {
   const [search, setSearch] = useState(""),
     [status, setStatus] = useState("all");
-  const k = data.dashboard.kpis;
   const rows = data.orders.filter(
     (o) =>
       (status === "all" || o.status === status) &&
@@ -373,32 +375,35 @@ function Orders({ data }: { data: ErpData }) {
   return (
     <>
       <Metrics
-        items={[
-          m(
-            "Faturamento bruto",
-            k.grossRevenue,
-            "currency",
-            `Líquido: ${money(k.netRevenue)}`,
-          ),
-          m(
-            "Pedidos únicos",
-            data.orders.length,
-            "number",
-            `Ticket médio: ${money(k.avgTicket)}`,
-          ),
-          m(
-            "Peças vendidas",
-            k.totalQuantity,
-            "number",
-            `Devolvidas: ${k.returnedQuantity}`,
-          ),
-          m(
-            "Cancelamentos",
-            k.cancelledOrders,
-            "number",
-            `Valor: ${money(k.cancelledAmount)}`,
-          ),
-        ]}
+        items={compare((data) => {
+          const k = data.dashboard.kpis;
+          return [
+            m(
+              "Faturamento bruto",
+              k.grossRevenue,
+              "currency",
+              `Líquido: ${money(k.netRevenue)}`,
+            ),
+            m(
+              "Pedidos únicos",
+              data.orders.length,
+              "number",
+              `Ticket médio: ${money(k.avgTicket)}`,
+            ),
+            m(
+              "Peças vendidas",
+              k.totalQuantity,
+              "number",
+              `Devolvidas: ${k.returnedQuantity}`,
+            ),
+            m(
+              "Cancelamentos",
+              k.cancelledOrders,
+              "number",
+              `Valor: ${money(k.cancelledAmount)}`,
+            ),
+          ];
+        })}
       />
       <Panel
         title="Pedidos do ERP"
@@ -436,11 +441,10 @@ function Orders({ data }: { data: ErpData }) {
     </>
   );
 }
-function Customers({ data }: { data: ErpData }) {
+function Customers({ data, compare }: { data: ErpData; compare: CompareErp }) {
   const [search, setSearch] = useState(""),
     [type, setType] = useState("all"),
     [selected, setSelected] = useState<ErpCustomerRow | null>(null);
-  const k = data.dashboard.kpis;
   const rows = data.customers.filter(
     (c) =>
       (type === "all" || c.buyerType === type) &&
@@ -489,17 +493,20 @@ function Customers({ data }: { data: ErpData }) {
   return (
     <>
       <Metrics
-        items={[
-          m("Compradores", k.uniqueCustomers),
-          m(
-            "Novos compradores",
-            null,
-            "number",
-            "Histórico completo não confirmado",
-          ),
-          m("Recorrentes", k.returningCustomers),
-          m("Retenção", k.retentionPct, "percent"),
-        ]}
+        items={compare((data) => {
+          const k = data.dashboard.kpis;
+          return [
+            m("Compradores", k.uniqueCustomers),
+            m(
+              "Novos compradores",
+              null,
+              "number",
+              "Histórico completo não confirmado",
+            ),
+            m("Recorrentes", k.returningCustomers),
+            m("Retenção", k.retentionPct, "percent"),
+          ];
+        })}
       />
       <Panel
         title="Base de compradores"
@@ -690,7 +697,15 @@ function Variants({ product }: { product: ErpProductRow }) {
     </section>
   );
 }
-function Products({ data, stock = false }: { data: ErpData; stock?: boolean }) {
+function Products({
+  data,
+  stock = false,
+  compare,
+}: {
+  data: ErpData;
+  stock?: boolean;
+  compare: CompareErp;
+}) {
   const [search, setSearch] = useState(""),
     [category, setCategory] = useState("all"),
     [inventory, setInventory] = useState(stock ? "in_stock" : "all"),
@@ -745,61 +760,68 @@ function Products({ data, stock = false }: { data: ErpData; stock?: boolean }) {
   return (
     <>
       <Metrics
-        items={
-          stock
-            ? [
-                m(
-                  "Estoque atual",
-                  d.totalStock,
-                  "number",
-                  `${d.totalSkus} SKUs · ${d.total} produtos`,
-                ),
-                m(
-                  "Poder de venda",
-                  d.salesPower,
-                  "currency",
-                  "Estoque positivo × preço de catálogo",
-                ),
-                m(
-                  "Cobertura",
-                  d.coverageDays,
-                  "days",
-                  `Giro: ${pct(d.turnoverPct)}`,
-                ),
-                m(
-                  "SKUs sem estoque",
-                  d.outOfStockCount,
-                  "number",
-                  `Negativos: ${d.negativeStockCount}`,
-                ),
-              ]
-            : [
-                m(
-                  "Faturamento",
-                  d.totalRevenue,
-                  "currency",
-                  `${d.totalUnits} peças`,
-                ),
-                m(
-                  "Lucro bruto",
-                  d.grossProfit,
-                  "currency",
-                  `Margem: ${pct(d.grossMarginPct)}`,
-                ),
-                m(
-                  "% de giro",
-                  d.turnoverPct,
-                  "percent",
-                  `Cobertura: ${d.coverageDays === null ? "Sem vendas" : Math.round(d.coverageDays) + " dias"}`,
-                ),
-                m(
-                  "Poder de venda",
-                  d.salesPower,
-                  "currency",
-                  `Estoque: ${d.totalStock}`,
-                ),
-              ]
-        }
+        items={compare((data) => {
+          const d = data.products;
+          return (
+            stock
+              ? [
+                  m(
+                    "Estoque atual",
+                    d.totalStock,
+                    "number",
+                    `${d.totalSkus} SKUs · ${d.total} produtos`,
+                  ),
+                  m(
+                    "Poder de venda",
+                    d.salesPower,
+                    "currency",
+                    "Estoque positivo × preço de catálogo",
+                  ),
+                  m(
+                    "Cobertura",
+                    d.coverageDays,
+                    "days",
+                    `Giro: ${pct(d.turnoverPct)}`,
+                  ),
+                  m(
+                    "SKUs sem estoque",
+                    d.outOfStockCount,
+                    "number",
+                    `Negativos: ${d.negativeStockCount}`,
+                  ),
+                ]
+              : [
+                  m(
+                    "Faturamento",
+                    d.totalRevenue,
+                    "currency",
+                    `${d.totalUnits} peças`,
+                  ),
+                  m(
+                    "Lucro bruto",
+                    d.grossProfit,
+                    "currency",
+                    `Margem: ${pct(d.grossMarginPct)}`,
+                  ),
+                  m(
+                    "% de giro",
+                    d.turnoverPct,
+                    "percent",
+                    `Cobertura: ${d.coverageDays === null ? "Sem vendas" : Math.round(d.coverageDays) + " dias"}`,
+                  ),
+                  m(
+                    "Poder de venda",
+                    d.salesPower,
+                    "currency",
+                    `Estoque: ${d.totalStock}`,
+                  ),
+                ]
+          ).map((item) =>
+            stock || ["Poder de venda", "% de giro"].includes(item.label)
+              ? { ...item, comparisonBasis: "snapshot" as const }
+              : item,
+          );
+        })}
       />
       <div className="erp-three">
         <BreakdownPanel
@@ -892,11 +914,10 @@ function Products({ data, stock = false }: { data: ErpData; stock?: boolean }) {
     </>
   );
 }
-function Sellers({ data }: { data: ErpData }) {
+function Sellers({ data, compare }: { data: ErpData; compare: CompareErp }) {
   const sellers = data.dashboard.breakdowns.sellers,
     stores = data.dashboard.breakdowns.stores;
-  const revenue = sellers.reduce((s, r) => s + r.revenue, 0),
-    orders = sellers.reduce((s, r) => s + r.orders, 0);
+  const revenue = sellers.reduce((s, r) => s + r.revenue, 0);
   const rows = sellers.map((r) => ({
     ...r,
     ticket: r.orders ? r.revenue / r.orders : 0,
@@ -915,22 +936,28 @@ function Sellers({ data }: { data: ErpData }) {
   return (
     <>
       <Metrics
-        items={[
-          m(
-            "Vendedores ativos",
-            sellers.length,
-            "number",
-            `${stores.length} lojas`,
-          ),
-          m("Faturamento", revenue, "currency", `${orders} pedidos`),
-          m("Ticket médio", orders ? revenue / orders : null, "currency"),
-          m(
-            "Clientes atendidos",
-            sellers.reduce((s, r) => s + (r.customers ?? 0), 0),
-            "number",
-            "Soma por vendedor; um cliente pode ser atendido por mais de uma equipe",
-          ),
-        ]}
+        items={compare((data) => {
+          const sellers = data.dashboard.breakdowns.sellers,
+            stores = data.dashboard.breakdowns.stores;
+          const revenue = sellers.reduce((s, r) => s + r.revenue, 0),
+            orders = sellers.reduce((s, r) => s + r.orders, 0);
+          return [
+            m(
+              "Vendedores ativos",
+              sellers.length,
+              "number",
+              `${stores.length} lojas`,
+            ),
+            m("Faturamento", revenue, "currency", `${orders} pedidos`),
+            m("Ticket médio", orders ? revenue / orders : null, "currency"),
+            m(
+              "Clientes atendidos",
+              sellers.reduce((s, r) => s + (r.customers ?? 0), 0),
+              "number",
+              "Soma por vendedor; um cliente pode ser atendido por mais de uma equipe",
+            ),
+          ];
+        })}
       />
       <div className="erp-two">
         <BreakdownPanel
@@ -1016,15 +1043,19 @@ export function ErpPage({
           key={`${c.scope.store_id}-${JSON.stringify(c.filters)}-${view}`}
         >
           {view === "overview" ? (
-            <Overview data={q.data} />
+            <Overview data={q.data} compare={q.compare} />
           ) : view === "pedidos" ? (
-            <Orders data={q.data} />
+            <Orders data={q.data} compare={q.compare} />
           ) : view === "clientes" ? (
-            <Customers data={q.data} />
+            <Customers data={q.data} compare={q.compare} />
           ) : view === "vendedores" ? (
-            <Sellers data={q.data} />
+            <Sellers data={q.data} compare={q.compare} />
           ) : (
-            <Products data={q.data} stock={view === "estoque"} />
+            <Products
+              data={q.data}
+              stock={view === "estoque"}
+              compare={q.compare}
+            />
           )}
         </div>
       )}
