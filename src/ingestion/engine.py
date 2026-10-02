@@ -10,6 +10,13 @@ from src.config.settings import Settings
 from src.connectors.upzero.client import UpZeroConnector
 from src.domain.models import Batch, SafeError
 from src.ingestion import metrics
+from src.ingestion.checkpoints import (
+    CHECKPOINT_COMPLETE,
+    CHECKPOINT_EXTRACTED,
+    CHECKPOINT_NEEDS_REVIEW,
+    CHECKPOINT_RECOVERED,
+    CHECKPOINT_RUNNING,
+)
 from src.normalization.entities import VERSION, normalize
 from src.normalization.identity import identity_evidence
 from src.observability.logging import event
@@ -314,10 +321,12 @@ class Engine:
         plan = digest([store, self.cfg.connection_id, resource, filters, mode])
         saved = self.repo.read("sync_checkpoints", store, [plan])
         cp = saved[0] if saved and not refresh else {}
-        if cp.get("status") == "complete":
+        if cp.get("status") == CHECKPOINT_COMPLETE:
             return self.repo.read("sync_runs", store, [cp["run_id"]])[0]
-        resume_extracted = cp.get("status") == "extracted"
-        if cp.get("status") == "needs_review":
+        resume_extracted = cp.get("status") == CHECKPOINT_EXTRACTED
+        if cp.get("status") == CHECKPOINT_RECOVERED:
+            raise SafeError("run_recovered_use_refresh")
+        if cp.get("status") == CHECKPOINT_NEEDS_REVIEW:
             raise SafeError("run_needs_review_use_replay_or_refresh")
         retry_baseline = self.connector.retries
         run_id = cp.get("run_id") or str(uuid.uuid4())
@@ -359,7 +368,7 @@ class Engine:
             "connection_id": self.cfg.connection_id,
             "plan_key": plan,
             "run_id": run_id,
-            "status": "running",
+            "status": CHECKPOINT_RUNNING,
             "pending_raw_id": cp.get("pending_raw_id"),
             "mode": mode,
             "filters": filters,
@@ -393,7 +402,7 @@ class Engine:
                 pending_raw_id=None,
                 position=raw["next_position"] or {},
                 updated_at=now(),
-                status="extracted" if done else "running",
+                status=CHECKPOINT_EXTRACTED if done else CHECKPOINT_RUNNING,
             )
             batch.add("sync_runs", run)
             batch.add("sync_checkpoints", cp)
@@ -464,7 +473,9 @@ class Engine:
                 retries=run["retries"] + self.connector.retries - retry_baseline,
             )
             cp.update(
-                status="complete" if not run["records_failed"] else "needs_review",
+                status=CHECKPOINT_COMPLETE
+                if not run["records_failed"]
+                else CHECKPOINT_NEEDS_REVIEW,
                 completed_to=filters.get("to")
                 or (
                     str(filters["end_date"]) + "T00:00:00+00:00"

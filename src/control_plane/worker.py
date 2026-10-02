@@ -21,8 +21,10 @@ from src.connectors.meta.live import MetaFoundationLiveConnector
 from src.connectors.upzero.client import UpZeroConnector
 from src.control_plane.model import StoreConfig, Window
 from src.control_plane.preflight import Prerequisites
+from src.control_plane.recovery_repository import BigQueryRecovery
 from src.control_plane.registry import Registry
 from src.domain.models import SafeError
+from src.ingestion.checkpoints import CHECKPOINT_RECOVERED, checkpoint_pending
 from src.ingestion.engine import Engine, row_key
 from src.ingestion.meta_live import MetaLiveEngine
 from src.ingestion.planning import incremental, open_order_windows
@@ -178,13 +180,17 @@ class Actions:
                 }
             )
             for resource in ("customers", "orders", "analytics_facts"):
-                pending = [
+                selected = [
                     r
                     for r in repo.read("sync_checkpoints", c.store_id)
-                    if r["resource"] == resource
-                    and r["connection_id"] == cfg.connection_id
-                    and (r["status"] != "complete" or r.get("pending_raw_id"))
+                    if r["resource"] == resource and r["connection_id"] == cfg.connection_id
                 ]
+                for checkpoint in selected:
+                    if checkpoint.get("status") == CHECKPOINT_RECOVERED and not checkpoint_pending(
+                        checkpoint
+                    ):
+                        BigQueryRecovery(self.transport).recovered(checkpoint, c.store_id)
+                pending = [r for r in selected if checkpoint_pending(r)]
                 for checkpoint in sorted(pending, key=lambda r: r["updated_at"]):
                     resume_engine = Engine(replace(cfg, page_limit=None), repo, client)
                     if checkpoint["plan_key"] != digest(

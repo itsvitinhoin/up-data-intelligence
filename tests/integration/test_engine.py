@@ -233,3 +233,35 @@ def test_cutover_rechecks_unchanged_events(tmp_path):
         q["rule_id"] == "purchase_without_order_id_after_effective" and q["failed_count"] == 1
         for q in r.read("quality_results", "A")
     )
+
+
+@pytest.mark.parametrize(
+    "status,expected",
+    [
+        ("complete", None),
+        ("needs_review", "run_needs_review_use_replay_or_refresh"),
+        ("recovered", "run_recovered_use_refresh"),
+    ],
+)
+def test_terminal_checkpoint_recovery_never_relabels_original_as_success(
+    tmp_path, status, expected
+):
+    engine, repo = setup(tmp_path)
+    original = engine.run("customers", {})
+    checkpoints = repo.read("sync_checkpoints", "A")
+    checkpoints[0]["status"] = status
+    if status != "complete":
+        original["status"] = "completed_with_errors"
+        repo.write({"sync_runs": [original]})
+    repo.write({"sync_checkpoints": checkpoints})
+    before = repo.read("sync_runs", "A")
+    engine.connector = UpZeroConnector(
+        "SYNTHETIC", httpx.MockTransport(lambda _: pytest.fail("must not recollect source"))
+    )
+    if expected:
+        with pytest.raises(SafeError, match=expected):
+            engine.run("customers", {})
+    else:
+        assert engine.run("customers", {}) == original
+    assert repo.read("sync_runs", "A") == before
+    assert repo.read("sync_checkpoints", "A") == checkpoints

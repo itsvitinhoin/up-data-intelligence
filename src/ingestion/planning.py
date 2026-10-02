@@ -4,6 +4,7 @@ from zoneinfo import ZoneInfo
 
 from src.bigquery.repository import Repository
 from src.config.settings import Settings
+from src.ingestion.checkpoints import CHECKPOINT_COMPLETE
 from src.utils.data import timestamp
 
 
@@ -46,7 +47,9 @@ def incremental(
     checkpoints = [
         r
         for r in repo.read("sync_checkpoints", cfg.store_id)
-        if r["resource"] == resource and r["mode"] == "incremental" and r["status"] == "complete"
+        if r["resource"] == resource
+        and r["mode"] == "incremental"
+        and r["status"] == CHECKPOINT_COMPLETE
     ]
     last = max(checkpoints, key=lambda r: r["updated_at"], default=None)
     end = instant(at)

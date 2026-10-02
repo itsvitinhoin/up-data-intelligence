@@ -392,6 +392,8 @@ def source_inventory(c):
             {
                 "run_id": resource,
                 "status": "completed",
+                "source": "upzero",
+                "mode": "incremental",
                 "core_records_failed": 0,
                 "finished_at": WINDOW.source_snapshot_at,
             }

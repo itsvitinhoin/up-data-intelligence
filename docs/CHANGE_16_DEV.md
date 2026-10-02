@@ -1157,3 +1157,77 @@ em `../terraform-bin/terraform`, pois `/usr/local/bin/terraform` não existe
 neste ambiente; não houve instalação, init, plan, apply ou refresh.
 A comparação com a base confirmou que todo o restante de `control_plane.tf`
 permanece byte a byte idêntico, incluindo bindings e schedulers.
+
+## CHANGE #17D.1.3 — checkpoint recovery state
+
+Base: `c8b09c774eba71e5b72b08427e324043f6d458f8`. Segundo auditoria fornecida, após
+corrigir IAM o dispatcher lançou o worker UP Zero, que encontrou quatro antigos
+checkpoints Customers backfill needs_review/pending_raw_id NULL. Os originais
+completed_with_errors tinham uma falha CORE cada (32/20/12/25 registros). A causa
+state/city vazios já está corrigida na transformação **1.1.1**, que não foi
+alterada. Os quatro replays completos reprocessaram 89 registros (4 inserts,
+85 updates, zero falhas) sem nova captura API/RAW, mas não atualizaram checkpoints.
+Não foram consultados dados/logs reais nem executados replays nesta mudança.
+
+A nova operação ADMIN_UP é separada do registry: `recovery.py` contém serviço e
+DTO imutável RecoveryProof; `recovery_repository.py` fornece reader/CAS;
+`recovery_queries.py` define uma única prova SQL de metadados, reutilizada pela
+transação, worker e preflight; `recovery_cli.py` usa common()/gated() e exige loja,
+confirmação de loja, UUID original e UUID replay explícitos, além das confirmações
+DEV e budgets. Autorização precede todo I/O. Os estados canônicos estão em
+`src/ingestion/checkpoints.py`; `{complete, recovered}` é terminal, mas recovered
+não é sucesso do run original nem nova source freshness.
+
+A transição needs_review → recovered exige checkpoint/original únicos, mesma
+store/resource/mode, pending NULL, original upzero/completed_with_errors com
+falha CORE comprovada e replay único upzero/completed/plan_key=original, sem
+leitura API/RAW e sem falhas CORE. Replay read/processed devem coincidir; v2 do
+original exige também cardinalidade igual à promoção original. Prova ausente,
+ambígua, divergente ou com contadores inválidos falha fechada. Os detalhes e
+limites de métricas históricas estão no [runbook de recovery](CUSTOMER_OPTIONAL_EMPTY_FIX.md#change-17d13--recovery-administrativa-de-checkpoints).
+
+A transação revalida a mesma prova antes da escrita, com parâmetros, store scope,
+chave/recurso esperados, ASSERTs e row_count=1 imediato. Só status/updated_at
+mudam. Não há update em runs originais/replays, RAW/CORE/quality. Segundo pedido
+com a mesma prova é checkpoint_already_recovered, sem nova escrita. Uma perda de
+resposta que torne COMMIT desconhecido produz checkpoint_recovery_outcome_unknown
+e mantém o cloud lease da store; rejeições definitivas liberam o lease normalmente.
+Sem retry automático e sem logs de payload/PII/SQL/credentials, SAFE_FIELDS intacto.
+
+Engine.run do mesmo plano recovered sem refresh falha explicitamente; worker
+verifica a prova antes de retirar recovered da fila pending e pode fazer nova
+coleta incremental. Incremental continua usando apenas checkpoints incremental
+complete como base. Preflight Customers aceita recovery comprovada no snapshot,
+mas ainda exige coleta real recente e scan sem filtro para source freshness.
+Recovery.updated_at/replay.finished_at não satisfazem freshness. Preflight de
+Orders/Facts recovered permanece fail-closed nesta etapa, explicitamente.
+
+Testes offline executam a prova SQL compartilhada e CAS em SQLite com COUNTIF
+local, interpretação de ASSERT e remoção de time travel. Cobrem auth antes de
+I/O, scope, metadados ausentes/duplicados, todas as condições do original/replay,
+v2/legacy, ambiguidade, alteração concorrente entre read/write, rollback de
+zero/duas rows, campo preservado, idempotência, SQL parametrizado/budget,
+submissão/rejeição/resultado perdido após COMMIT e retenção de lease, Engine,
+worker, incremental, preflight/freshness, CLI e logs sanitizados. Fixture do
+incidente contém quatro pares sintéticos de 32/20/12/25: quatro blockers viram
+quatro recovered, preservando runs, RAW/CORE e qualidade. Essa validação offline
+não certifica o parser/planner/time travel do BigQuery live.
+
+README e histórico de CUSTOMER_OPTIONAL_EMPTY_FIX receberam atualização aditiva.
+Nenhum Terraform/IAM/schema/coluna/SQL versionado/frontend/normalização/Meta/
+Analytics/Intelligence/Dashboard/Dockerfile/cloudbuild mudou. Nenhum checkpoint
+real foi modificado; não houve recovery/replay/refresh/sync/API externa/query
+BigQuery/DML/Cloud Run/Scheduler/plan/apply/build/deploy live ou leitura de secret.
+A imagem runtime precisará ser reconstruída e atualizada em etapa autorizada
+antes de permitir recovered no DEV; nada disso foi executado aqui.
+
+Validação final offline: **1.871 testes aprovados** (140 novos casos: 137 no
+arquivo de recovery e três de Engine; 235 testes focados em Control Plane/Engine).
+Ruff check, formatting (179 arquivos), mypy (128 arquivos), `git diff --check`
+e Terraform fmt/validate aprovados. Terraform foi apenas validado com o binário
+local existente; nenhum arquivo Terraform mudou e nenhum plano foi gerado.
+A comparação com a base confirmou Engine.replay/transform e StoreAdmin/gateway
+intactos. Todos os dados de teste são sintéticos, sem copiar o plan/state real,
+registros de clientes ou credenciais. A consulta de prova inicia com SELECT
+para que uma falha de leitura não seja classificada como mutação desconhecida
+pelo guard de orçamento existente; existe teste explícito dessa condição.

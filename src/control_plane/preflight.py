@@ -8,8 +8,10 @@ from zoneinfo import ZoneInfo
 from src.analytics.cloud.transport import Transport, scalar
 from src.connectors.meta.config import Account
 from src.control_plane.model import StoreConfig, Window, instant
+from src.control_plane.recovery_repository import BigQueryRecovery
 from src.control_plane.repository import decoded
 from src.domain.models import SafeError
+from src.ingestion.checkpoints import CHECKPOINT_RECOVERED, checkpoint_pending
 from src.intelligence.live.runtime import binding, reporting
 
 
@@ -87,7 +89,7 @@ class Prerequisites:
         runs = self.rows(
             c.store_id,
             "up_ops.sync_runs",
-            "run_id,status,finished_at,core_records_failed",
+            "run_id,status,finished_at,core_records_failed,source,mode",
             window.source_snapshot_at,
         )
         run_map = {r["run_id"]: r for r in runs}
@@ -100,12 +102,27 @@ class Prerequisites:
                 if r.get("resource") == resource
                 and r.get("connection_id") == c.upzero_connection_id
             ]
-            if any(r.get("pending_raw_id") or r.get("status") != "complete" for r in selected):
+            if any(checkpoint_pending(r) for r in selected):
                 raise SafeError("upzero_source_not_complete")
             good = []
             for checkpoint in selected:
+                if checkpoint.get("status") == CHECKPOINT_RECOVERED:
+                    # Recovered Customers no longer block, but NEVER prove fresh collection.
+                    # Other resources remain fail-closed until interval recovery is reviewed.
+                    if resource != "customers":
+                        raise SafeError("upzero_recovered_resource_not_supported")
+                    BigQueryRecovery(self.transport).recovered(
+                        checkpoint, c.store_id, snapshot=window.source_snapshot_at
+                    )
+                    continue
                 run = run_map.get(checkpoint.get("run_id"))
-                if run and run["status"] == "completed" and run["core_records_failed"] == 0:
+                if (
+                    run
+                    and run["status"] == "completed"
+                    and run["core_records_failed"] == 0
+                    and run.get("source") == "upzero"
+                    and run.get("mode") in {"backfill", "incremental", "reconcile"}
+                ):
                     good.append((checkpoint, run))
             if not good:
                 raise SafeError("upzero_complete_checkpoint_required")
