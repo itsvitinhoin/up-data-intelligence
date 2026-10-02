@@ -222,3 +222,7 @@ Veja [MULTI-STORE CONTROL PLANE](docs/CHANGE_16_DEV.md#multi-store-control-plane
 Write API administrativa separada, SAGA DRAFT/INSTALLING e referências numéricas de
 secrets, com bridge exclusivamente DEV e fixtures sintéticas. Não inicia pipelines.
 [Arquitetura, IAM, recuperação e limites](docs/CHANGE_18_2_SECURE_BRAND_ONBOARDING.md).
+
+### Installation Planner + Orchestrator V2 (CHANGE #18.3)
+
+Fundação offline de instalação por work units duráveis, slices resumíveis e publicação parcial certificada. Não ativa sync normal nem schedulers. Consulte [arquitetura, limites e runbook de adoção](docs/CHANGE_18_3_INSTALLATION_ORCHESTRATOR.md) antes de qualquer provisionamento ou execução DEV.

@@ -95,7 +95,17 @@ export function parseInstallation(
   expectedStore?: string,
 ): InstallationEnvelope {
   const e = exact(value, ["data", "pagination", "metadata"]);
+  const v2 = obj(e.metadata).contract_version === "installation.v2";
   const r = exact(e.data, [
+    ...(v2
+      ? [
+          "installation_plan_id",
+          "installation_plan_status",
+          "work",
+          "records_processed",
+          "pages_processed",
+        ]
+      : []),
     "store_id",
     "overall_state",
     "updated_at",
@@ -122,7 +132,9 @@ export function parseInstallation(
   const store = text(r.store_id);
   if (
     e.pagination !== null ||
-    m.contract_version !== "installation.v1" ||
+    !["installation.v1", "installation.v2"].includes(
+      String(m.contract_version),
+    ) ||
     m.store_id !== store ||
     (expectedStore && store !== expectedStore)
   )
@@ -182,6 +194,7 @@ export function parseInstallation(
       "PARTIAL",
       "READY",
       "BLOCKED",
+      ...(v2 ? ["OUTCOME_UNKNOWN" as const] : []),
     ]),
     updated_at: timestamp(r.updated_at),
     history_complete: nullableFlag(r.history_complete),
@@ -274,9 +287,53 @@ export function parseInstallation(
     },
     limitations: list(r.limitations).map(text),
   };
+  if (v2) {
+    const w = exact(r.work, [
+      "pending",
+      "running",
+      "complete",
+      "blocked",
+      "ambiguous",
+    ]);
+    const work = {
+      pending: count(w.pending),
+      running: count(w.running),
+      complete: count(w.complete),
+      blocked: count(w.blocked),
+      ambiguous: count(w.ambiguous),
+    };
+    if (Object.values(work).some((v) => v === null)) throw invalid();
+    data.installation_plan_id = text(r.installation_plan_id);
+    data.installation_plan_status = choice(r.installation_plan_status, [
+      "PLANNING",
+      "RUNNING",
+      "PARTIAL",
+      "COMPLETE",
+      "BLOCKED",
+      "OUTCOME_UNKNOWN",
+    ] as const);
+    data.work = work as NonNullable<Installation["work"]>;
+    const records = count(r.records_processed),
+      pages = count(r.pages_processed);
+    if (records === null || pages === null) throw invalid();
+    data.records_processed = records;
+    data.pages_processed = pages;
+    if (
+      data.overall_state === "READY" &&
+      (data.installation_plan_status !== "COMPLETE" ||
+        data.work.running ||
+        data.work.blocked ||
+        data.work.ambiguous ||
+        data.work.pending ||
+        data.progress.percent !== 100)
+    )
+      throw invalid();
+    if (data.work.ambiguous && data.overall_state !== "OUTCOME_UNKNOWN")
+      throw invalid();
+  }
   if (
     data.overall_state === "READY" &&
-    (data.history_complete !== true ||
+    ((!v2 && data.history_complete !== true) ||
       data.facts_complete !== true ||
       !available ||
       !data.sources.length ||
@@ -293,7 +350,7 @@ export function parseInstallation(
     data,
     pagination: null,
     metadata: {
-      contract_version: "installation.v1",
+      contract_version: v2 ? "installation.v2" : "installation.v1",
       store_id: store,
       snapshot_at: timestamp(m.snapshot_at),
       generation,

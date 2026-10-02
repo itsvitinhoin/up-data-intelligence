@@ -23,6 +23,7 @@ export const installationLabels: Record<InstallationState, string> = {
   PARTIAL: "Dados parciais disponíveis",
   READY: "Pronto",
   BLOCKED: "Bloqueado",
+  OUTCOME_UNKNOWN: "Resultado pendente de reconciliação",
 };
 const resourceLabels: Record<InstallationResourceState, string> = {
   PENDING: "Pendente",
@@ -45,6 +46,11 @@ export function InstallationProgressView({
 }) {
   return (
     <div className="installation-progress">
+      {progress.kind === "CHUNKS" && progress.total !== null && (
+        <p>
+          {progress.processed} / {progress.total} etapas
+        </p>
+      )}
       <p>
         {progress.percent !== null
           ? `${progress.percent.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`
@@ -162,6 +168,19 @@ export function InstallationStatus({
         </div>
       ))}
       <InstallationProgressView progress={data.progress} />
+      {data.records_processed !== undefined && (
+        <p className="muted">
+          {data.records_processed.toLocaleString("pt-BR")} registros processados
+          · {data.pages_processed?.toLocaleString("pt-BR")} páginas
+        </p>
+      )}
+      {details && data.work && (
+        <p className="muted">
+          Etapas pendentes: {data.work.pending} · Processando:{" "}
+          {data.work.running} · Concluídas: {data.work.complete} · Bloqueadas:{" "}
+          {data.work.blocked} · Em reconciliação: {data.work.ambiguous}
+        </p>
+      )}
       {data.recommended_preview_window && (
         <p className="muted">
           Período certificado:{" "}

@@ -1,0 +1,87 @@
+[
+  {
+    "name": "row_key",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "plan_id",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "onboarding_operation_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "store_id",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "status",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "planner_version",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "config_hash",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "error_code",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "revision",
+    "type": "INT64",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "registry_revision",
+    "type": "INT64",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "priority",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "requested_from",
+    "type": "TIMESTAMP",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "target_as_of",
+    "type": "TIMESTAMP",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "created_at",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "updated_at",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "completed_at",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "adopted_coverage",
+    "type": "JSON",
+    "mode": "NULLABLE"
+  }
+]

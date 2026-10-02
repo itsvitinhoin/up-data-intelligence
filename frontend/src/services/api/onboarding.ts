@@ -1,3 +1,4 @@
+import { parseInstallation } from "./installation";
 /** Secret submission deliberately avoids React Query, Company and persistent browser storage. */
 import { ApiError } from "./access";
 import type { OnboardingRequest, OnboardingResult } from "@/types/onboarding";
@@ -28,7 +29,10 @@ function array(value: unknown): unknown[] {
   return value;
 }
 export function parseOnboarding(value: unknown): OnboardingResult {
+  const hasInstallation =
+    !!value && typeof value === "object" && "installation" in value;
   const r = record(value, [
+    ...(hasInstallation ? ["installation"] : []),
     "operation_id",
     "store_id",
     "brand_id",
@@ -93,6 +97,9 @@ export function parseOnboarding(value: unknown): OnboardingResult {
   const errorCode = r.error_code === null ? null : text(r.error_code);
   if (errorCode !== null && !/^[a-z_]{1,100}$/.test(errorCode)) throw invalid();
   return {
+    ...(hasInstallation
+      ? { installation: parseInstallation(r.installation, store) }
+      : {}),
     operation_id: operationId,
     store_id: store,
     brand_id: brand,
@@ -133,4 +140,24 @@ export async function submitOnboarding(
     payload.sources.upzero.credential = null;
     body = ""; // Best effort only; JS strings cannot be reliably zeroized.
   }
+}
+
+export async function readOnboarding(
+  operationId: string,
+  signal?: AbortSignal,
+  fetcher: typeof fetch = fetch,
+): Promise<OnboardingResult> {
+  if (!/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(operationId))
+    throw invalid();
+  const response = await fetcher(`/api/admin/onboarding/${operationId}`, {
+    credentials: "same-origin",
+    cache: "no-store",
+    signal,
+  });
+  if (!response.ok)
+    throw new ApiError(
+      response.status,
+      "Não foi possível verificar a instalação da marca.",
+    );
+  return parseOnboarding(await response.json());
 }

@@ -6,6 +6,8 @@ from src.admin.schema import BINDINGS, OPERATIONS
 from src.connectors.meta.foundation_schema import SCHEMAS as META_FOUNDATION_SCHEMAS
 from src.control_plane.model import REGISTRY, REGISTRY_FIELDS
 from src.ingestion.metrics import COUNTERS
+from src.installation.schema import PLANS as INSTALLATION_PLANS
+from src.installation.schema import UNITS as INSTALLATION_UNITS
 
 
 @dataclass(frozen=True)
@@ -283,3 +285,10 @@ for legacy_name, foundation_fields in META_FOUNDATION_SCHEMAS.items():
     META_TABLE_NAMES.update((live_name, live_name + "_versions"))
 
 TABLES[REGISTRY] = Table("up_ops", REGISTRY_FIELDS, None, ("status", "store_id"))
+
+# Installation ledger: operational metadata only; existing datasets/schemas unchanged.
+
+TABLES["installation_plans"] = Table("up_ops", INSTALLATION_PLANS, None, ("store_id", "status"))
+TABLES["installation_work_units"] = Table(
+    "up_ops", INSTALLATION_UNITS, None, ("store_id", "status", "plan_id", "resource")
+)

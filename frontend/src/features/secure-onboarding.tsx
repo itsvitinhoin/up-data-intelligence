@@ -45,6 +45,10 @@ export function SecureOnboardingForm({
             timezone: get("timezone"),
             currency: get("currency"),
             history_from: get("history_from"),
+            qualifying_order_statuses:
+              values.get("b2b") === "on"
+                ? values.getAll("qualifying_order_statuses").map(String)
+                : [],
           },
           sources: {
             upzero: {
@@ -119,6 +123,22 @@ export function SecureOnboardingForm({
         Operação B2C
         <input name="b2c" type="checkbox" disabled={busy} />
       </label>
+      <fieldset disabled={busy}>
+        <legend>Status de compra qualificante B2B</legend>
+        {["RESERVED", "CONFIRMED", "PROCESSING", "INVOICED", "SHIPPED"].map(
+          (status) => (
+            <label key={status} className="integration-toggle">
+              <input
+                type="checkbox"
+                name="qualifying_order_statuses"
+                value={status}
+                defaultChecked
+              />{" "}
+              {status}
+            </label>
+          ),
+        )}
+      </fieldset>
       <label className="form-field">
         Timezone
         <Input

@@ -2,7 +2,14 @@
 
 from src.dashboard.queries import Query, table
 
-OPS = {"store_runtime_config", "source_connections", "sync_checkpoints", "sync_runs"}
+OPS = {
+    "store_runtime_config",
+    "source_connections",
+    "sync_checkpoints",
+    "sync_runs",
+    "installation_plans",
+    "installation_work_units",
+}
 
 
 def build_installation(project: str, name: str, store: str, snapshot: str | None) -> Query:
@@ -20,11 +27,12 @@ def build_installation(project: str, name: str, store: str, snapshot: str | None
     if snapshot is not None:
         params["snapshot_at"] = ("TIMESTAMP", snapshot)
     if name == "installation_registry":
-        sql = f"""SELECT store_id,status,operation_b2b,history_complete,facts_complete,
- timezone,currency,policy_version,history_coverage,facts_coverage_from,facts_coverage_to,
- upzero_enabled,meta_enabled,upzero_connection_id,meta_connection_id,updated_at,
- CURRENT_TIMESTAMP() AS snapshot_at
+        sql = f"""SELECT *, CURRENT_TIMESTAMP() AS snapshot_at
  FROM {ops("store_runtime_config")} WHERE store_id=@store LIMIT 2"""
+    elif name == "installation_plans":
+        sql = f"SELECT * FROM {ops('installation_plans')} {history} WHERE store_id=@store ORDER BY created_at DESC LIMIT 2"
+    elif name == "installation_units":
+        sql = f"SELECT * FROM {ops('installation_work_units')} {history} WHERE store_id=@store ORDER BY sequence,work_unit_id LIMIT 10001"
     elif name == "installation_sources":
         sql = f"""SELECT source_system,connection_id,status,updated_at
  FROM {ops("source_connections")} {history} WHERE store_id=@store

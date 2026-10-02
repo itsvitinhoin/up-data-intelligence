@@ -94,6 +94,7 @@ class Reader:
         return copy.deepcopy(
             {
                 "installation_registry": self.registry,
+                "installation_plans": [],
                 "installation_sources": self.connections,
                 "installation_resources": self.resources,
                 "head": self.heads,
@@ -173,7 +174,7 @@ def test_partial_certified_window_not_history_claim(reader: Reader) -> None:
         "percent": None,
         "eta_seconds": None,
     }
-    assert len(reader.calls) == 4
+    assert len(reader.calls) == 5
     assert all(q.parameters.get("snapshot_at") == ("TIMESTAMP", AT) for q in reader.calls[1:])
 
 

@@ -52,7 +52,12 @@ class MetaConnector:
         self.client.close()
 
     def pages(
-        self, resource: str, insights: Insights | None, position: dict[str, Any] | None = None
+        self,
+        resource: str,
+        insights: Insights | None,
+        position: dict[str, Any] | None = None,
+        *,
+        cooperative: bool = False,
     ) -> Iterator[Page]:
         if resource not in RESOURCES or (resource == "insights" and insights is None):
             raise SafeError("invalid_meta_resource_configuration")
@@ -106,7 +111,7 @@ class MetaConnector:
                             error = "meta_cursor_missing_or_redacted"
                         elif after in seen:
                             error = "meta_cursor_loop"
-                        elif page_number + 1 == self.max_pages:
+                        elif page_number + 1 == self.max_pages and not cooperative:
                             error = "meta_page_budget_exceeded"
                         else:
                             next_position = {"after": after}

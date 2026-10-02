@@ -18,7 +18,7 @@ from src.dashboard.repository import Reader
 from src.dashboard.service import resolve_publication
 
 ResourceState = Literal["PENDING", "RUNNING", "PARTIAL", "COMPLETE", "BLOCKED"]
-InstallationState = Literal["INSTALLING", "PARTIAL", "READY", "BLOCKED"]
+InstallationState = Literal["INSTALLING", "PARTIAL", "READY", "BLOCKED", "OUTCOME_UNKNOWN"]
 
 
 def stamp(value: Any) -> str | None:
@@ -346,13 +346,45 @@ class InstallationReader:
                     else None,
                 )
             )
+        plans = query("installation_plans", snapshot)
+        work = query("installation_units", snapshot) if plans else []
+        if (
+            len(plans) > 1
+            or len(work) > 10000
+            or any(p.get("store_id") != grant.store_id for p in plans)
+            or any(
+                r.get("store_id") != grant.store_id or r.get("plan_id") != plans[0]["plan_id"]
+                for r in work
+            )
+        ):
+            raise ReadError(503, "installation_metadata_invalid")
         limitations = ["history_incomplete"] if history is not True else []
         if facts is not True:
             limitations.append("facts_incomplete")
         window = None
         publication = None
         policy = self.policies.get(grant.store_id)
-        if policy is not None:
+        if plans:
+            from src.control_plane.model import StoreConfig
+            from src.installation.publication import available
+
+            config = StoreConfig.from_row({k: v for k, v in registry.items() if k != "snapshot_at"})
+            try:
+                policy, publication = available(
+                    reader, self.project, config, work, snapshot, request_id
+                )
+                if publication:
+                    window = InstallationCoverage(
+                        publication.report_from,
+                        publication.report_to,
+                        "analytics_head_receipt_certified",
+                        ("overview", "customers", "orders", "retention", "products"),
+                    )
+            except ReadError:
+                limitations.append("publication_invalid")
+            if not publication:
+                limitations.append("publication_unavailable")
+        elif policy is not None:
             head = reader.query(
                 build(
                     self.project,
@@ -451,11 +483,62 @@ class InstallationReader:
             "progress": asdict(progress),
             "limitations": sorted(set(limitations)),
         }
+        if plans:
+            from src.installation.model import AMBIGUOUS, PLAN_STATES, WORK_STATES
+            from src.installation.progress import summarize
+
+            plan = plans[0]
+            if plan.get("status") not in PLAN_STATES or any(
+                r.get("status") not in WORK_STATES for r in work
+            ):
+                raise ReadError(503, "installation_metadata_invalid")
+            summary = summarize(work)
+            summary["progress"]["eta_seconds"] = (
+                round(summary["progress"]["eta_seconds"])
+                if summary["progress"]["eta_seconds"] is not None
+                else None
+            )
+            data.update(
+                summary,
+                installation_plan_id=safe_id(plan["plan_id"]),
+                installation_plan_status=plan["status"],
+            )
+            ready = (
+                plan["status"] == "COMPLETE"
+                and all(r["status"] == "COMPLETE" for r in work)
+                and facts is True
+                and window is not None
+                and bool(sources)
+                and all(s.active is True for s in sources)
+                and not any(r.pending_raw or r.state in {"RUNNING", "BLOCKED"} for r in resources)
+                and not any(r["status"] in AMBIGUOUS for r in work)
+            )
+            data["overall_state"] = (
+                "OUTCOME_UNKNOWN"
+                if plan["status"] == "OUTCOME_UNKNOWN" or summary["work"]["ambiguous"]
+                else "BLOCKED"
+                if plan["status"] == "BLOCKED"
+                or summary["work"]["blocked"]
+                or "publication_invalid" in limitations
+                else "READY"
+                if ready
+                else "PARTIAL"
+                if window
+                else "INSTALLING"
+            )
+            data["limitations"] = sorted(
+                set(limitations)
+                - {
+                    "installation_total_unknown",
+                    "latest_attempt_counters_not_unique_history",
+                    "eta_unknown",
+                }
+            ) + (["eta_unknown"] if summary["progress"]["eta_seconds"] is None else [])
         return {
             "data": data,
             "pagination": None,
             "metadata": {
-                "contract_version": "installation.v1",
+                "contract_version": "installation.v2" if plans else "installation.v1",
                 "store_id": grant.store_id,
                 "snapshot_at": snapshot,
                 "generation": publication.generation if publication else None,

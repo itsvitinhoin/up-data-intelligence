@@ -28,7 +28,9 @@ class OnboardingService:
         lease: Callable[[str], AbstractContextManager[None]],
         subject_key: bytes,
         clock: Callable[[], str] = now,
+        installation: Callable[[str, str], Row] | None = None,
     ):
+        self.installation = installation
         identity("configuration-check", subject_key)
         self.repository, self.secrets, self.lease, self.subject_key, self.clock = (
             repository,
@@ -198,7 +200,12 @@ class OnboardingService:
         ):
             raise AdminError("onboarding_operation_not_found", 404)
         admin.authorize_tenant(operation["tenant_id"])
-        return self.public(operation)
+        result = self.public(operation)
+        if self.installation and operation["status"] == "INSTALLING":
+            result["installation"] = self.installation(
+                operation["tenant_id"], operation["store_id"]
+            )
+        return result
 
     def public(self, operation: Row) -> Row:
         config = self.repository.config(operation["store_id"])

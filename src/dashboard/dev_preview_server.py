@@ -99,6 +99,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Local-only B2B Analytics V1 DEV preview")
     parser.add_argument("--project", required=True)
     parser.add_argument("--location", required=True)
+    parser.add_argument(
+        "--installation-v2",
+        action="store_true",
+        help="Resolve certified installation publication policy server-side; requires ledger tables",
+    )
     parser.add_argument("--policy", type=Path, required=True)
     parser.add_argument("--tenant-id", required=True)
     parser.add_argument("--store-id", required=True)
@@ -127,6 +132,7 @@ def main() -> int:
             {policy.store_id: policy},
             lambda: BigQueryReadSession(client, budget),
             cursor_key,
+            installation_v2=args.installation_v2,
         )
 
     app = create_dev_preview_app(

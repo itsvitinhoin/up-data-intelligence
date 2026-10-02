@@ -528,8 +528,14 @@ def test_terraform_additive_baseline_and_canonical_families():
         set(active) - set(old)
         == META_ACTIVE
         | set(SCHEMAS)
-        | {"store_runtime_config", "workspace_store_bindings", "onboarding_operations"}
-        and len(set(active) - set(old)) == 32
+        | {
+            "store_runtime_config",
+            "workspace_store_bindings",
+            "onboarding_operations",
+            "installation_plans",
+            "installation_work_units",
+        }
+        and len(set(active) - set(old)) == 34
     )
     for name, sha in json.loads(
         Path("tests/fixtures/change16/base_schema_hashes.json").read_text()

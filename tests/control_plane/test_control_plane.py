@@ -530,7 +530,13 @@ def test_shared_schema_is_only_addition_and_old_terraform_preserved():
     root = Path("infra/terraform")
     old = json.loads(Path("tests/fixtures/change161/base_tables.json").read_text())
     active = json.loads((root / "tables.json").read_text())
-    assert set(active) - set(old) == {REGISTRY, "workspace_store_bindings", "onboarding_operations"}
+    assert set(active) - set(old) == {
+        REGISTRY,
+        "workspace_store_bindings",
+        "onboarding_operations",
+        "installation_plans",
+        "installation_work_units",
+    }
     assert all(active[name] == spec for name, spec in old.items())
     hashes = json.loads(Path("tests/fixtures/change161/base_schema_hashes.json").read_text())
     for name, sha in hashes.items():

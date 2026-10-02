@@ -1,3 +1,4 @@
+import time
 import uuid
 from datetime import datetime
 from itertools import chain
@@ -299,6 +300,36 @@ class Engine:
                 batch.failed += 1
         return batch
 
+    def advance(
+        self,
+        resource: str,
+        filters: dict[str, Any],
+        *,
+        mode: str = "backfill",
+        page_budget: int = 20,
+        soft_time_budget_seconds: float = 600,
+        refresh: bool = False,
+    ) -> dict[str, Any]:
+        if (
+            type(page_budget) is not int
+            or page_budget < 1
+            or not 0 < soft_time_budget_seconds <= 600
+        ):
+            raise SafeError("invalid_slice_budget")
+        result = self.run(
+            resource,
+            filters,
+            mode=mode,
+            refresh=refresh,
+            _page_budget=min(page_budget, self.connector.max_pages),
+            _soft_time_budget_seconds=soft_time_budget_seconds,
+        )
+        return {
+            **result,
+            "complete": result.get("complete", result["status"] == "completed"),
+            "yielded": result.get("yielded", False),
+        }
+
     def run(
         self,
         resource: str,
@@ -307,6 +338,8 @@ class Engine:
         mode: str = "backfill",
         refresh: bool = False,
         stop_at_id: int | None = None,
+        _page_budget: int | None = None,
+        _soft_time_budget_seconds: float | None = None,
     ) -> dict[str, Any]:
         if resource not in TABLE_FOR:
             raise SafeError("unsupported_resource")
@@ -328,6 +361,8 @@ class Engine:
             raise SafeError("run_recovered_use_refresh")
         if cp.get("status") == CHECKPOINT_NEEDS_REVIEW:
             raise SafeError("run_needs_review_use_replay_or_refresh")
+        slice_started = time.monotonic()
+        slice_pages = 0
         retry_baseline = self.connector.retries
         run_id = cp.get("run_id") or str(uuid.uuid4())
         oldrun = self.repo.read("sync_runs", store, [run_id])
@@ -381,6 +416,7 @@ class Engine:
         event("sync_started", run_id=run_id, store_id=store, resource=resource)
 
         def promote(raw: dict[str, Any]) -> bool:
+            nonlocal slice_pages
             if raw.get("pagination_error"):
                 self.repo.write(
                     {
@@ -416,7 +452,31 @@ class Engine:
                 payload_bytes=raw["bytes_read"],
             )
             self.repo.write(batch.rows)
+            slice_pages += 1
             return done
+
+        def should_yield() -> bool:
+            return (
+                _page_budget is not None
+                and slice_pages > 0
+                and (
+                    slice_pages >= _page_budget
+                    or (
+                        _soft_time_budget_seconds is not None
+                        and time.monotonic() - slice_started >= _soft_time_budget_seconds
+                    )
+                )
+            )
+
+        def yielded() -> dict[str, Any]:
+            run.update(
+                status="running",
+                finished_at=None,
+                retries=run["retries"] + self.connector.retries - retry_baseline,
+            )
+            cp.update(status=CHECKPOINT_RUNNING, updated_at=now())
+            self.repo.write({"sync_runs": [run], "sync_checkpoints": [cp]})
+            return {**run, "complete": False, "yielded": True}
 
         try:
             done = resume_extracted
@@ -425,6 +485,8 @@ class Engine:
                 if not pending:
                     raise SafeError("pending_raw_not_found")
                 done = promote(pending[0])
+            if not done and should_yield():
+                return yielded()
             if not done:
                 for page in self.connector.pages(resource, filters, cp["position"]):
                     raw_id = page.request_id
@@ -467,6 +529,8 @@ class Engine:
                     done = promote(raw)
                     if done:
                         break
+                    if should_yield():
+                        return yielded()
             run.update(
                 status="completed_with_errors" if run["records_failed"] else "completed",
                 finished_at=now(),

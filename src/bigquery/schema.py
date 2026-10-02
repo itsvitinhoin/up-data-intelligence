@@ -29,6 +29,36 @@ def generate() -> None:
                 "current_step",
                 "revision",
             }
+        if name == "installation_plans":
+            required |= {
+                "plan_id",
+                "status",
+                "revision",
+                "planner_version",
+                "requested_from",
+                "target_as_of",
+                "config_hash",
+                "registry_revision",
+            }
+        if name == "installation_work_units":
+            required |= {
+                "work_unit_id",
+                "plan_id",
+                "source",
+                "connection_id",
+                "pipeline",
+                "resource",
+                "unit_kind",
+                "mode",
+                "sequence",
+                "status",
+                "revision",
+                "filters",
+                "dependencies",
+                "required",
+                "attempt_count",
+                "failure_count",
+            }
         fields = [
             {
                 "name": k,

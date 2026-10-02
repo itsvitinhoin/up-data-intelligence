@@ -1,3 +1,4 @@
+import type { InstallationEnvelope } from "./installation";
 export type OnboardingRequest = {
   tenant_id: string;
   store: {
@@ -8,6 +9,7 @@ export type OnboardingRequest = {
     timezone: string;
     currency: string;
     history_from: string;
+    qualifying_order_statuses: string[];
   };
   sources: {
     upzero: {
@@ -23,6 +25,7 @@ export type OnboardingRequest = {
   };
 };
 export type OnboardingResult = {
+  installation?: InstallationEnvelope;
   operation_id: string;
   store_id: string;
   brand_id: string;

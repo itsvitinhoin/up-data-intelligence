@@ -28,6 +28,13 @@ export function onboardingRequest(): OnboardingRequest {
       timezone: "America/Sao_Paulo",
       currency: "BRL",
       history_from: "2026-01-01",
+      qualifying_order_statuses: [
+        "RESERVED",
+        "CONFIRMED",
+        "PROCESSING",
+        "INVOICED",
+        "SHIPPED",
+      ],
     },
     sources: {
       upzero: {

@@ -261,6 +261,24 @@
       "store_id"
     ]
   },
+  "installation_plans": {
+    "dataset": "up_ops",
+    "partition": null,
+    "cluster": [
+      "store_id",
+      "status"
+    ]
+  },
+  "installation_work_units": {
+    "dataset": "up_ops",
+    "partition": null,
+    "cluster": [
+      "store_id",
+      "status",
+      "plan_id",
+      "resource"
+    ]
+  },
   "analytics_store_daily": {
     "dataset": "up_analytics",
     "partition": "order_date",

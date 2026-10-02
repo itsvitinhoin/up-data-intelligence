@@ -1,4 +1,5 @@
-export type InstallationState = "INSTALLING" | "PARTIAL" | "READY" | "BLOCKED";
+export type InstallationState =
+  "INSTALLING" | "PARTIAL" | "READY" | "BLOCKED" | "OUTCOME_UNKNOWN";
 export type InstallationResourceState =
   "PENDING" | "RUNNING" | "PARTIAL" | "COMPLETE" | "BLOCKED";
 export type InstallationCoverage = {
@@ -44,6 +45,23 @@ export type InstallationResource = {
   last_error_code: string | null;
 };
 export type Installation = {
+  installation_plan_id?: string;
+  installation_plan_status?:
+    | "PLANNING"
+    | "RUNNING"
+    | "PARTIAL"
+    | "COMPLETE"
+    | "BLOCKED"
+    | "OUTCOME_UNKNOWN";
+  work?: {
+    pending: number;
+    running: number;
+    complete: number;
+    blocked: number;
+    ambiguous: number;
+  };
+  records_processed?: number;
+  pages_processed?: number;
   store_id: string;
   overall_state: InstallationState;
   updated_at: string;
@@ -62,7 +80,7 @@ export type InstallationEnvelope = {
   data: Installation;
   pagination: null;
   metadata: {
-    contract_version: "installation.v1";
+    contract_version: "installation.v1" | "installation.v2";
     store_id: string;
     snapshot_at: string;
     generation: number | null;

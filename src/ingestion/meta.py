@@ -4,6 +4,7 @@ No CLI, scheduler, credentials provider or live connector is registered here.
 Caller supplies the existing store lease factory (same lock namespace as UP Zero).
 """
 
+import time
 import uuid
 from collections.abc import Callable
 from contextlib import AbstractContextManager
@@ -82,15 +83,54 @@ class MetaEngine:
             "configured_at": now(),
         }
 
+    def advance(
+        self,
+        resource: str,
+        insights: Insights | None = None,
+        *,
+        page_budget: int = 20,
+        soft_time_budget_seconds: float = 600,
+    ) -> dict[str, Any]:
+        if (
+            type(page_budget) is not int
+            or page_budget < 1
+            or not 0 < soft_time_budget_seconds <= 600
+        ):
+            raise SafeError("invalid_slice_budget")
+        result = self.run(
+            resource,
+            insights,
+            _page_budget=min(page_budget, self.connector.max_pages),
+            _soft_time_budget_seconds=soft_time_budget_seconds,
+        )
+        return {
+            **result,
+            "complete": result.get("status") == "completed",
+            "yielded": result.get("yielded", False),
+        }
+
     def run(
-        self, resource: str, insights: Insights | None = None, *, refresh: bool = False
+        self,
+        resource: str,
+        insights: Insights | None = None,
+        *,
+        refresh: bool = False,
+        _page_budget: int | None = None,
+        _soft_time_budget_seconds: float | None = None,
     ) -> dict[str, Any]:
         if resource not in CORE or ((resource == "insights") != (insights is not None)):
             raise SafeError("invalid_meta_resource_configuration")
         with self.lease():
-            return self._run(resource, insights, refresh)
+            return self._run(resource, insights, refresh, _page_budget, _soft_time_budget_seconds)
 
-    def _run(self, resource: str, insights: Insights | None, refresh: bool) -> dict[str, Any]:
+    def _run(
+        self,
+        resource: str,
+        insights: Insights | None,
+        refresh: bool,
+        page_budget: int | None = None,
+        soft_time_budget_seconds: float | None = None,
+    ) -> dict[str, Any]:
         a, table = self.account, "meta_raw_" + resource
         config = self._configuration(insights)
         # Page limit belongs to extraction, not entity/Insights logical identity.
@@ -131,6 +171,7 @@ class MetaEngine:
                 **({"meta_account_bindings": [self._binding()]} if self.auto_binding else {}),
             }
         )
+        slice_started, slice_pages = time.monotonic(), 0
         retry_baseline = self.connector.retries
         event(
             "sync_started",
@@ -140,6 +181,7 @@ class MetaEngine:
         )
 
         def promote(raw: dict[str, Any]) -> bool:
+            nonlocal slice_pages
             if raw.get("pagination_error"):
                 raise SafeError(raw["pagination_error"])
             batch = self._transform(raw)
@@ -165,7 +207,27 @@ class MetaEngine:
             batch.add("sync_runs", run)
             batch.add("sync_checkpoints", cp)
             self.repo.write(batch.rows)
+            slice_pages += 1
             return finished
+
+        def should_yield() -> bool:
+            return (
+                page_budget is not None
+                and slice_pages > 0
+                and (
+                    slice_pages >= page_budget
+                    or time.monotonic() - slice_started >= (soft_time_budget_seconds or 600)
+                )
+            )
+
+        def yielded() -> dict[str, Any]:
+            run.update(
+                status="running",
+                finished_at=None,
+                retries=run["retries"] + self.connector.retries - retry_baseline,
+            )
+            self.repo.write({"sync_runs": [run], "sync_checkpoints": [cp]})
+            return {**run, "complete": False, "yielded": True}
 
         try:
             if cp["pending_raw_id"]:
@@ -176,8 +238,15 @@ class MetaEngine:
                 run["core_records_failed"] = 0
                 metrics.aliases(run)
                 done = promote(pending[0])
+                if not done and should_yield():
+                    return yielded()
             if not done:
-                for page in self.connector.pages(resource, insights, cp["position"]):
+                pages = (
+                    self.connector.pages(resource, insights, cp["position"], cooperative=True)
+                    if page_budget is not None
+                    else self.connector.pages(resource, insights, cp["position"])
+                )
+                for page in pages:
                     raw = {
                         "row_key": page.request_id,
                         "raw_record_id": page.request_id,
@@ -215,6 +284,8 @@ class MetaEngine:
                     done = promote(raw)
                     if done:
                         break
+                    if should_yield():
+                        return yielded()
             run.update(
                 status="completed",
                 finished_at=now(),

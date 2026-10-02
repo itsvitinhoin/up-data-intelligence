@@ -14,7 +14,14 @@ class MetaLiveEngine(MetaEngine):
     auto_binding = False
     connector_version = "meta-live-1.0.0"
 
-    def _run(self, resource: str, insights: Insights | None, refresh: bool) -> dict[str, Any]:
+    def _run(
+        self,
+        resource: str,
+        insights: Insights | None,
+        refresh: bool,
+        page_budget: int | None = None,
+        soft_time_budget_seconds: float | None = None,
+    ) -> dict[str, Any]:
         matches = self.repo.read("meta_account_bindings", self.account.store_id)
         if len(matches) != 1 or any(
             matches[0].get(k) != v
@@ -27,7 +34,7 @@ class MetaLiveEngine(MetaEngine):
             }.items()
         ):
             raise SafeError("META_ACCOUNT_BINDING_REQUIRED")
-        return super()._run(resource, insights, refresh)
+        return super()._run(resource, insights, refresh, page_budget, soft_time_budget_seconds)
 
     def _configuration(self, insights: Insights | None) -> dict[str, Any]:
         return {

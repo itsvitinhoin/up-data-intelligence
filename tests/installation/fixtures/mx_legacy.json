@@ -1,0 +1,284 @@
+{
+  "registry": {
+    "row_key": "571bac710d82de3ab7b6e1d8378eb93c2c723fb5894cac0ac87931dd4d66a9c9",
+    "store_id": "synthetic-mx",
+    "status": "DRAFT",
+    "revision": 1,
+    "store_name": null,
+    "store_slug": null,
+    "operation_b2b": true,
+    "operation_b2c": false,
+    "timezone": "America/Sao_Paulo",
+    "currency": "BRL",
+    "policy_version": "1.0.0",
+    "history_from": "2026-09-01T00:00:00Z",
+    "history_complete": false,
+    "facts_complete": false,
+    "facts_coverage_from": null,
+    "facts_coverage_to": null,
+    "qualifying_order_statuses": [
+      "RESERVED",
+      "CONFIRMED",
+      "PROCESSING",
+      "INVOICED",
+      "SHIPPED"
+    ],
+    "history_coverage": null,
+    "upzero_enabled": true,
+    "meta_enabled": false,
+    "analytics_enabled": false,
+    "intelligence_enabled": false,
+    "upzero_connection_id": "synthetic-mx-upzero",
+    "upzero_store_identifier": null,
+    "purchase_order_id_effective_at": null,
+    "meta_connection_id": null,
+    "meta_account_id": null,
+    "meta_api_version": null,
+    "sync_enabled": false,
+    "created_at": null,
+    "updated_at": null
+  },
+  "now": "2026-10-02T03:00:00+00:00",
+  "checkpoints": [
+    {
+      "row_key": "bf2025d3066d724e9b97fddaf49656e58ac63ec2f442019e316086b09102ae7c",
+      "plan_key": "bf2025d3066d724e9b97fddaf49656e58ac63ec2f442019e316086b09102ae7c",
+      "store_id": "synthetic-mx",
+      "connection_id": "synthetic-mx-upzero",
+      "resource": "customers",
+      "filters": {
+        "after_id": "0",
+        "limit": 200
+      },
+      "mode": "incremental",
+      "status": "recovered",
+      "run_id": "synthetic-recovered-0",
+      "pending_raw_id": null,
+      "position": {
+        "cursor": "SYNTHETIC-OPAQUE-CURSOR"
+      },
+      "updated_at": "2026-10-02T03:00:00+00:00"
+    },
+    {
+      "row_key": "5b6630df0bbd15a04fedb76bb7f7573acaadfa75e8b5adc67aaf64dc9daf20b4",
+      "plan_key": "5b6630df0bbd15a04fedb76bb7f7573acaadfa75e8b5adc67aaf64dc9daf20b4",
+      "store_id": "synthetic-mx",
+      "connection_id": "synthetic-mx-upzero",
+      "resource": "customers",
+      "filters": {
+        "after_id": "1",
+        "limit": 200
+      },
+      "mode": "incremental",
+      "status": "recovered",
+      "run_id": "synthetic-recovered-1",
+      "pending_raw_id": null,
+      "position": {
+        "cursor": "SYNTHETIC-OPAQUE-CURSOR"
+      },
+      "updated_at": "2026-10-02T03:00:00+00:00"
+    },
+    {
+      "row_key": "0c03e6a987702d60a66cc1f6e1123d72fd41a697b347bf7de8cd76d72c285677",
+      "plan_key": "0c03e6a987702d60a66cc1f6e1123d72fd41a697b347bf7de8cd76d72c285677",
+      "store_id": "synthetic-mx",
+      "connection_id": "synthetic-mx-upzero",
+      "resource": "customers",
+      "filters": {
+        "after_id": "2",
+        "limit": 200
+      },
+      "mode": "incremental",
+      "status": "recovered",
+      "run_id": "synthetic-recovered-2",
+      "pending_raw_id": null,
+      "position": {
+        "cursor": "SYNTHETIC-OPAQUE-CURSOR"
+      },
+      "updated_at": "2026-10-02T03:00:00+00:00"
+    },
+    {
+      "row_key": "55051a1df6a516d1e70940219c54d9db35c0c820f4941ea855f7ba7edae796fe",
+      "plan_key": "55051a1df6a516d1e70940219c54d9db35c0c820f4941ea855f7ba7edae796fe",
+      "store_id": "synthetic-mx",
+      "connection_id": "synthetic-mx-upzero",
+      "resource": "customers",
+      "filters": {
+        "after_id": "3",
+        "limit": 200
+      },
+      "mode": "incremental",
+      "status": "recovered",
+      "run_id": "synthetic-recovered-3",
+      "pending_raw_id": null,
+      "position": {
+        "cursor": "SYNTHETIC-OPAQUE-CURSOR"
+      },
+      "updated_at": "2026-10-02T03:00:00+00:00"
+    },
+    {
+      "row_key": "3720908333b1cd58bd116211f04a63743b7b5b196c01186c352aa2a0c181dd9c",
+      "plan_key": "3720908333b1cd58bd116211f04a63743b7b5b196c01186c352aa2a0c181dd9c",
+      "store_id": "synthetic-mx",
+      "connection_id": "synthetic-mx-upzero",
+      "resource": "customers",
+      "filters": {
+        "limit": 200
+      },
+      "mode": "incremental",
+      "status": "complete",
+      "run_id": "synthetic-customers",
+      "pending_raw_id": null,
+      "position": {
+        "cursor": "SYNTHETIC-OPAQUE-CURSOR"
+      },
+      "updated_at": "2026-10-02T03:00:00+00:00"
+    },
+    {
+      "row_key": "8cefa0f2c2962a73344329b0dd4bb39f98bdd0197820cb9fc604e1489919a470",
+      "plan_key": "8cefa0f2c2962a73344329b0dd4bb39f98bdd0197820cb9fc604e1489919a470",
+      "store_id": "synthetic-mx",
+      "connection_id": "synthetic-mx-upzero",
+      "resource": "orders",
+      "filters": {
+        "start_date": "2026-08-31",
+        "end_date": "2026-09-30",
+        "limit": 200
+      },
+      "mode": "reconcile",
+      "status": "complete",
+      "run_id": "synthetic-orders",
+      "pending_raw_id": null,
+      "position": {
+        "cursor": "SYNTHETIC-OPAQUE-CURSOR"
+      },
+      "updated_at": "2026-10-02T03:00:00+00:00"
+    },
+    {
+      "row_key": "ca244b7860889c175ea6b8c8a5c808aa3b71b71a14da6d758f1ebf1982232358",
+      "plan_key": "ca244b7860889c175ea6b8c8a5c808aa3b71b71a14da6d758f1ebf1982232358",
+      "store_id": "synthetic-mx",
+      "connection_id": "synthetic-mx-upzero",
+      "resource": "analytics_facts",
+      "filters": {
+        "from": "2026-09-01T00:00:00Z",
+        "to": "2026-10-01T03:00:00+00:00",
+        "limit": 1000
+      },
+      "mode": "incremental",
+      "status": "running",
+      "run_id": "synthetic-analytics_facts",
+      "pending_raw_id": null,
+      "position": {
+        "cursor": "SYNTHETIC-OPAQUE-CURSOR"
+      },
+      "updated_at": "2026-10-02T03:00:00+00:00"
+    }
+  ],
+  "runs": [
+    {
+      "row_key": "synthetic-recovered-0",
+      "run_id": "synthetic-recovered-0",
+      "store_id": "synthetic-mx",
+      "source": "upzero",
+      "resource": "customers",
+      "mode": "incremental",
+      "plan_key": "bf2025d3066d724e9b97fddaf49656e58ac63ec2f442019e316086b09102ae7c",
+      "status": "running",
+      "finished_at": null,
+      "core_records_processed": 344000,
+      "core_pages_processed": 344,
+      "core_records_failed": 0
+    },
+    {
+      "row_key": "synthetic-recovered-1",
+      "run_id": "synthetic-recovered-1",
+      "store_id": "synthetic-mx",
+      "source": "upzero",
+      "resource": "customers",
+      "mode": "incremental",
+      "plan_key": "5b6630df0bbd15a04fedb76bb7f7573acaadfa75e8b5adc67aaf64dc9daf20b4",
+      "status": "running",
+      "finished_at": null,
+      "core_records_processed": 344000,
+      "core_pages_processed": 344,
+      "core_records_failed": 0
+    },
+    {
+      "row_key": "synthetic-recovered-2",
+      "run_id": "synthetic-recovered-2",
+      "store_id": "synthetic-mx",
+      "source": "upzero",
+      "resource": "customers",
+      "mode": "incremental",
+      "plan_key": "0c03e6a987702d60a66cc1f6e1123d72fd41a697b347bf7de8cd76d72c285677",
+      "status": "running",
+      "finished_at": null,
+      "core_records_processed": 344000,
+      "core_pages_processed": 344,
+      "core_records_failed": 0
+    },
+    {
+      "row_key": "synthetic-recovered-3",
+      "run_id": "synthetic-recovered-3",
+      "store_id": "synthetic-mx",
+      "source": "upzero",
+      "resource": "customers",
+      "mode": "incremental",
+      "plan_key": "55051a1df6a516d1e70940219c54d9db35c0c820f4941ea855f7ba7edae796fe",
+      "status": "running",
+      "finished_at": null,
+      "core_records_processed": 344000,
+      "core_pages_processed": 344,
+      "core_records_failed": 0
+    },
+    {
+      "row_key": "synthetic-customers",
+      "run_id": "synthetic-customers",
+      "store_id": "synthetic-mx",
+      "source": "upzero",
+      "resource": "customers",
+      "mode": "incremental",
+      "plan_key": "3720908333b1cd58bd116211f04a63743b7b5b196c01186c352aa2a0c181dd9c",
+      "status": "completed",
+      "finished_at": "2026-10-02T03:00:00+00:00",
+      "core_records_processed": 344000,
+      "core_pages_processed": 344,
+      "core_records_failed": 0
+    },
+    {
+      "row_key": "synthetic-orders",
+      "run_id": "synthetic-orders",
+      "store_id": "synthetic-mx",
+      "source": "upzero",
+      "resource": "orders",
+      "mode": "reconcile",
+      "plan_key": "8cefa0f2c2962a73344329b0dd4bb39f98bdd0197820cb9fc604e1489919a470",
+      "status": "completed",
+      "finished_at": "2026-10-02T03:00:00+00:00",
+      "core_records_processed": 344000,
+      "core_pages_processed": 344,
+      "core_records_failed": 0
+    },
+    {
+      "row_key": "synthetic-analytics_facts",
+      "run_id": "synthetic-analytics_facts",
+      "store_id": "synthetic-mx",
+      "source": "upzero",
+      "resource": "analytics_facts",
+      "mode": "incremental",
+      "plan_key": "ca244b7860889c175ea6b8c8a5c808aa3b71b71a14da6d758f1ebf1982232358",
+      "status": "running",
+      "finished_at": null,
+      "core_records_processed": 344000,
+      "core_pages_processed": 344,
+      "core_records_failed": 0
+    }
+  ],
+  "certified_publication": {
+    "store_id": "synthetic-mx",
+    "as_of": "2026-09-28T03:00:00Z",
+    "report_from": "2026-09-01",
+    "report_to": "2026-09-28"
+  }
+}

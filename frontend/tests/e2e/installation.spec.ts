@@ -1,5 +1,8 @@
 import { test, expect } from "@playwright/test";
-import { installationFixture } from "../fixtures/installation";
+import {
+  installationFixture,
+  installationV2Fixture,
+} from "../fixtures/installation";
 
 test("Admin opens MX certified partial window; out-of-coverage request is rejected", async ({
   page,
@@ -163,3 +166,62 @@ test("client sees processing state instead of numbers when no window is certifie
   ).toHaveCount(0);
   expect(overviewReads).toBe(0);
 });
+
+for (const status of [
+  "INSTALLING",
+  "PARTIAL",
+  "READY",
+  "OUTCOME_UNKNOWN",
+] as const) {
+  test(`Installation V2 ${status}: logical progress, separate counts and lifetime proof`, async ({
+    page,
+  }) => {
+    const errors: string[] = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    const fixture = installationV2Fixture(status);
+    await page.route("**/api/dashboard/**", async (route) => {
+      const url = new URL(route.request().url());
+      if (!url.pathname.endsWith("/installation"))
+        throw new Error("No Analytics request in admin test");
+      await route.fulfill(
+        url.searchParams.get("workspace_operation_id") === "mx-fashion-b2b"
+          ? { json: fixture }
+          : {
+              status: 404,
+              json: { error: { code: "preview_binding_absent" } },
+            },
+      );
+    });
+    await page.goto("/");
+    await page.getByRole("button", { name: "Entrar", exact: true }).click();
+    const card = page.getByRole("region", { name: "Instalação de mx-fashion" });
+    await expect(card).toContainText(
+      status === "READY" ? "61 / 61 etapas" : "18 / 61 etapas",
+    );
+    await expect(card).toContainText("344.000 registros processados");
+    await expect(card).toContainText(
+      status === "READY"
+        ? "Pronto"
+        : status === "PARTIAL"
+          ? "Dados parciais disponíveis"
+          : status === "OUTCOME_UNKNOWN"
+            ? "Resultado pendente de reconciliação"
+            : "Instalando",
+    );
+    if (status === "INSTALLING")
+      await expect(
+        page.getByRole("button", { name: "Ver Dashboard de MX Fashion" }),
+      ).toBeDisabled();
+    if (status === "PARTIAL" || status === "READY")
+      await expect(
+        page.getByRole("button", { name: "Ver Dashboard de MX Fashion" }),
+      ).toBeEnabled();
+    await page
+      .getByRole("button", { name: "Editar integração de MX Fashion" })
+      .click();
+    await expect(page.getByRole("dialog")).toContainText(
+      "Histórico completo: Não",
+    );
+    expect(errors).toEqual([]);
+  });
+}

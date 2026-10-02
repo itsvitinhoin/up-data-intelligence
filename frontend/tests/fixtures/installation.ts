@@ -91,3 +91,32 @@ export function installationFixture(
     },
   };
 }
+
+export function installationV2Fixture(
+  state: "INSTALLING" | "PARTIAL" | "READY" | "OUTCOME_UNKNOWN" = "PARTIAL",
+): InstallationEnvelope {
+  const value = installationFixture(state, state !== "INSTALLING");
+  value.metadata.contract_version = "installation.v2";
+  value.data.history_complete = false;
+  value.data.installation_plan_id = "synthetic-plan";
+  value.data.installation_plan_status =
+    state === "READY" ? "COMPLETE" : state === "INSTALLING" ? "RUNNING" : state;
+  value.data.progress = {
+    kind: "CHUNKS",
+    processed: state === "READY" ? 61 : 18,
+    total: 61,
+    percent: ((state === "READY" ? 61 : 18) / 61) * 100,
+    eta_seconds: state === "READY" ? 0 : null,
+  };
+  value.data.records_processed = 344000;
+  value.data.pages_processed = 344;
+  value.data.work = {
+    pending: state === "READY" ? 0 : 43,
+    running: 0,
+    complete: state === "READY" ? 61 : 18,
+    blocked: 0,
+    ambiguous: state === "OUTCOME_UNKNOWN" ? 1 : 0,
+  };
+  value.data.limitations = ["history_incomplete"];
+  return value;
+}

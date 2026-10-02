@@ -1,0 +1,167 @@
+[
+  {
+    "name": "row_key",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "work_unit_id",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "plan_id",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "store_id",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "source",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "connection_id",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "pipeline",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "resource",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "unit_kind",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "mode",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "status",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "dispatch_token",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "dispatch_operation_name",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "execution_name",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "checkpoint_plan_key",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "run_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "last_error_code",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "sequence",
+    "type": "INT64",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "revision",
+    "type": "INT64",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "reservation_revision",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "attempt_count",
+    "type": "INT64",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "failure_count",
+    "type": "INT64",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "records_processed",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "pages_processed",
+    "type": "INT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "next_eligible_at",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "started_at",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "updated_at",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "finished_at",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "filters",
+    "type": "JSON",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "dependencies",
+    "type": "JSON",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "required",
+    "type": "BOOL",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "duration_seconds",
+    "type": "FLOAT64",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "slice_seconds",
+    "type": "FLOAT64",
+    "mode": "NULLABLE"
+  }
+]

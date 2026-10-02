@@ -17,10 +17,20 @@ test("Admin creates synthetic DRAFT brand; credential cleared; no dashboard quer
     expect(req.method()).toBe("POST");
     expect(req.url()).not.toContain(syntheticCredential);
     expect(value.sources.upzero.credential).toBe(syntheticCredential);
+    expect(value.store.qualifying_order_statuses).toEqual([
+      "RESERVED",
+      "CONFIRMED",
+      "PROCESSING",
+      "INVOICED",
+      "SHIPPED",
+    ]);
     expect(value.store.slug).toBe("synthetic-brand");
     await expect(page.getByLabel("Chave/API Key UP Zero")).toHaveValue("");
     await route.fulfill({ status: 201, json: onboardingResult() });
   });
+  await page.route("**/api/admin/onboarding/*", (route) =>
+    route.fulfill({ json: onboardingResult() }),
+  );
   await page.goto("/");
   await page.getByRole("button", { name: "Entrar", exact: true }).click();
   await page.getByRole("button", { name: "Criar marca", exact: true }).click();

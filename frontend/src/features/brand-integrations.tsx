@@ -1,4 +1,6 @@
 "use client";
+import { readOnboarding } from "@/services/api/onboarding";
+import { installationPollingInterval } from "@/services/api/installation";
 import { useInstallation } from "@/hooks/use-installation";
 import { InstallationStatus } from "@/components/installation-state";
 import type { OnboardingResult } from "@/types/onboarding";
@@ -57,6 +59,82 @@ const searchableName = (value: string) =>
     .replace(/[\u0300-\u036f]/g, "")
     .toLocaleLowerCase("pt-BR")
     .trim();
+function OnboardedInstallationCard({ item }: { item: OnboardingResult }) {
+  const { session, select } = useWorkspace();
+  const router = useRouter();
+  const q = useQuery({
+    queryKey: ["onboarding-installation", session?.id, item.operation_id],
+    queryFn: ({ signal }) => readOnboarding(item.operation_id, signal),
+    initialData: item,
+    retry: false,
+    refetchInterval: (query) =>
+      query.state.data?.installation
+        ? installationPollingInterval(query.state.data.installation.data)
+        : query.state.data?.status === "INSTALLING"
+          ? 30000
+          : false,
+    refetchIntervalInBackground: false,
+  });
+  const value = q.data;
+  const state = value.installation?.data;
+  const window = state?.recommended_preview_window;
+  // An installation response is not authorization. Existing trusted workspace selection is required.
+  const allowed = (session ? authorizedTenants(session) : []).flatMap((t) =>
+    t.brands.flatMap((b) =>
+      b.id === item.brand_id
+        ? b.operations
+            .filter((o) => o.type === "B2B")
+            .map((o) => ({
+              tenant_id: t.id,
+              store_id: o.id,
+              operation: o.type,
+            }))
+        : [],
+    ),
+  )[0];
+  return (
+    <Panel
+      title={item.name}
+      subtitle="Instalação solicitada · sincronização contínua desligada"
+    >
+      {state ? (
+        <InstallationStatus data={state} details />
+      ) : (
+        <>
+          <span className="badge badge--up">
+            {value.status === "BLOCKED" ? "Bloqueado" : "Instalando"}
+          </span>
+          <p className="muted">Calculando progresso...</p>
+          <ul className="integration-statuses">
+            {value.sources.map((source) => (
+              <li key={source.source}>
+                {source.source === "upzero" ? "UP Zero" : "Meta Ads"} ·{" "}
+                <span>Pendente</span>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      {q.isError && (
+        <p role="status">Não foi possível atualizar o estado da instalação.</p>
+      )}
+      <Button
+        className="btn"
+        disabled={!window || !allowed || q.isError}
+        aria-label={`Ver Dashboard de ${item.name}`}
+        onClick={() => {
+          if (window && allowed && !q.isError) {
+            select(allowed, window);
+            router.push("/b2b");
+          }
+        }}
+      >
+        Ver Dashboard
+      </Button>
+    </Panel>
+  );
+}
+
 function BrandDashboard({ brand }: { brand: Company }) {
   const { session, select, dataMode } = useWorkspace();
   const router = useRouter();
@@ -328,42 +406,7 @@ export function BrandIntegrationsPage({
               searchableName(item.name).includes(searchableName(search)),
             )
             .map((item) => (
-              <Panel
-                key={item.operation_id}
-                title={item.name}
-                subtitle="Onboarding administrativo · DRAFT · pipelines desligados"
-              >
-                <span
-                  className={`badge ${item.status === "BLOCKED" ? "badge--warn" : "badge--up"}`}
-                >
-                  {item.status === "INSTALLING"
-                    ? "Instalando"
-                    : item.status === "BLOCKED"
-                      ? "Bloqueado"
-                      : "Instalando"}
-                </span>
-                <ul className="integration-statuses">
-                  {item.sources.map((source) => (
-                    <li key={source.source}>
-                      <span>
-                        {source.source === "upzero" ? "UP Zero" : "Meta Ads"}
-                      </span>
-                      <span>Pendente</span>
-                    </li>
-                  ))}
-                </ul>
-                <p className="muted">
-                  Sem período certificado. Aguardando verificação e planejamento
-                  da instalação.
-                </p>
-                <Button
-                  className="btn"
-                  disabled
-                  aria-label={`Ver Dashboard de ${item.name}`}
-                >
-                  Ver Dashboard
-                </Button>
-              </Panel>
+              <OnboardedInstallationCard key={item.operation_id} item={item} />
             ))}
           {visibleBrands?.length ? (
             <div className="workspace-grid brand-integrations">

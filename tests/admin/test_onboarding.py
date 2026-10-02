@@ -39,6 +39,13 @@ def body(slug="synthetic-brand", up=True, meta=False):
             "timezone": "America/Sao_Paulo",
             "currency": "BRL",
             "history_from": "2026-01-01",
+            "qualifying_order_statuses": [
+                "RESERVED",
+                "CONFIRMED",
+                "PROCESSING",
+                "INVOICED",
+                "SHIPPED",
+            ],
         },
         "sources": {
             "upzero": {
@@ -816,3 +823,29 @@ def test_unknown_secret_write_read_failure_remains_unknown(setup):
         assert caught.value.code in {"secret_write_outcome_unknown", "secret_read_failed"}
         assert SYNTHETIC not in str(caught.value)
     assert client.calls.count("add") == 1
+
+
+def test_installation_readback_only_after_owner_and_tenant_authorization(setup):
+    svc, _, _, _ = setup
+    result = svc.create(ADMIN, KEY, body())
+    calls = []
+    svc.installation = lambda tenant, store: (
+        calls.append((tenant, store))
+        or {
+            "data": {"store_id": store},
+            "metadata": {"contract_version": "installation.v2"},
+            "pagination": None,
+        }
+    )
+    for principal in (
+        None,
+        Principal("other", "ADMIN_UP", ADMIN.tenants),
+        Principal(ADMIN.subject, "ADMIN_UP", frozenset({"foreign-tenant"})),
+    ):
+        with pytest.raises(AdminError):
+            svc.read(principal, result["operation_id"])
+    assert not calls
+    read = svc.read(ADMIN, result["operation_id"])
+    assert calls == [("synthetic-tenant", "synthetic-brand")]
+    assert read["installation"]["data"]["store_id"] == "synthetic-brand"
+    assert SYNTHETIC not in json.dumps(read) and "secret_version_name" not in read

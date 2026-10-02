@@ -10,6 +10,7 @@ from typing import Any
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
+from src.analytics.policy import ORDER_STATUSES, VERSION
 from src.control_plane.model import StoreConfig
 from src.control_plane.registry import Admin
 from src.domain.models import SafeError
@@ -145,6 +146,7 @@ def parse_request(value: Any) -> Request:
                 "timezone",
                 "currency",
                 "history_from",
+                "qualifying_order_statuses",
             },
         )
         sources = exact(root["sources"], {"upzero", "meta"})
@@ -163,11 +165,23 @@ def parse_request(value: Any) -> Request:
         local = text(s["history_from"], 10)
         if not local or date.fromisoformat(local).isoformat() != local:
             raise ValueError
+        statuses = s["qualifying_order_statuses"]
+        if (
+            not isinstance(statuses, list)
+            or any(not isinstance(v, str) for v in statuses)
+            or len(set(statuses)) != len(statuses)
+            or not set(statuses) <= ORDER_STATUSES - {"CANCELED"}
+            or (boolean(s["operation_b2b"]) and not statuses)
+            or (not s["operation_b2b"] and statuses)
+        ):
+            raise ValueError
         config = StoreConfig(
             store_id=slug or "",
             store_slug=slug,
             store_name=text(s["name"], 120),
             operation_b2b=boolean(s["operation_b2b"]),
+            qualifying_order_statuses=tuple(statuses),
+            policy_version=VERSION if s["operation_b2b"] else None,
             operation_b2c=boolean(s["operation_b2c"]),
             timezone=timezone,
             currency=text(s["currency"], 3),

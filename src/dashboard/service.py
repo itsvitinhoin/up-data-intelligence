@@ -133,8 +133,11 @@ class DashboardService:
         policies: Mapping[str, AnalyticsPolicy],
         reader_factory: Callable[[], Reader],
         cursor_key: bytes,
+        *,
+        installation_v2: bool = False,
     ):
         self.project = project
+        self.installation_v2 = installation_v2
         self.policies = dict(policies)
         self.reader_factory = reader_factory
         self.cursors = CursorCodec(cursor_key)
@@ -154,13 +157,21 @@ class DashboardService:
         if principal is None:
             raise ReadError(401, "unauthenticated")
         principal.authorize(grant.tenant_id, grant.store_id, grant.operation)
-        if grant.store_id not in self.policies:
-            raise ReadError(404, "store_not_configured")
         self.grant = grant
         self.principal = principal
-        self.policy = self.policies[grant.store_id]
         self.request_id = uuid4().hex
         self.reader = self.reader_factory()
+        policy = self.policies.get(grant.store_id)
+        if self.installation_v2:
+            from src.installation.publication import resolve_policy
+
+            installation = resolve_policy(self.reader, self.project, grant, self.request_id)
+            if installation:
+                self.policy, self.publication = installation
+                return
+        if policy is None:
+            raise ReadError(404, "store_not_configured")
+        self.policy = policy
         rows = self._query("head", store=grant.store_id, policy=self.policy.policy_hash)
         self.publication = resolve_publication(rows, self.policy)
 
