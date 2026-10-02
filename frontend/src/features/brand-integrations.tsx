@@ -1,6 +1,7 @@
 "use client";
 import { useInstallation } from "@/hooks/use-installation";
 import { InstallationStatus } from "@/components/installation-state";
+import type { OnboardingResult } from "@/types/onboarding";
 import { useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -225,7 +226,9 @@ function BrandInstallationDetail({ brand }: { brand: Company }) {
 }
 export function BrandIntegrationsPage({
   createAction,
+  onboarded = [],
 }: {
+  onboarded?: OnboardingResult[];
   createAction?: React.ReactNode;
 }) {
   const { session, refreshAccess } = useWorkspace();
@@ -320,6 +323,48 @@ export function BrandIntegrationsPage({
             )}
             name="integracoes-por-marca"
           />
+          {onboarded
+            .filter((item) =>
+              searchableName(item.name).includes(searchableName(search)),
+            )
+            .map((item) => (
+              <Panel
+                key={item.operation_id}
+                title={item.name}
+                subtitle="Onboarding administrativo · DRAFT · pipelines desligados"
+              >
+                <span
+                  className={`badge ${item.status === "BLOCKED" ? "badge--warn" : "badge--up"}`}
+                >
+                  {item.status === "INSTALLING"
+                    ? "Instalando"
+                    : item.status === "BLOCKED"
+                      ? "Bloqueado"
+                      : "Instalando"}
+                </span>
+                <ul className="integration-statuses">
+                  {item.sources.map((source) => (
+                    <li key={source.source}>
+                      <span>
+                        {source.source === "upzero" ? "UP Zero" : "Meta Ads"}
+                      </span>
+                      <span>Pendente</span>
+                    </li>
+                  ))}
+                </ul>
+                <p className="muted">
+                  Sem período certificado. Aguardando verificação e planejamento
+                  da instalação.
+                </p>
+                <Button
+                  className="btn"
+                  disabled
+                  aria-label={`Ver Dashboard de ${item.name}`}
+                >
+                  Ver Dashboard
+                </Button>
+              </Panel>
+            ))}
           {visibleBrands?.length ? (
             <div className="workspace-grid brand-integrations">
               {visibleBrands.map((brand) => (

@@ -16,6 +16,19 @@ def generate() -> None:
     meta_manifest: dict[str, Any] = {}
     for name, spec in TABLES.items():
         required = {"row_key", "store_id"} | ({"status", "revision"} if name == REGISTRY else set())
+        if name == "workspace_store_bindings":
+            required |= {"tenant_id", "brand_id", "workspace_operation_id", "operation"}
+        if name == "onboarding_operations":
+            required |= {
+                "operation_id",
+                "idempotency_key",
+                "admin_subject_hash",
+                "request_hash",
+                "tenant_id",
+                "status",
+                "current_step",
+                "revision",
+            }
         fields = [
             {
                 "name": k,

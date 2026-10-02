@@ -3,9 +3,14 @@ import re
 from src.domain.models import SafeError
 
 
-def resolve_secret(reference: str) -> str:
-    if not re.fullmatch(r"projects/[\w-]+/secrets/[\w-]+/versions/(?:[0-9]+|latest)", reference):
+def validate_secret_reference(reference: str, *, numeric_only: bool = False) -> None:
+    version = r"[1-9][0-9]*" if numeric_only else r"(?:[0-9]+|latest)"
+    if not re.fullmatch(r"projects/[\w-]+/secrets/[\w-]+/versions/" + version, reference):
         raise SafeError("invalid_secret_reference")
+
+
+def resolve_secret(reference: str) -> str:
+    validate_secret_reference(reference)
     try:
         from google.cloud import secretmanager
 

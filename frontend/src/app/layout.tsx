@@ -7,6 +7,7 @@ import "@fontsource/jetbrains-mono/400.css";
 import "./globals.css";
 import { Providers } from "@/features/providers";
 import { getDashboardDataMode } from "@/services/api/server";
+import { onboardingDevEnabled } from "@/services/api/onboarding-bridge.server";
 export const metadata: Metadata = {
   title: {
     default: "UP Data Intelligence",
@@ -25,7 +26,12 @@ export default function RootLayout({
         <a href="#main" className="skip-link">
           Ir para conteúdo
         </a>
-        <Providers dataMode={getDashboardDataMode()}>{children}</Providers>
+        <Providers
+          dataMode={getDashboardDataMode()}
+          onboardingEnabled={onboardingDevEnabled()}
+        >
+          {children}
+        </Providers>
       </body>
     </html>
   );

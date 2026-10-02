@@ -525,8 +525,11 @@ def test_terraform_additive_baseline_and_canonical_families():
     active = json.loads((root / "tables.json").read_text())
     assert {k: active[k] for k in old} == old
     assert (
-        set(active) - set(old) == META_ACTIVE | set(SCHEMAS) | {"store_runtime_config"}
-        and len(set(active) - set(old)) == 30
+        set(active) - set(old)
+        == META_ACTIVE
+        | set(SCHEMAS)
+        | {"store_runtime_config", "workspace_store_bindings", "onboarding_operations"}
+        and len(set(active) - set(old)) == 32
     )
     for name, sha in json.loads(
         Path("tests/fixtures/change16/base_schema_hashes.json").read_text()

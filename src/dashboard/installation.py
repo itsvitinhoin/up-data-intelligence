@@ -261,6 +261,7 @@ class InstallationReader:
                 if connection.get("status") in {"inactive", "disabled"}
                 else None
             )
+            pending_source = connection.get("status") == "pending"
             evidence = [
                 r for r in rows if r.get("source") == source and r.get("connection_id") == cid
             ]
@@ -274,11 +275,13 @@ class InstallationReader:
                     raise ReadError(503, "installation_resources_invalid")
                 if not matched:
                     resources.append(
-                        InstallationResource(source, cid, name, "PENDING" if active else "BLOCKED")
+                        InstallationResource(
+                            source, cid, name, "PENDING" if active or pending_source else "BLOCKED"
+                        )
                     )
                     continue
                 r = matched[0]
-                state = resource_state(r) if active else "BLOCKED"
+                state = "PENDING" if pending_source else resource_state(r) if active else "BLOCKED"
                 start, end = checkpoint_window(r, timezone)
                 modern = r.get("metrics_version") == 2
                 resources.append(
@@ -313,7 +316,9 @@ class InstallationReader:
                 )
             own = [r for r in resources if r.connection_id == cid]
             state = (
-                "BLOCKED"
+                "PENDING"
+                if pending_source
+                else "BLOCKED"
                 if not active or any(r.state == "BLOCKED" for r in own)
                 else "RUNNING"
                 if any(r.state == "RUNNING" for r in own)
@@ -335,7 +340,7 @@ class InstallationReader:
                     "source_inactive"
                     if active is False
                     else "source_status_unknown"
-                    if active is None
+                    if active is None and not pending_source
                     else "sync_requires_review"
                     if state == "BLOCKED"
                     else None,

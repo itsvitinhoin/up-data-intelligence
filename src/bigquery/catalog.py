@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 
+from src.admin.schema import BINDINGS, OPERATIONS
 from src.connectors.meta.foundation_schema import SCHEMAS as META_FOUNDATION_SCHEMAS
 from src.control_plane.model import REGISTRY, REGISTRY_FIELDS
 from src.ingestion.metrics import COUNTERS
@@ -84,6 +85,12 @@ RAW = {
     "pagination_error": "STRING",
 }
 TABLES: dict[str, Table] = {}
+TABLES["workspace_store_bindings"] = Table(
+    "up_ops", BINDINGS, None, ("tenant_id", "workspace_operation_id", "store_id")
+)
+TABLES["onboarding_operations"] = Table(
+    "up_ops", OPERATIONS, None, ("admin_subject_hash", "idempotency_key", "store_id")
+)
 for name in ("customers", "orders", "analytics_facts"):
     TABLES["upzero_" + name] = Table(
         "up_raw", COMMON | RAW, "ingested_at", ("store_id", "resource")

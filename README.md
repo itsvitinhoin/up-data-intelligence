@@ -216,3 +216,9 @@ Registry administrativo dinâmico, dispatcher limitado e quatro workers comparti
 com schedulers centrais pausados. Adding a new store requires no Terraform resources.
 Implementação validada offline; provisionamento/execução requerem aprovação separada.
 Veja [MULTI-STORE CONTROL PLANE](docs/CHANGE_16_DEV.md#multi-store-control-plane--change-161).
+
+### Secure brand onboarding (#18.2, offline)
+
+Write API administrativa separada, SAGA DRAFT/INSTALLING e referências numéricas de
+secrets, com bridge exclusivamente DEV e fixtures sintéticas. Não inicia pipelines.
+[Arquitetura, IAM, recuperação e limites](docs/CHANGE_18_2_SECURE_BRAND_ONBOARDING.md).

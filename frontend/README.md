@@ -186,3 +186,12 @@ Ao conectar paginação de servidor no futuro, a opção Todos deve usar uma ope
 ## CHANGE #15B.2 — Preview B2B Analytics V1
 
 O modo DEV privado amplia a leitura same-origin para Pedidos, Aquisição observada, Retenção, Clientes/Summary/pedidos e Produtos. Geography mantém mapa neutro + 424; Performance aguarda materialização, sem fixtures. B2C e marcas não vinculadas seguem demo. `api = demoApi` continua global. Fonte/cobertura por página, cursor bounded, NULL e strings decimais preservados; nenhum cutover público nem camadas #08–#14 promovidas. [Runbook atual](../docs/DASHBOARD_B2B_PREVIEW_DEV.md).
+
+## CHANGE #18.2 — Onboarding seguro, DEV explícito
+
+O dialog Criar marca pode usar a Write API somente no modo privado
+`UP_ADMIN_ONBOARDING_DEV=1` com `NODE_ENV=development`. Default/produção mantêm o demo
+sem ativar essa bridge. Credenciais são input de senha transitório, fora de Company,
+React Query, exportações e storage. Marca nova fica Instalando/Pendente e sem Dashboard.
+[Contrato, segurança, testes offline e limitações](../docs/CHANGE_18_2_SECURE_BRAND_ONBOARDING.md).
+O login demo não é autenticação ADMIN_UP de produção.

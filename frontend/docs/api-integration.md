@@ -61,3 +61,13 @@ O modo DEV privado amplia a leitura same-origin para Pedidos, Aquisição observ
 ## CHANGE #16
 
 `intelligence.ts` valida DTOs materializados; `http.ts` mantém demoApi separado e adiciona endpoints Customer360/Timeline/Produtos/Performance/Campaigns/Influence. Metadata leva ambos os domínios/gerações. Bridges continuam server-only/loopback, sem Meta token no browser. Nenhuma fixture é fallback na operação real vinculada. Consulte [CHANGE_16_DEV.md](../../docs/CHANGE_16_DEV.md); `npm test` e Playwright offline usam apenas fixtures sintéticas.
+
+## Administrative write boundary (#18.2)
+
+Onboarding não faz parte de DataApi nem DashboardService. O módulo
+`services/api/onboarding.ts` envia um payload administrativo transitório por fetch direto;
+valida resposta com allowlist e limpa a credencial, sem React Query/Company.
+Bridge server-side DEV-only em `/api/admin/onboarding` (POST) e
+`/api/admin/onboarding/{operation_id}` (GET), desabilitada em produção. Token/URL privados
+não entram no browser; demo auth não vira auth production. Default demoApi preservado.
+Veja [SAGA, idempotência, IAM e recuperação](../../docs/CHANGE_18_2_SECURE_BRAND_ONBOARDING.md).

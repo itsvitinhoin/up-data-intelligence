@@ -68,9 +68,9 @@ resource "google_project_iam_member" "jobs" {
   member  = "serviceAccount:${google_service_account.analytics.email}"
 }
 resource "google_cloud_run_v2_job" "analytics" {
-  count    = var.enable_job_proposal ? 1 : 0
-  name     = "up-analytics-dev"
-  location = var.region
+  count               = var.enable_job_proposal ? 1 : 0
+  name                = "up-analytics-dev"
+  location            = var.region
   deletion_protection = true
   template {
     task_count = 1

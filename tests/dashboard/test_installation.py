@@ -384,3 +384,24 @@ def test_one_reader_budget_session_and_consistent_snapshot(reader: Reader) -> No
     api.installation(PRINCIPAL, GRANT)
     factory.assert_called_once()
     assert len({q.parameters.get("snapshot_at") for q in reader.calls[1:]}) == 1
+
+
+def test_draft_pending_onboarding_is_installing_not_blocked(reader: Reader) -> None:
+    reader.registry[0]["status"] = "DRAFT"
+    reader.connections[0]["status"] = "pending"
+    reader.resources = []
+    reader.heads = []
+    data = read(reader)
+    assert data["overall_state"] == "INSTALLING"
+    assert data["recommended_preview_window"] is None
+    assert data["sources"][0]["configured"] is True
+    assert data["sources"][0]["active"] is None
+    assert data["sources"][0]["state"] == "PENDING"
+    assert data["sources"][0]["last_error_code"] is None
+    assert all(r["state"] == "PENDING" for r in data["resources"])
+
+
+@pytest.mark.parametrize("status", ["inactive", "disabled", "error", "arbitrary-unknown"])
+def test_non_pending_invalid_source_remains_blocked(reader: Reader, status: str) -> None:
+    reader.connections[0]["status"] = status
+    assert read(reader)["overall_state"] == "BLOCKED"

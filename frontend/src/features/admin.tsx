@@ -1,6 +1,8 @@
 "use client";
 import { PageExport, ListExport, PrintContext } from "@/components/exports";
 import { useState } from "react";
+import { SecureOnboardingForm } from "@/features/secure-onboarding";
+import type { OnboardingResult } from "@/types/onboarding";
 import { LogoUpload } from "@/components/logo-upload";
 import { platforms, erps } from "@/types/domain";
 import Link from "next/link";
@@ -113,6 +115,8 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 }
 export function CompaniesPage() {
   const { session, changed } = useAdmin();
+  const { onboardingEnabled } = useWorkspace();
+  const [onboarded, setOnboarded] = useState<OnboardingResult[]>([]);
   const meta = useQuery({
     queryKey: ["up-admin", "meta"],
     queryFn: () => adminApi.meta(session),
@@ -134,6 +138,7 @@ export function CompaniesPage() {
   });
   return (
     <BrandIntegrationsPage
+      onboarded={onboarded}
       createAction={
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
@@ -144,90 +149,107 @@ export function CompaniesPage() {
           <DialogContent className="glass">
             <DialogTitle>Cadastrar marca</DialogTitle>
             <DialogDescription>
-              Cadastro demonstrativo em memória. Use dados fictícios.
+              {onboardingEnabled
+                ? "Configuração persistida via backend administrativo DEV. Sem execução de pipelines."
+                : "Cadastro demonstrativo em memória. Use dados fictícios."}
             </DialogDescription>
-            <form
-              className="form-grid"
-              onSubmit={(event) => {
-                event.preventDefault();
-                const form = new FormData(event.currentTarget);
-                save.mutate({
-                  id: crypto.randomUUID(),
-                  name: String(form.get("name")).trim(),
-                  cnpj: String(form.get("cnpj")),
-                  logo,
-                  platform:
-                    platform === "none"
-                      ? null
-                      : (platform as Company["platform"]),
-                  erp: erp === "none" ? null : (erp as Company["erp"]),
-                  segment: String(form.get("segment")),
-                  operation,
-                  status: "ACTIVE",
-                  meta_account_id: account === "none" ? null : account,
-                });
-              }}
-            >
-              <Field name="name" label="Nome da marca" />
-              <Field name="cnpj" label="CNPJ" />
-              <LogoUpload
-                value={logo}
-                onChange={setLogo}
-                onBusy={setLogoBusy}
+            {onboardingEnabled ? (
+              <SecureOnboardingForm
+                tenant={session.tenant_ids[0] ?? ""}
+                onCreated={(result) => {
+                  setOnboarded((previous) => [
+                    ...previous.filter(
+                      (item) => item.operation_id !== result.operation_id,
+                    ),
+                    result,
+                  ]);
+                  setOpen(false);
+                }}
               />
-              <Choice
-                label="Plataforma"
-                value={platform}
-                onChange={setPlatform}
-                options={[
-                  { value: "none", label: "Não informado" },
-                  ...platforms.map((value) => ({ value, label: value })),
-                ]}
-              />
-              <Choice
-                label="ERP"
-                value={erp}
-                onChange={setErp}
-                options={[
-                  { value: "none", label: "Não informado" },
-                  ...erps.map((value) => ({ value, label: value })),
-                ]}
-              />
-              <Field name="segment" label="Segmento" />
-              <Choice
-                label="Operação"
-                value={operation}
-                onChange={(value) =>
-                  setOperation(value as Company["operation"])
-                }
-                options={["B2B", "B2C", "Ambos"].map((value) => ({
-                  value,
-                  label: value,
-                }))}
-              />
-              <Choice
-                label="Conta Meta Ads vinculada"
-                value={account}
-                onChange={setAccount}
-                options={[
-                  { value: "none", label: "Vincular depois" },
-                  ...(meta.data?.accounts
-                    .filter((item) => item.status === "AVAILABLE")
-                    .map((item) => ({
-                      value: item.meta_account_id,
-                      label: item.account_name,
-                    })) ?? []),
-                ]}
-              />
-              {save.isError && <p role="alert">{save.error.message}</p>}
-              <Button
-                className="btn"
-                type="submit"
-                disabled={save.isPending || logoBusy}
+            ) : (
+              <form
+                className="form-grid"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  const form = new FormData(event.currentTarget);
+                  save.mutate({
+                    id: crypto.randomUUID(),
+                    name: String(form.get("name")).trim(),
+                    cnpj: String(form.get("cnpj")),
+                    logo,
+                    platform:
+                      platform === "none"
+                        ? null
+                        : (platform as Company["platform"]),
+                    erp: erp === "none" ? null : (erp as Company["erp"]),
+                    segment: String(form.get("segment")),
+                    operation,
+                    status: "ACTIVE",
+                    meta_account_id: account === "none" ? null : account,
+                  });
+                }}
               >
-                Salvar marca
-              </Button>
-            </form>
+                <Field name="name" label="Nome da marca" />
+                <Field name="cnpj" label="CNPJ" />
+                <LogoUpload
+                  value={logo}
+                  onChange={setLogo}
+                  onBusy={setLogoBusy}
+                />
+                <Choice
+                  label="Plataforma"
+                  value={platform}
+                  onChange={setPlatform}
+                  options={[
+                    { value: "none", label: "Não informado" },
+                    ...platforms.map((value) => ({ value, label: value })),
+                  ]}
+                />
+                <Choice
+                  label="ERP"
+                  value={erp}
+                  onChange={setErp}
+                  options={[
+                    { value: "none", label: "Não informado" },
+                    ...erps.map((value) => ({ value, label: value })),
+                  ]}
+                />
+                <Field name="segment" label="Segmento" />
+                <Choice
+                  label="Operação"
+                  value={operation}
+                  onChange={(value) =>
+                    setOperation(value as Company["operation"])
+                  }
+                  options={["B2B", "B2C", "Ambos"].map((value) => ({
+                    value,
+                    label: value,
+                  }))}
+                />
+                <Choice
+                  label="Conta Meta Ads vinculada"
+                  value={account}
+                  onChange={setAccount}
+                  options={[
+                    { value: "none", label: "Vincular depois" },
+                    ...(meta.data?.accounts
+                      .filter((item) => item.status === "AVAILABLE")
+                      .map((item) => ({
+                        value: item.meta_account_id,
+                        label: item.account_name,
+                      })) ?? []),
+                  ]}
+                />
+                {save.isError && <p role="alert">{save.error.message}</p>}
+                <Button
+                  className="btn"
+                  type="submit"
+                  disabled={save.isPending || logoBusy}
+                >
+                  Salvar marca
+                </Button>
+              </form>
+            )}
           </DialogContent>
         </Dialog>
       }

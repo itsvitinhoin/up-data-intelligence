@@ -25,6 +25,7 @@ export function overviewScopeKey(scope: Scope) {
 }
 interface Workspace {
   session: Session | null;
+  onboardingEnabled: boolean;
   scope: Scope | null;
   filters: Filters;
   dataMode: DashboardDataMode;
@@ -40,9 +41,11 @@ const Context = createContext<Workspace | null>(null);
 export function Providers({
   children,
   dataMode = "demo",
+  onboardingEnabled = false,
 }: {
   children: ReactNode;
   dataMode?: DashboardDataMode;
+  onboardingEnabled?: boolean;
 }) {
   const [client] = useState(
     () =>
@@ -68,6 +71,7 @@ export function Providers({
         <Context.Provider
           value={{
             session,
+            onboardingEnabled,
             scope,
             filters,
             dataMode,

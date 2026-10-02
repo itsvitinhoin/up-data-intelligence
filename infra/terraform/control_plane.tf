@@ -66,7 +66,7 @@ locals {
   }
   control_plane_writes = {
     # This is a constant table inventory, never a store inventory.
-    upzero       = toset([for name, spec in local.tables : name if spec.dataset != "up_analytics" && !contains(["store_runtime_config", "source_connections"], name) && !startswith(name, "meta_")])
+    upzero       = toset([for name, spec in local.tables : name if spec.dataset != "up_analytics" && !contains(["store_runtime_config", "source_connections", "workspace_store_bindings", "onboarding_operations"], name) && !startswith(name, "meta_")])
     meta         = setunion(setsubtract(local.change16_meta_tables, toset(["meta_account_bindings"])), toset(["sync_runs", "sync_checkpoints", "quality_results"]))
     analytics    = local.analytics_write_tables
     intelligence = local.change16_intelligence_tables
