@@ -41,6 +41,7 @@ def create_dev_preview_app(
     protected = create_wsgi_app(service_factory, authenticate)
     allowed_paths = {
         f"/v1/stores/{store_id}/overview",
+        f"/v1/stores/{store_id}/installation",
         "/v1/orders",
         "/v1/acquisition",
         "/v1/customers",
@@ -66,7 +67,10 @@ def create_dev_preview_app(
             is not None
         )
         query = parse_qs(str(environ.get("QUERY_STRING", "")), keep_blank_values=True)
-        if path != f"/v1/stores/{store_id}/overview" and query.get("store_id") != [store_id]:
+        if path not in {
+            f"/v1/stores/{store_id}/overview",
+            f"/v1/stores/{store_id}/installation",
+        } and query.get("store_id") != [store_id]:
             allowed = False
         if not allowed or environ.get("REQUEST_METHOD") != "GET":
             code = "404 Not Found" if not allowed else "405 Method Not Allowed"

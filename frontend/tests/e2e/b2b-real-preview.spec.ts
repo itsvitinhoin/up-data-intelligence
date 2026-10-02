@@ -1,3 +1,4 @@
+import { installationFixture } from "../fixtures/installation";
 import { test, expect, type Page } from "@playwright/test";
 // Synthetic offline envelopes only. Live opt-in uses the exact same traversal without fixtures.
 const live = process.env.DASHBOARD_E2E_LIVE === "1";
@@ -128,6 +129,10 @@ async function mocks(page: Page) {
       return;
     }
     const path = url.pathname.replace("/api/dashboard/", "");
+    if (path === "installation") {
+      await route.fulfill({ json: installationFixture() });
+      return;
+    }
     if (
       path === "performance" ||
       /\/(intelligence|timeline|products)$/.test(path)

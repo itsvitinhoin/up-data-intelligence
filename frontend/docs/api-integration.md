@@ -1,5 +1,9 @@
 # Fronteira de integração
 
+## Installation State — CHANGE #18.1
+
+`createHttpApi().installation(scope)` consome o envelope estrito `installation.v1` de `GET /v1/stores/{store_id}/installation`, separado da metadata comercial que exige HEAD. O hook `useInstallation` usa o bridge server-side `/api/dashboard/installation`, binding existente de workspace para technical store, AbortSignal/no-store e polling de 30s somente em INSTALLING/PARTIAL. O modo demo/admin write e a autorização production não mudaram. [Semântica, limites e runbook offline](../../docs/CHANGE_18_MX_PRODUCT_ONBOARDING.md).
+
 Esta entrega estabelece a interface `DataApi`, consumida exclusivamente pelos hooks. O modo demo é explícito e não liga um endpoint por variável de ambiente. Todas as futuras chamadas do transporte recebem `tenant_id` e `store_id`, sinal de cancelamento e credenciais de sessão via cookie. Não há token em storage, bundle ou configuração pública.
 
 ## Contratos de origem

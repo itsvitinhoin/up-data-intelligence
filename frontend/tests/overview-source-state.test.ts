@@ -38,6 +38,10 @@ vi.mock("@/hooks/use-resource", async (original) => ({
   useRequestContext: harness.context,
 }));
 vi.mock("next/navigation", () => ({ usePathname: harness.pathname }));
+// This suite exercises Overview's query state, not the independent installation query.
+vi.mock("@/hooks/use-installation", () => ({
+  useInstallation: () => ({ enabled: false, data: null }),
+}));
 const scope: Scope = {
   tenant_id: "demo-up",
   store_id: "mx-fashion-b2b",

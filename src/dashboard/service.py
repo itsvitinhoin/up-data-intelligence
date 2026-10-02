@@ -80,6 +80,52 @@ def _float(value: Any) -> float | None:
     return result
 
 
+def resolve_publication(rows: list[dict[str, Any]], policy: AnalyticsPolicy) -> Publication:
+    if not rows:
+        raise ReadError(503, "publication_head_missing")
+    if len(rows) != 1:
+        raise ReadError(503, "publication_head_duplicate_or_invalid")
+    row = rows[0]
+    if (
+        row.get("status") != "completed"
+        or row.get("receipt_status") != "completed"
+        or row.get("receipt_version") != ANALYTICS_VERSION
+        or row.get("store_id") != row.get("receipt_store_id")
+        or row.get("policy_hash") != row.get("receipt_policy_hash")
+        or row.get("publication_id") != row.get("receipt_id")
+        or row.get("generation") != row.get("receipt_generation")
+        or row.get("source_watermark") != row.get("receipt_watermark")
+        or _timestamp(row.get("as_of")) != _timestamp(row.get("receipt_as_of"))
+    ):
+        raise ReadError(503, "publication_head_invalid")
+    receipt_from = _publication_date(row.get("receipt_from"))
+    receipt_to = _publication_date(row.get("receipt_to"))
+    if (
+        receipt_from >= receipt_to
+        or (
+            row.get("report_from") is not None
+            and _publication_date(row["report_from"]) != receipt_from
+        )
+        or (row.get("report_to") is not None and _publication_date(row["report_to"]) != receipt_to)
+    ):
+        raise ReadError(503, "publication_head_invalid")
+    generation = integer(row.get("generation"))
+    if generation is None:
+        raise ReadError(503, "publication_head_invalid")
+    publication = Publication(
+        store_id=str(row.get("store_id")),
+        policy_hash=str(row.get("policy_hash")),
+        generation=generation,
+        publication_id=str(row.get("publication_id")),
+        snapshot_at=_timestamp(row.get("snapshot_at")),
+        as_of=_timestamp(row.get("as_of")),
+        report_from=receipt_from,
+        report_to=receipt_to,
+    )
+    publication.validate(policy)
+    return publication
+
+
 class DashboardService:
     def __init__(
         self,
@@ -116,51 +162,14 @@ class DashboardService:
         self.request_id = uuid4().hex
         self.reader = self.reader_factory()
         rows = self._query("head", store=grant.store_id, policy=self.policy.policy_hash)
-        if not rows:
-            raise ReadError(503, "publication_head_missing")
-        if len(rows) != 1:
-            raise ReadError(503, "publication_head_duplicate_or_invalid")
-        row = rows[0]
-        if (
-            row.get("status") != "completed"
-            or row.get("receipt_status") != "completed"
-            or row.get("receipt_version") != ANALYTICS_VERSION
-            or row.get("store_id") != row.get("receipt_store_id")
-            or row.get("policy_hash") != row.get("receipt_policy_hash")
-            or row.get("publication_id") != row.get("receipt_id")
-            or row.get("generation") != row.get("receipt_generation")
-            or row.get("source_watermark") != row.get("receipt_watermark")
-            or _timestamp(row.get("as_of")) != _timestamp(row.get("receipt_as_of"))
-        ):
-            raise ReadError(503, "publication_head_invalid")
-        receipt_from = _publication_date(row.get("receipt_from"))
-        receipt_to = _publication_date(row.get("receipt_to"))
-        if (
-            receipt_from >= receipt_to
-            or (
-                row.get("report_from") is not None
-                and _publication_date(row["report_from"]) != receipt_from
-            )
-            or (
-                row.get("report_to") is not None
-                and _publication_date(row["report_to"]) != receipt_to
-            )
-        ):
-            raise ReadError(503, "publication_head_invalid")
-        generation = integer(row.get("generation"))
-        if generation is None:
-            raise ReadError(503, "publication_head_invalid")
-        self.publication = Publication(
-            store_id=str(row.get("store_id")),
-            policy_hash=str(row.get("policy_hash")),
-            generation=generation,
-            publication_id=str(row.get("publication_id")),
-            snapshot_at=_timestamp(row.get("snapshot_at")),
-            as_of=_timestamp(row.get("as_of")),
-            report_from=receipt_from,
-            report_to=receipt_to,
+        self.publication = resolve_publication(rows, self.policy)
+
+    def installation(self, principal: Principal | None, grant: Grant) -> dict[str, Any]:
+        from src.dashboard.installation import InstallationReader
+
+        return InstallationReader(self.project, self.policies, self.reader_factory).read(
+            principal, grant
         )
-        self.publication.validate(self.policy)
 
     def _rows(self, name: str, **values: object) -> list[dict[str, Any]]:
         return self._query(

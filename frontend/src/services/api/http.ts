@@ -1,3 +1,4 @@
+import { parseInstallation } from "./installation";
 /** Analytics V1 read transport. Never selected by the demo composition root. */
 import {
   parseIntelligence,
@@ -625,6 +626,32 @@ export function createHttpApi(baseUrl: string, fetcher: typeof fetch = fetch) {
     };
   }
   return {
+    installation: async (
+      scope: LiveScope,
+      options: { signal?: AbortSignal } = {},
+    ) => {
+      if (!scope.tenant_id || !scope.store_id || scope.operation !== "B2B")
+        throw invalid();
+      const url = new URL(
+        `/v1/stores/${encodeURIComponent(scope.store_id)}/installation`,
+        base,
+      );
+      url.searchParams.set("tenant_id", scope.tenant_id);
+      url.searchParams.set("operation", scope.operation);
+      const response = await fetcher(url, {
+        method: "GET",
+        credentials: "include",
+        cache: "no-store",
+        headers: { Accept: "application/json" },
+        signal: options.signal,
+      });
+      if (!response.ok)
+        throw new ApiError(
+          response.status,
+          "Estado de instalação indisponível.",
+        );
+      return parseInstallation(await response.json(), scope.store_id);
+    },
     intelligence: async <K extends IntelligenceResource>(
       resource: K,
       scope: LiveScope,

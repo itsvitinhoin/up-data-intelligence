@@ -88,6 +88,16 @@ def dispatch(
             from_day=_value(query, "from"),
             to_day=_value(query, "to"),
         )
+    installation = re.fullmatch(r"/v1/stores/([^/]+)/installation", path)
+    if installation:
+        if set(query) - {"tenant_id", "operation"}:
+            raise ReadError(400, "unsupported_filter")
+        grant = Grant(
+            _value(query, "tenant_id") or "",
+            unquote(installation.group(1)),
+            _value(query, "operation") or "",
+        )
+        return 200, service.installation(principal, grant)
     overview = re.fullmatch(r"/v1/stores/([^/]+)/overview", path)
     customer_orders = re.fullmatch(r"/v1/customers/([^/]+)/orders", path)
     customer = re.fullmatch(r"/v1/customers/([^/]+)", path)

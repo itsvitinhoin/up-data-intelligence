@@ -2296,3 +2296,39 @@ button:disabled {
   width: 100%;
   font-size: 11px;
 }
+
+.installation-status {
+  width: 100%;
+  display: grid;
+  gap: 12px;
+  text-align: left;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.02);
+}
+.installation-status .integration-statuses li {
+  flex-wrap: wrap;
+}
+.installation-status .integration-statuses li > span:first-child {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.installation-progress p {
+  margin: 0 0 5px;
+}
+.installation-progress progress {
+  width: 100%;
+  accent-color: var(--up);
+}
+.installation-detail {
+  flex-basis: 100%;
+  display: grid;
+  gap: 5px;
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+.brand-dashboard-access:has(.installation-status) {
+  flex-wrap: wrap;
+}

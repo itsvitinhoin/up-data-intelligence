@@ -46,6 +46,10 @@ def build(project: str, name: str, **values: object) -> Query:
         "policy": ("STRING", values.get("policy")),
     }
     if name == "head":
+        at = ""
+        if values.get("snapshot_at") is not None:
+            common["snapshot_at"] = ("TIMESTAMP", values["snapshot_at"])
+            at = "FOR SYSTEM_TIME AS OF @snapshot_at"
         sql = f"""/* dashboard:head */
 SELECT h.store_id,h.policy_hash,h.generation,h.publication_id,h.status,
  h.as_of,h.report_from,h.report_to,h.source_watermark,
@@ -55,8 +59,8 @@ SELECT h.store_id,h.policy_hash,h.generation,h.publication_id,h.status,
  r.source_watermark AS receipt_watermark,
  r.as_of AS receipt_as_of,r.report_from AS receipt_from,r.report_to AS receipt_to,
  CURRENT_TIMESTAMP() AS snapshot_at
-FROM {a("analytics_publications")} h
-LEFT JOIN {a("analytics_publications")} r
+FROM {a("analytics_publications")} AS h {at}
+LEFT JOIN {a("analytics_publications")} AS r {at}
  ON r.record_kind='RECEIPT' AND r.store_id=h.store_id
  AND r.policy_hash=h.policy_hash AND r.publication_id=h.publication_id
 WHERE h.record_kind='HEAD' AND h.store_id=@store AND h.policy_hash=@policy"""

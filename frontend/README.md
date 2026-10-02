@@ -57,6 +57,8 @@ O guard de UI **não é autenticação/autorização de produção**. O backend 
 
 ## Preparação para os contratos existentes
 
+CHANGE #18.1 acrescenta estado de instalação read-only no Admin e coverage guard no preview B2B. Marcas vinculadas podem abrir a janela Analytics certificada; instalação parcial não significa histórico completo. Demo permanece separado. [Contrato e validação offline](../docs/CHANGE_18_MX_PRODUCT_ONBOARDING.md).
+
 Leia [API e integração futura](docs/api-integration.md). `DataApi` é um **contrato de apresentação**, não uma cópia dos DTOs do backend. O transporte HTTP de leitura Analytics V1 está implementado separadamente, sem autenticação real ou seleção pela UI; rotas administrativas e diversas rotas de dashboard ainda não existem. Não basta trocar a URL para habilitar dados reais.
 
 Antes do cutover visual: adequar os componentes aos view models nullable, mapear explicitamente os contratos Changes #11/#12/#14 quando forem promovidos e integrar autenticação real no backend. A Read API #15A foi implementada para Analytics V1 e é testada offline; nenhuma query real, deploy ou troca de adaptador ocorreu.

@@ -1,4 +1,6 @@
 "use client";
+import { useInstallation } from "@/hooks/use-installation";
+import { InstallationStatus } from "@/components/installation-state";
 import { useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -55,7 +57,7 @@ const searchableName = (value: string) =>
     .toLocaleLowerCase("pt-BR")
     .trim();
 function BrandDashboard({ brand }: { brand: Company }) {
-  const { session, select } = useWorkspace();
+  const { session, select, dataMode } = useWorkspace();
   const router = useRouter();
   const operations = (session ? authorizedTenants(session) : []).flatMap(
     (tenant) =>
@@ -72,6 +74,17 @@ function BrandDashboard({ brand }: { brand: Company }) {
   const [storeId, setStoreId] = useState(operations[0]?.storeId ?? "");
   const selected =
     operations.find((item) => item.storeId === storeId) ?? operations[0];
+  const installation = useInstallation(
+    selected
+      ? {
+          tenant_id: selected.tenantId,
+          store_id: selected.storeId,
+          operation: selected.type,
+        }
+      : null,
+  );
+  const mustCertify = installation.enabled && installation.data !== null;
+  const window = installation.data?.data.recommended_preview_window;
   return (
     <div className="brand-dashboard-access">
       {operations.length > 1 && (
@@ -87,21 +100,127 @@ function BrandDashboard({ brand }: { brand: Company }) {
       )}
       <Button
         className="btn"
-        disabled={!selected}
+        disabled={
+          !selected ||
+          (installation.enabled && installation.isError) ||
+          (mustCertify && !window)
+        }
         aria-label={`Ver Dashboard de ${brand.name}`}
         onClick={() => {
-          if (!selected) return;
-          select({
-            tenant_id: selected.tenantId,
-            store_id: selected.storeId,
-            operation: selected.type,
-          });
+          if (
+            !selected ||
+            (installation.enabled && installation.isError) ||
+            (mustCertify && !window)
+          )
+            return;
+          select(
+            {
+              tenant_id: selected.tenantId,
+              store_id: selected.storeId,
+              operation: selected.type,
+            },
+            window ?? undefined,
+          );
           router.push("/" + selected.type.toLowerCase());
         }}
       >
         Ver Dashboard <ArrowRight size={15} />
       </Button>
+      {installation.enabled ? (
+        installation.isPending ? (
+          <small>Verificando instalação...</small>
+        ) : installation.isError ? (
+          <small role="status">
+            Estado de instalação indisponível. Acesso real não liberado.
+          </small>
+        ) : installation.data ? (
+          <InstallationStatus data={installation.data.data} />
+        ) : (
+          <small>Sem binding real para esta operação · demonstração</small>
+        )
+      ) : (
+        <small>
+          {dataMode === "read-api-preview"
+            ? "Operação sem contrato de instalação real · demo"
+            : "Configuração demonstrativa · sem instalação live"}
+        </small>
+      )}
     </div>
+  );
+}
+function BrandConnectionDot({ brand }: { brand: Company }) {
+  const { session } = useWorkspace();
+  const scope = (session ? authorizedTenants(session) : [])
+    .flatMap((t) =>
+      t.brands
+        .filter((b) => b.id === brand.id)
+        .flatMap((b) =>
+          b.operations
+            .filter((o) => o.type === "B2B")
+            .map((o) => ({
+              tenant_id: t.id,
+              store_id: o.id,
+              operation: o.type,
+            })),
+        ),
+    )
+    .at(0);
+  const q = useInstallation(scope ?? null);
+  const active = q.enabled
+    ? q.isError || !q.data
+      ? null
+      : q.data.data.sources.some((s) => s.configured && s.active === true)
+        ? true
+        : q.data.data.sources.some((s) => s.configured && s.active === null)
+          ? null
+          : false
+    : verifiedConnectionCount(brand) > 0;
+  return (
+    <span
+      className={`connection-dot ${active ? "connection-dot--active" : ""}`}
+      role="img"
+      aria-label={
+        active === null
+          ? `Conexão não verificada de ${brand.name}`
+          : active
+            ? `Conexão ativa de ${brand.name}`
+            : `Sem conexão ativa de ${brand.name}`
+      }
+    />
+  );
+}
+function BrandInstallationDetail({ brand }: { brand: Company }) {
+  const { session } = useWorkspace();
+  const scope = (session ? authorizedTenants(session) : [])
+    .flatMap((t) =>
+      t.brands
+        .filter((b) => b.id === brand.id)
+        .flatMap((b) =>
+          b.operations
+            .filter((o) => o.type === "B2B")
+            .map((o) => ({
+              tenant_id: t.id,
+              store_id: o.id,
+              operation: o.type,
+            })),
+        ),
+    )
+    .at(0);
+  const q = useInstallation(scope ?? null);
+  if (!q.enabled)
+    return (
+      <p className="muted">
+        Configurações demonstrativas. Credenciais reais não são recebidas neste
+        formulário.
+      </p>
+    );
+  if (q.isPending) return <Loading />;
+  if (q.isError)
+    return <p role="status">Estado operacional real indisponível.</p>;
+  return q.data ? (
+    <InstallationStatus data={q.data.data} details />
+  ) : (
+    <p className="muted">Sem binding de instalação real.</p>
   );
 }
 export function BrandIntegrationsPage({
@@ -208,15 +327,7 @@ export function BrandIntegrationsPage({
                   key={brand.id}
                   title={
                     <span className="brand-card-heading">
-                      <span
-                        className={`connection-dot ${verifiedConnectionCount(brand) ? "connection-dot--active" : ""}`}
-                        role="img"
-                        aria-label={
-                          verifiedConnectionCount(brand)
-                            ? `Conexão ativa de ${brand.name}`
-                            : `Sem conexão ativa de ${brand.name}`
-                        }
-                      />
+                      <BrandConnectionDot brand={brand} />
                       {brand.logo && (
                         <Image
                           className="brand-card-logo"
@@ -242,7 +353,8 @@ export function BrandIntegrationsPage({
                   <div className="integration-summary">
                     <Plug size={16} />
                     <span>
-                      {verifiedConnectionCount(brand)} integrações ativas ·{" "}
+                      Configuração demo · {verifiedConnectionCount(brand)}{" "}
+                      integrações ativas ·{" "}
                       {connections(brand).filter((i) => i.enabled).length}{" "}
                       preparadas
                     </span>
@@ -338,6 +450,7 @@ export function BrandIntegrationsPage({
             Selecione as integrações desta marca. As configurações ficam nesta
             sessão de demonstração.
           </DialogDescription>
+          {draft && <BrandInstallationDetail brand={draft} />}
           {draft && (
             <form
               onSubmit={(e) => {

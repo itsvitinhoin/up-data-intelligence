@@ -1,4 +1,5 @@
 "use client";
+import { useInstallation } from "@/hooks/use-installation";
 import { useState } from "react";
 import { usePathname } from "next/navigation";
 import { activePageState, isB2BReadPage } from "@/lib/dashboard-source";
@@ -30,7 +31,17 @@ export function PeriodFilter() {
     scope?.operation === "B2B" &&
     dataMode === "read-api-preview";
   const current = activePageState(path, dataMode, scope, dashboardPageState);
-  const coverage = current?.metadata;
+  const installation = useInstallation();
+  const available = installation.data?.data.available_window;
+  const coverage =
+    current?.metadata ??
+    (available
+      ? {
+          report_from: available.from,
+          report_to: available.to,
+          reporting_timezone: installation.data!.metadata.reporting_timezone,
+        }
+      : undefined);
   const pendingCoverage =
     previewRoute && current?.source !== "demo" && !coverage;
   const lastClosed = coverage ? exclusiveToInclusive(coverage.report_to) : null;
@@ -45,7 +56,9 @@ export function PeriodFilter() {
   const error =
     periodError(from, to) ??
     (coverage && (from < coverage.report_from || to > lastClosed!)
-      ? "Período fora da cobertura publicada."
+      ? installation.data
+        ? "Histórico deste período ainda está sendo processado."
+        : "Período fora da cobertura publicada."
       : null);
   return (
     <Dialog

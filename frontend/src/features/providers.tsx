@@ -16,6 +16,8 @@ import type {
   Session,
 } from "@/types/domain";
 import type { DashboardPageState } from "@/lib/dashboard-source";
+import type { InstallationCoverage } from "@/types/installation";
+import { exclusiveToInclusive } from "@/lib/period";
 import { defaultFilters } from "@/config/tenants";
 import { authorizedTenants, sessionFor } from "@/services/api";
 export function overviewScopeKey(scope: Scope) {
@@ -30,7 +32,7 @@ interface Workspace {
   setDashboardPageState: Dispatch<SetStateAction<DashboardPageState | null>>;
   login: (id: string) => void;
   logout: () => void;
-  select: (scope: Scope) => void;
+  select: (scope: Scope, window?: InstallationCoverage) => void;
   setFilters: (filters: Filters) => void;
   refreshAccess: () => void;
 }
@@ -102,7 +104,7 @@ export function Providers({
               if (session) setSession(sessionFor(session.id));
               clear();
             },
-            select: (next) => {
+            select: (next, window) => {
               if (
                 !session ||
                 !authorizedTenants(session).some(
@@ -119,7 +121,16 @@ export function Providers({
                 return;
               clear();
               setScope(next);
-              setFilters(defaultFilters);
+              setFilters(
+                window
+                  ? {
+                      ...defaultFilters,
+                      period: "custom",
+                      from: window.from,
+                      to: exclusiveToInclusive(window.to),
+                    }
+                  : defaultFilters,
+              );
             },
           }}
         >

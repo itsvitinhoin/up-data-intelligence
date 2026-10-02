@@ -2,7 +2,9 @@ import { defineConfig } from "@playwright/test";
 const live = process.env.DASHBOARD_E2E_LIVE === "1";
 export default defineConfig({
   testDir: "tests/e2e",
-  testMatch: "b2b-real-preview.spec.ts",
+  testMatch: live
+    ? "b2b-real-preview.spec.ts"
+    : ["b2b-real-preview.spec.ts", "installation.spec.ts"],
   workers: 1,
   fullyParallel: false,
   timeout: 90000,

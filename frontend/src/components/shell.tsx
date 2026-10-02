@@ -1,4 +1,5 @@
 "use client";
+import { InstallationBoundary } from "@/components/installation-state";
 import { PageExport, PrintContext } from "@/components/exports";
 import { PeriodFilter } from "@/components/period-filter";
 import { useState, useEffect } from "react";
@@ -464,7 +465,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
           </span>
           <span className="badge badge--up">{sourceLabel}</span>
         </div>
-        {children}
+        <InstallationBoundary>{children}</InstallationBoundary>
         <footer className="note">
           {realOverview
             ? `UP Data Intelligence · Dados reais · Analytics V1${currentRead?.metadata?.history_complete ? "" : " · Histórico parcial"}`
