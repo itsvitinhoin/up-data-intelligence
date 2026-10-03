@@ -1,8 +1,9 @@
 # CHANGE #18.4D — Installation runtime DEV
 
-**Latest outcome (#18.4D.2): MX ADOPTION BLOCKED —
-`store_busy_or_lease_unavailable`. Metadata handoff committed and plan-only
-accepted; create-plan failed before persistence. Zero plans/work units persisted.**
+**Latest continuation (#18.4D.3): MX ADOPTION BLOCKED —
+`cloud_session_authorization_required` (local access gate, not a runtime error).
+Lease recovery and create-plan were not attempted. The last verified cloud state
+is the #18.4D.2 reconciliation below; it has not been revalidated this round.**
 
 The seven-resource deployment and all four help smokes succeeded. The single MX
 inspection stopped at source connection metadata validation, before calculating
@@ -560,3 +561,77 @@ Only this runbook is published; private helpers, snapshots, logs and screenshots
 remain outside Git. No credentials, customer data, Terraform state/plan or cache
 is included. Same branch, a separate documentation commit, no PR or merge.
 Stop before lease recovery, another create-plan attempt or any dispatch.
+
+## CHANGE #18.4D.3 — lease reconciliation continuation (2026-10-03)
+
+**MX ADOPTION BLOCKED — `cloud_session_authorization_required`.**
+This label identifies the local access/approval gate, not a SafeError emitted by
+Cloud Run. No ownership determination or lease recovery was made this round.
+
+### Confirmed local baseline and access blocker
+
+The checkout was exactly `change-18-4d-installation-runtime`, HEAD
+`7557efeed9e728a8bd4f3dd2c329e322ac92e397`, clean. No branch switch or reset.
+No runtime, frontend, policy, schema, Terraform or image file changed.
+
+The previous Cloud Shell browser tab was no longer available. A new tab for the
+specified DEV project opened under a different signed-in Google session. The
+automatic approval review rejected switching to the previously used UP session
+because the current request did not explicitly identify/authorize that account.
+Explicit authorization was requested and remained pending. No workaround,
+alternative credentials or cloud SDK operation was used to bypass the rejection.
+
+Opening the Cloud Shell UI is not evidence of successful project access. No GCP
+metadata query, execution listing, lease metadata GET/body read, business-data
+read, delete, create-plan or Terraform operation was performed in this round.
+
+### Recovery/persistence gates remain unexecuted
+
+The approved historical lease key/generation, Registry revision 4, 97 checkpoints,
+111 runs, zero plans/work units and accepted semantic plan signature are retained
+in the preceding section as historical evidence only. They are not a substitute
+for current reconciliation. No claim is made that the lease is currently orphaned,
+absent or safe to delete, or that current execution/scheduler state is unchanged.
+
+After session access is explicitly authorized, the remaining sequence is:
+
+1. Audit full candidate execution metadata around 2026-10-02 18:45–20:15Z,
+   including the five normal workers/dispatcher and applicable Foundation Jobs.
+2. Reconcile current executions, seven PAUSED Schedulers/no Installation
+   Scheduler, Registry/source/binding, zero plans/units and exact legacy
+   run/checkpoint evidence against the private previous snapshot. Stop if any
+   ownership/outcome or business-state criterion cannot be proved.
+3. Re-read lease metadata immediately before the only authorized deletion.
+   Require generation `1790967367875706`, canonical MX key and unchanged
+   creation/update time. Use that exact generation precondition, never a generic
+   delete, body read, expiry assumption or automatic retry.
+4. Reconcile absence of MX/global leases; repeat pre-create state/image guards.
+   Submit create-plan once with the fixed approved target and budgets.
+5. Reconcile persisted plan/45 PENDING units/Registry and compare the approved
+   semantic signature, preserving legacy IDs, filters, counters and checkpoints.
+   Read the actual Installation State without forcing INSTALLING; audit final
+   leases and unchanged certified window/history/coverage.
+6. Stop before dispatch or any business worker. Any unknown outcome stops retries.
+
+No new create-plan execution/exit, persisted signature, current Registry,
+Installation State or lease-delete outcome exists to report for #18.4D.3.
+These remain unverified rather than defaulting to the expected values.
+
+### Local validation and publication
+
+- `.venv/bin/pytest -q tests/installation`: **88 passed**, 16.75s.
+- `.venv/bin/pytest -q`: **2052 passed**, 133.87s.
+- `.venv/bin/ruff check .`: passed.
+- `.venv/bin/ruff format --check .`: **270 files already formatted**.
+- `.venv/bin/mypy src`: passed, **150 source files**.
+- `git diff --check`: passed after this documentation update.
+
+UP Zero API: NO. Meta API: NO. Secret value read: NO. Dispatch: NO.
+Business workers: NO. RAW mutation: NO. CORE business mutation: NO.
+Checkpoint mutation: NO. Sync-run mutation: NO. Publication mutation: NO.
+history_complete changed: NO. Schedulers changed: NO. Terraform: NO.
+Lease delete: NO. Create-plan attempt: NO.
+
+Only this existing runbook is committed/pushed on the same branch. No private
+metadata, lease body, credentials, state/plan, temporary artifact, PR or merge.
+Stop at the session-authorization gate; lease recovery is not yet certified.
