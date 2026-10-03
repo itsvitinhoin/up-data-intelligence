@@ -1,9 +1,10 @@
 # CHANGE #18.4D — Installation runtime DEV
 
-**Latest continuation (#18.4D.3): MX ADOPTION BLOCKED —
-`cloud_session_authorization_required` (local access gate, not a runtime error).
-Lease recovery and create-plan were not attempted. The last verified cloud state
-is the #18.4D.2 reconciliation below; it has not been revalidated this round.**
+**Latest continuation (#18.4D.3, authorized resumption): MX PLAN PERSISTED —
+READY FOR FIRST CONTROLLED DISPATCH. The legacy MX lease was reconciled and
+removed once with its exact generation precondition. One canonical create-plan
+execution succeeded; the persisted plan matches the approved semantic hash.
+No dispatch or business work unit was executed.**
 
 The seven-resource deployment and all four help smokes succeeded. The single MX
 inspection stopped at source connection metadata validation, before calculating
@@ -562,7 +563,7 @@ remain outside Git. No credentials, customer data, Terraform state/plan or cache
 is included. Same branch, a separate documentation commit, no PR or merge.
 Stop before lease recovery, another create-plan attempt or any dispatch.
 
-## CHANGE #18.4D.3 — lease reconciliation continuation (2026-10-03)
+## CHANGE #18.4D.3 — initial access gate (2026-10-03)
 
 **MX ADOPTION BLOCKED — `cloud_session_authorization_required`.**
 This label identifies the local access/approval gate, not a SafeError emitted by
@@ -635,3 +636,200 @@ Lease delete: NO. Create-plan attempt: NO.
 Only this existing runbook is committed/pushed on the same branch. No private
 metadata, lease body, credentials, state/plan, temporary artifact, PR or merge.
 Stop at the session-authorization gate; lease recovery is not yet certified.
+
+## CHANGE #18.4D.3 — authorized lease recovery and plan persistence
+
+**MX PLAN PERSISTED — READY FOR FIRST CONTROLLED DISPATCH.**
+The user subsequently authorized the intended UP Google session. The earlier
+access rejection was resolved through that authorization, without a workaround.
+This section supersedes the initial access-gate outcome, preserving its history.
+
+### Baseline, runtime and ownership reconciliation
+
+The local and Cloud Shell checkouts remained on
+`change-18-4d-installation-runtime`, HEAD
+`717a53a3dbe8d04e92dff025116c0b27deeb181e`, clean. This is the documentation-only
+continuation of required baseline `7557efeed9e728a8bd4f3dd2c329e322ac92e397`;
+only this runbook differs. No branch switch, reset or runtime modification.
+
+All 13 Cloud Run Job specs matched the preceding audit. All four Installation
+Jobs retained digest
+`sha256:5e9b3d0752cd78abfabf580b39c69eedf487dd72b086c3e62f6f593ccc2288f0`.
+The execution inventory covered all nine required normal/Installation Jobs and
+three existing Foundation Jobs. None was active immediately before recovery.
+Seven existing Schedulers were PAUSED; Installation Schedulers were absent.
+
+Full candidate execution metadata in the historical 18:45–20:15Z window showed:
+
+| Execution | Start (UTC) | Completion (UTC) | Terminal evidence |
+| --- | --- | --- | --- |
+| `up-store-dispatcher-zww44` | 2026-10-02 18:55:45.749367 | 2026-10-02 19:56:22.153419 | failedCount=1, Completed=False, NonZeroExitCode |
+| `up-upzero-worker-97khw` | 2026-10-02 18:55:59.749307 | 2026-10-02 19:56:16.159085 | failedCount=1, Completed=False, configured timeout reached |
+
+The worker args identified MX/upzero. Its structured sync_started event at
+18:58:17.856944Z identified legacy run
+`0264739c-d3c6-4984-b88e-74fb5554bd58`. The dispatcher subsequently emitted
+`worker_execution_outcome_unknown` at 19:56:19.160045Z. This connects the preserved
+lease to an ended legacy attempt and its ambiguous dispatcher result; it does
+not infer ownership merely from object age or a lease UUID.
+
+All 479 BigQuery write job IDs recorded by that worker were reconciled through
+job metadata: DONE, zero errors, zero pending/running jobs. There were no
+INSERT/UPDATE/DELETE/MERGE/SCRIPT jobs after the preceding reconciliation cutoff
+2026-10-03T20:43:09.121039Z and before this round's authorized persistence.
+The full 97 checkpoint rows and 111 sync-run rows matched the private preceding
+snapshot, including the legacy run/checkpoint, filters, mode and cursor ownership.
+Source connections and Meta binding also matched. No customer rows, RAW payload,
+secret value or query text was fetched for this audit.
+
+Before recovery: Registry revision 4/ACTIVE/sync_enabled=false, zero MX plans and
+zero MX work units. UP Zero remained active, Meta pending with secret reference
+NULL, and the binding unchanged. All four normal pipeline eligibility checks
+were false. Canonical read-only planning reproduced the approved plan/hash before
+recovery; no code fix, build, image update or Terraform action was required.
+
+### Generation-guarded recovery
+
+Only metadata was read for the canonical `digest("mx-fashion")` object:
+
+- Bucket: `up-data-intelligence-dev-876521886531-leases`.
+- Key: `leases/fa7e7671aca22a7663014f31f0124d4f70f4401aafea3afa5e895359e6f850c5`.
+- Generation: `1790967367875706`.
+- Creation/update: `2026-10-02T18:56:07.883000+00:00`; size 36 bytes.
+
+A fresh metadata GET immediately before deletion confirmed that exact generation,
+creation/update time and size. SDK deletion ran once with
+`if_generation_match=1790967367875706`, `retry=None`, timeout 30 seconds.
+Result: SUCCESS. Subsequent metadata GETs proved both the MX lease and the global
+Installation lease absent. No body/UUID was read and no other lease was removed.
+Recovery rested on terminal executions, settled writes, unchanged durable
+business evidence, paused schedulers and no current owner, not automatic expiry.
+
+### Single canonical create-plan and reconciliation
+
+Fresh pre-create reads proved revision 4/ACTIVE/sync=false, zero plans/units,
+exact UP Zero/Meta source and binding metadata, unchanged legacy evidence,
+absent leases and unchanged runtime Job specs.
+
+The one authorized create-plan execution was
+`up-installation-orchestrator-pf4bk`, exit 0, succeededCount=1, Completed=True
+(start 2026-10-03T21:39:54.740865Z, completion 21:40:21.227431Z). It used the existing immutable
+Installation image, explicit `--create-plan --adopt`, MX store/confirmation,
+fixed target `2026-10-03T03:00:00+00:00`, DEV project/confirmation/number/region,
+and the approved lease bucket. Budgets remained 1,073,741,824 bytes/query,
+137,438,953,472 bytes/execution, pages 20, soft time 600s, parallel stores 2,
+max stores 10 and max dispatches 20. No --dispatch or implicit business mode.
+
+The canonical create transaction
+`installation_bac237425380e75d43623a12387f353862fe5d05536a8647fe853b07c0d9e71f`
+and its child statements were DONE without errors. Its source code and job
+metadata limit writes to Registry, installation_plans and installation_work_units.
+No automatic repetition occurred.
+
+| Persisted identity | Verified value |
+| --- | --- |
+| Plan ID | `67ac3f1baed4d7fc8ea055a6c90c265a4a7f4b4b1b21c21d37d983c77fc04a15` |
+| planner_version | `1.0.0` |
+| config_hash | `2e91000a8c229e772a1f1d86bf63f445fd4359a2bad09bf7c73e23fce9048c38` |
+| semantic_plan_sha256 | `b0c522d697abbd9640170ab36a2348fbb365271325909c221ad1aa35a781975a` |
+| Plan status / Registry revision | RUNNING / 5 |
+| Plans / total / required / optional units | 1 / 45 / 43 / 2 |
+| Unit state | all 45 PENDING, attempt_count=0, execution_name/dispatch_token=NULL |
+
+The same semantic normalization as the accepted plan-only excluded created_at,
+updated_at and adopted publication snapshot_at only. Full normalized plan/unit
+comparison also matched IDs, sources/resources/kinds, original filters,
+dependencies, required flags and legacy references. No missing or added unit.
+
+| Source | Units |
+| --- | ---: |
+| upzero | 5 |
+| meta | 38 |
+| analytics | 2 |
+
+| Kind | Units |
+| --- | ---: |
+| VERIFY_SOURCE | 2 |
+| LEGACY_RESUME | 1 |
+| SYNC_SNAPSHOT | 1 |
+| SYNC_WINDOW | 2 |
+| META_CATALOG | 4 |
+| META_INSIGHTS | 33 |
+| PUBLISH_ANALYTICS | 2 |
+
+Resource counts: verification 2, analytics_facts 2, customers 1, orders 1,
+accounts 1, campaigns 1, adsets 1, ads 1, insights 33, publication 2.
+The only LEGACY_RESUME remains the exact Facts run/checkpoint recorded above:
+344,000 records, 344 pages, pending_raw_id=NULL; incremental mode and original
+filters/cursor ownership preserved. No new Facts window overlaps its pending
+interval. The four recovered Customers neither caused replay nor established
+freshness; the one Customers snapshot remains planned.
+
+Orders reuse the 33 complete intervals, contiguous union
+[2026-08-31T03:00Z, 2026-10-02T03:00Z), with only local 02 October newly planned.
+Facts reuse the 29 complete intervals, contiguous union
+[2026-09-01T00:00Z, 2026-09-29T00:00Z). The pending legacy Facts work is preserved;
+the sole new gap is [2026-10-02T03:00Z, 2026-10-03T03:00Z). These are checked
+unions, not MIN/MAX across gaps. Meta retains one VERIFY_SOURCE, four catalog
+units and 33 insights units (partial local 31 August through 02 October), all
+unexecuted.
+
+Existing certified generation 1, policy/publication IDs and the local
+[2026-09-01, 2026-09-28) window above were revalidated unchanged through canonical
+HEAD/RECEIPT/coverage reads. Both future publication milestones above matched:
+exclusive report_to 29 September/facts_complete=false and 03 October/true.
+Neither was published; planned coverage does not modify stored coverage.
+
+### Final Registry, Installation State and immutability
+
+| Field | Before | After |
+| --- | --- | --- |
+| revision | 4 | 5 |
+| status | ACTIVE | DRAFT |
+| sync_enabled | false | false |
+| analytics_enabled | true | true |
+| history_complete | false | false |
+
+Only revision, status and updated_at changed in the full Registry comparison.
+Analytics was already enabled, so it was preserved rather than counted as a
+change. All other fields, sources and Meta binding matched exactly. UP Zero
+remained active and Meta pending with secret_resource_name=NULL.
+StoreConfig eligibility for upzero/meta/analytics/intelligence is false for all.
+
+Canonical InstallationReader, using an explicitly scoped administrative local
+audit principal, returned the actual state PARTIAL, plan RUNNING, CHUNKS 0/43
+(0%), ETA null. Separately it reports 344,000 legacy records and 344 pages.
+Available window remains local 01–27 September (exclusive report_to 28 September),
+history_complete=false. No state was forced to INSTALLING and no claim of new
+coverage or progress was made.
+
+Checkpoint count remained 97 -> 97; sync-run count 111 -> 111. Full row digests
+matched, including legacy IDs, filters, mode, pending RAW and cursor ownership.
+Both MX and global Installation leases were absent after completion.
+The final inventory again proved zero active executions, seven PAUSED Schedulers
+and no Installation Scheduler. Comparing inventories showed exactly one new
+execution, the orchestrator create-plan, and no new normal/Foundation/Installation
+business worker execution. All 13 Job specs remained identical; execution args
+and the image digest exactly matched the approved submission.
+
+### Validation, safety and stop boundary
+
+The unchanged runtime was validated during the initial part of this same change:
+Installation suite 88 passed (16.75s); full suite 2052 passed (133.87s);
+Ruff passed; formatting check 270 files already formatted; mypy passed for 150
+source files. No runtime code changed during this resumption. Private audit
+helpers were corrected for Registry expectations (analytics already true) and
+local principal composition; they did not change source code or durable evidence.
+Git diff whitespace validation is repeated for this documentation-only update.
+
+UP Zero API: NO. Meta API: NO. Secret value read: NO. Dispatch: NO.
+Business workers: NO. RAW mutation: NO. CORE business mutation: NO.
+Checkpoint mutation: NO. Sync-run mutation: NO. Publication mutation: NO.
+history_complete changed: NO. Schedulers changed: NO. Terraform: NO.
+
+Only the reconciled generation-matched legacy lease deletion and the canonical
+create-plan metadata transaction were performed. No source probe, business
+worker, image/build/deploy, repeated create-plan or other recovery mutation.
+Private snapshots/logs/helpers and screenshots remain outside Git. Only this
+runbook is committed/pushed on the existing branch, no PR or merge.
+**STOP: do not dispatch or execute a business work unit in this change.**
