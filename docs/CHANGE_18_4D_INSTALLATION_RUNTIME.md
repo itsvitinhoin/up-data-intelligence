@@ -1,10 +1,10 @@
 # CHANGE #18.4D — Installation runtime DEV
 
-**Latest continuation (#18.4D.3, authorized resumption): MX PLAN PERSISTED —
-READY FOR FIRST CONTROLLED DISPATCH. The legacy MX lease was reconciled and
-removed once with its exact generation precondition. One canonical create-plan
-execution succeeded; the persisted plan matches the approved semantic hash.
-No dispatch or business work unit was executed.**
+**Latest continuation (#18.4E): MX FIRST DISPATCH BLOCKED —
+`dispatch_refresh_would_change_registry`. A read-only preflight reproduced the
+canonical pre-dispatch refresh and detected a Registry revision/coverage update
+outside this round's preservation guard. No dispatch, worker, secret value read
+or source API call occurred. The #18.4D.3 persisted plan remains unchanged.**
 
 The seven-resource deployment and all four help smokes succeeded. The single MX
 inspection stopped at source connection metadata validation, before calculating
@@ -833,3 +833,129 @@ worker, image/build/deploy, repeated create-plan or other recovery mutation.
 Private snapshots/logs/helpers and screenshots remain outside Git. Only this
 runbook is committed/pushed on the existing branch, no PR or merge.
 **STOP: do not dispatch or execute a business work unit in this change.**
+
+
+## CHANGE #18.4E — First Controlled Dispatch (2026-10-03)
+
+**MX FIRST DISPATCH BLOCKED — `dispatch_refresh_would_change_registry`.**
+This is the private preflight's diagnostic label, not a SafeError observed from a
+Cloud Run execution. The first dispatch was not submitted.
+
+### Baseline and read-only evidence
+
+Local checkout: `change-18-4d-installation-runtime`, HEAD
+`b7aaaadd27641997c4bf81892961050fb31771eb`, clean. Cloud Shell fast-forwarded only
+the preceding documentation commit and the helper asserted the same branch/HEAD
+and clean checkout. No branch switch, reset, runtime change or build/deploy.
+The already authorized UP Google session was used for DEV metadata reads.
+
+Fresh canonical BigQueryLedger reads confirmed:
+
+- Registry revision 5, DRAFT, sync_enabled=false, history_complete=false;
+  all four normal pipeline eligibility checks false.
+- Exactly one MX plan, ID
+  `67ac3f1baed4d7fc8ea055a6c90c265a4a7f4b4b1b21c21d37d983c77fc04a15`, RUNNING.
+- 45 units, 43 required / two optional; all PENDING, attempt_count=0,
+  dispatch_token=NULL, execution_name=NULL.
+- Semantic signature still
+  `b0c522d697abbd9640170ab36a2348fbb365271325909c221ad1aa35a781975a`.
+- Full Registry/plan/unit/source/binding rows matched the preceding private
+  snapshot. UP Zero active; Meta pending, secret_resource_name=NULL.
+- 97 checkpoints / 111 sync-runs, full row digests unchanged; legacy Facts run
+  `0264739c-d3c6-4984-b88e-74fb5554bd58` and checkpoint
+  `9a1ab3d71e25c60c73f0edc40c8e10af4dc7e867fc01cfb142726ea33fd2fbec`
+  preserved, including mode, filters, cursor ownership, pending_raw_id=NULL and
+  344,000 records / 344 pages.
+- MX, installation-work:mx-fashion and installation-orchestrator-global leases
+  absent, using metadata GETs only. No lease body read/acquisition/deletion.
+- Canonical available() revalidated the existing HEAD/RECEIPT window
+  [2026-09-01, 2026-09-28), generation 1. No publication mutation.
+
+The preflight stopped on the refresh preservation conflict before completing
+execution/Scheduler/Job-image inventory for this round. Those checks are not
+reported as freshly verified. Their last evidence remains #18.4D.3; future
+execution requires repeating the complete current precheck.
+
+### First candidate and one-dispatch bounds
+
+Selection reproduced the canonical ordering: plan priority, unit sequence,
+plan created_at, work_unit_id. The persisted first candidate was exactly:
+
+| Field | Value |
+| --- | --- |
+| work_unit_id | `912a3094fb1c2d96cfe819817d9b84b86720244ae48c95e6550f40e1cd4926df` |
+| source / pipeline | upzero / upzero |
+| resource / kind | verification / VERIFY_SOURCE |
+| required / sequence | true / 0 |
+| dependencies / status | empty / PENDING |
+
+Code inspection confirmed max_stores=1, max_dispatches=1 and parallel stores=1
+bound the selector to one reservation/launch; page budget 20 and soft time 600s
+remain unchanged. The verification path reads the pinned UP Zero secret
+server-side, takes only next(customers page with limit=1), discards the payload,
+and writes source/work verification metadata only. No Engine ingestion or seed
+path is used by VERIFY_SOURCE. None of these live verification actions ran.
+
+### Deterministic preservation conflict before reservation
+
+Orchestrator.dispatch() calls refresh() before reserve() and Cloud Run POST.
+A private helper invoked the actual Orchestrator.refresh() with the current
+StoreConfig, persisted plan/work rows and revalidated publication availability.
+Its injected ledger returned only the captured reads and intercepted update_plan
+without any SDK write. No guard or source code was changed.
+
+The canonical refresh proposed:
+
+| Registry field | Current | Proposed, not persisted |
+| --- | --- | --- |
+| revision | 5 | 6 |
+| facts_coverage_from | NULL | 2026-09-01T00:00:00+00:00 |
+| facts_coverage_to | NULL | 2026-09-29T00:00:00+00:00 |
+| updated_at | existing value | refresh time |
+
+It also proposed plan status RUNNING -> PARTIAL, based on the existing certified
+publication. Registry status would remain DRAFT, sync false, history_complete
+false. These proposals use the adopted complete Facts intervals; they do not
+mean the pending legacy work completed or that new evidence was produced.
+
+This conflicts with this change's explicit requirement that Registry revision 5
+and its existing fields remain unchanged. Therefore no dispatch was attempted.
+This is a contract/preservation decision, not evidence of a failed probe, invalid
+credential or wrong first unit. No claim is made that the canonical refresh is a
+code bug. A later approved scope must resolve whether that canonical coverage
+reconciliation is permitted before executing the first unit; do not bypass it
+or manually change Registry/coverage here.
+
+### Durable outcome and stop boundary
+
+Orchestrator execution: none. Worker execution/operation: none. Dispatches: zero.
+The selected unit and the other 44 remain untouched in the captured current
+ledger: PENDING, revision unchanged, attempts/failures unchanged, no dispatch
+operation/execution/token. Progress remains 0/43 (0%), ETA null; legacy counters
+remain separate. No post-worker refresh or Installation State read was needed
+because no worker ran. The last canonical Installation State is #18.4D.3 PARTIAL;
+this round revalidated its certified 01–27 September window but does not present
+that previous state response as a new read.
+
+All operations in this round were read-only or private local diagnostic work.
+There is no after-dispatch execution/duration/safe verification event to report.
+No retry, alternative endpoint, credential repair, recovery or second dispatch.
+
+### Tests, safety and Git
+
+- `.venv/bin/pytest -q tests/installation`: **88 passed**, 15.92s.
+- `git diff --check`: passed before and after the documentation update.
+- No runtime code changed; no build/redeploy or Terraform required/performed.
+
+UP Zero API: NO (authorized probe not reached). Secret value read: NO.
+Meta API: NO. Dispatches: 0. Business ingestion: NO. LEGACY_RESUME execution: NO.
+RAW business mutation: NO. CORE business mutation: NO. Checkpoint mutation: NO.
+Sync-run mutation: NO. Publication mutation: NO. history_complete changed: NO.
+Schedulers changed: NO. Terraform: NO. Registry/plan/work mutation: NO.
+No secret version was created/altered; the existing secret reference remained
+identical and no secret/customer payload was read, logged or committed.
+
+Only this existing runbook is committed/pushed on
+`change-18-4d-installation-runtime`. Private snapshots/helper/log files remain
+outside Git. No PR or merge.
+**STOP before dispatch, Meta verification or LEGACY_RESUME.**
