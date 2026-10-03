@@ -283,3 +283,55 @@ Keep installation_image null. Any Installation job creation, existing table
 schema change, delete or replacement must stop the audit as specified. Only a
 subsequent successful inspection may change the decision to
 `PLAN CLEAN — READY FOR REVIEW`; this document does not authorize apply.
+
+
+## Authorized Cloud Shell continuation
+
+This section records the subsequently authorized Cloud Shell inspection. The
+local blocked inspection above remains historical evidence; it does not describe
+the later Cloud Shell result.
+
+- Project identity verified: `up-data-intelligence-dev`, number `876521886531`.
+- Terraform `1.16.4`; workspace `default`.
+- Existing GCS backend accessible: bucket
+  `up-data-intelligence-dev-876521886531-tfstate`, prefix `foundation/dev`.
+- State inventory before provisioning: **303 managed resources**.
+- The operator reported refresh-only operational drift. The historical plan JSONs
+  also report provider refresh drift; this is separate from material plan actions.
+  The inspected paths were `last_modified_time`, `num_bytes`, `num_rows`,
+  `etag`, `execution_count` and the `latest_created_execution` name/create/
+  completion timestamps. No schema or runtime specification drift appeared in
+  that historical JSON. No refresh-only apply or drift remediation was performed
+  by this continuation.
+- Initial Cloud Shell plan: **32 add / 0 change / 14 destroy**. This was rejected.
+- Cause: the live `control_plane_image` and
+  `control_plane_meta_secret_version` inputs were absent from the environment
+  tfvars. Null/default inputs disabled existing conditional Control Plane resources.
+- The operator recovered the existing image and secret version **reference** from
+  state metadata, without accessing a secret value. No tfvars was edited.
+- Corrected Cloud Shell plan: **32 add / 0 change / 0 destroy**. Its saved JSON
+  was independently inspected during #18.4B; the initial JSON still shows the
+  14 rejected deletes.
+- #18.4B independently generated and audited a fresh plan from the same baseline,
+  with the same approved live inputs; it again showed exactly the authorized
+  **32 CREATEs**, with no existing-resource update, delete or replacement.
+
+Approved shell-only inputs:
+
+```bash
+CONTROL_PLANE_IMAGE='southamerica-east1-docker.pkg.dev/up-data-intelligence-dev/up-data-intelligence/foundation@sha256:47e4ce9ecd849642950fecff6e0a6ab88756e9cba04c9729c20dacbcd9dfcd2e'
+# Supply these to plan, not to apply of the saved plan:
+# -var="control_plane_image=${CONTROL_PLANE_IMAGE}"
+# -var='control_plane_meta_secret_version=1'
+```
+
+`installation_image` remained null and was not added to tfvars or the environment.
+The five existing Control Plane Jobs remained no-op, retaining the approved
+immutable image in both plan before/after values. No Scheduler material action
+was present; the four Control Plane Scheduler configurations remained paused
+with their existing schedules.
+
+Final #18.4A decision: **PLAN CLEAN — READY FOR PROVISIONING REVIEW**.
+The separate #18.4B authorization and its fresh exact-allowlist audit, rather
+than the old #18.4A plan file, govern the provisioning operation. See
+[CHANGE #18.4B](CHANGE_18_4B_DEV_METADATA_IAM_PROVISIONING.md).
