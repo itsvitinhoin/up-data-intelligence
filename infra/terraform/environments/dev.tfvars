@@ -23,3 +23,5 @@ pilot = {
 analytics_image                      = "southamerica-east1-docker.pkg.dev/up-data-intelligence-dev/up-data-intelligence/foundation@sha256:ef816b9ae1f63f19b50fba7826d27ebd42482008ae2f17089be037abb10a707e"
 analytics_maximum_bytes_billed       = 1073741824
 analytics_maximum_total_bytes_billed = 137438953472
+
+build_submitter_member = "user:upagency.oficial@gmail.com"

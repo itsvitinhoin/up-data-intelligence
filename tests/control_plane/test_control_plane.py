@@ -555,7 +555,13 @@ def test_shared_schema_is_only_addition_and_old_terraform_preserved():
     for name, sha in json.loads(
         Path("tests/fixtures/change161/base_terraform_hashes.json").read_text()
     ).items():
-        assert hashlib.sha256((root / name).read_bytes()).hexdigest() == sha
+        content = (root / name).read_bytes()
+        if name == "environments/dev.tfvars":
+            # #18.4C authorizes only this additive, non-secret DEV input.
+            addition = b'\nbuild_submitter_member = "user:upagency.oficial@gmail.com"\n'
+            assert content.endswith(addition)
+            content = content.removesuffix(addition)
+        assert hashlib.sha256(content).hexdigest() == sha
 
 
 def test_control_plane_run_role_has_exact_job_override_permissions():
