@@ -505,12 +505,18 @@ class InstallationReader:
             )
             ready = (
                 plan["status"] == "COMPLETE"
+                and bool(work)
+                and summary["progress"]["percent"] == 100
                 and all(r["status"] == "COMPLETE" for r in work)
                 and facts is True
                 and window is not None
+                and registry.get("sync_enabled") is False
                 and bool(sources)
-                and all(s.active is True for s in sources)
-                and not any(r.pending_raw or r.state in {"RUNNING", "BLOCKED"} for r in resources)
+                and all(
+                    s.configured and s.active is True and s.state == "COMPLETE" for s in sources
+                )
+                and bool(resources)
+                and all(r.state == "COMPLETE" and r.pending_raw is not True for r in resources)
                 and not any(r["status"] in AMBIGUOUS for r in work)
             )
             data["overall_state"] = (

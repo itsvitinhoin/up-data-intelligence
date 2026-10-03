@@ -147,3 +147,75 @@ def test_existing_certified_head_survives_adoption_before_any_new_publication():
     ).installation(PRINCIPAL, GRANT)
     assert result["data"]["overall_state"] == "PARTIAL"
     assert result["data"]["available_window"]["to"] == reader.policy.report_to
+
+
+@pytest.mark.parametrize(
+    "projection,changes",
+    [
+        ("InstallationSource", {"state": "PENDING"}),
+        ("InstallationSource", {"configured": False}),
+        ("InstallationSource", {"active": False}),
+        ("InstallationResource", {"state": "RUNNING"}),
+        ("InstallationResource", {"state": "PENDING"}),
+        ("InstallationResource", {"pending_raw": True}),
+    ],
+)
+def test_v2_complete_plan_rejects_incomplete_operational_projection(
+    monkeypatch, projection, changes
+):
+    import src.dashboard.installation as installation
+
+    reader = PlannedReader(True)
+    constructor = getattr(installation, projection)
+    # Contradictory projection, including COMPLETE+pending RAW; valid publication/work.
+    monkeypatch.setattr(
+        installation,
+        projection,
+        lambda *args, **kwargs: replace(constructor(*args, **kwargs), **changes),
+    )
+    result = DashboardService(
+        "up-data-intelligence-dev",
+        {},
+        lambda: reader,
+        b"synthetic-key-not-a-real-secret-32b",
+        installation_v2=True,
+    ).installation(PRINCIPAL, GRANT)
+    data = result["data"]
+    assert data["installation_plan_status"] == "COMPLETE"
+    assert (
+        data["work"]["pending"]
+        == data["work"]["running"]
+        == data["work"]["blocked"]
+        == data["work"]["ambiguous"]
+        == 0
+    )
+    assert data["available_window"] is not None and data["facts_complete"] is True
+    assert data["overall_state"] != "READY"
+    projected = data["sources"] if projection == "InstallationSource" else data["resources"]
+    assert all(all(row[key] == value for key, value in changes.items()) for row in projected)
+
+
+@pytest.mark.parametrize("sync_enabled", [True, None])
+def test_v2_ready_requires_sync_explicitly_disabled(sync_enabled):
+    reader = PlannedReader(True)
+    reader.registry[0]["sync_enabled"] = sync_enabled
+    if sync_enabled is None:
+        from src.domain.models import SafeError
+
+        with pytest.raises(SafeError, match="registry_boolean_required"):
+            DashboardService(
+                "up-data-intelligence-dev",
+                {},
+                lambda: reader,
+                b"synthetic-key-not-a-real-secret-32b",
+                installation_v2=True,
+            ).installation(PRINCIPAL, GRANT)
+        return
+    data = DashboardService(
+        "up-data-intelligence-dev",
+        {},
+        lambda: reader,
+        b"synthetic-key-not-a-real-secret-32b",
+        installation_v2=True,
+    ).installation(PRINCIPAL, GRANT)["data"]
+    assert data["overall_state"] != "READY"

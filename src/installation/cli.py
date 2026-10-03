@@ -9,7 +9,7 @@ from typing import Any
 
 from src.control_plane.model import StoreConfig, Window, instant
 from src.domain.models import SafeError
-from src.installation.model import Limits, Row
+from src.installation.model import Limits, Row, require_creatable_plan
 from src.installation.planner import Planner
 from src.installation.progress import summarize
 from src.utils.data import now
@@ -203,6 +203,7 @@ def main(argv: list[str] | None = None) -> int:
                             certified_publication=asdict(published),
                         )
                 if args.create_plan:
+                    require_creatable_plan(plan)
                     ledger.create(configured, plan, units)
                     saved = ledger.plans(c.store_id)
                     if len(saved) != 1 or saved[0]["plan_id"] != plan["plan_id"]:
@@ -291,6 +292,7 @@ def main(argv: list[str] | None = None) -> int:
                     checkpoints=checkpoints,
                     runs=runs,
                 )
+                require_creatable_plan(plan)
                 with lease(current.store_id):
                     ledger.create(config, plan, units)
 

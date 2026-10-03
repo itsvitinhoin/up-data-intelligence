@@ -22,6 +22,12 @@ KINDS = frozenset(
 Row = dict[str, Any]
 
 
+def require_creatable_plan(plan: Row) -> None:
+    # A planning diagnostic must not occupy the immutable, one-plan-per-store ledger.
+    if plan.get("status") == "BLOCKED":
+        raise SafeError("installation_plan_not_creatable")
+
+
 @dataclass(frozen=True)
 class Limits:
     global_parallel_store_limit: int = 2

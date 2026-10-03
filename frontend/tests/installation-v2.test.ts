@@ -59,3 +59,39 @@ it("authenticated onboarding readback can carry only validated scoped installati
   result.installation.metadata.store_id = "foreign";
   expect(() => parseOnboarding(result)).toThrow();
 });
+
+it.each(["PENDING", "RUNNING", "PARTIAL", "BLOCKED"] as const)(
+  "rejects READY with an active source in %s",
+  (state) => {
+    const value = installationV2Fixture("READY");
+    value.data.sources[0]!.state = state;
+    expect(value.data.sources[0]!.active).toBe(true);
+    expect(() => parseInstallation(value)).toThrow();
+  },
+);
+it.each(["PENDING", "RUNNING", "PARTIAL", "BLOCKED"] as const)(
+  "rejects READY with a resource in %s",
+  (state) => {
+    const value = installationV2Fixture("READY");
+    value.data.resources[0]!.state = state;
+    expect(() => parseInstallation(value)).toThrow();
+  },
+);
+it("rejects READY with COMPLETE resource but pending RAW", () => {
+  const value = installationV2Fixture("READY");
+  value.data.resources[0]!.state = "COMPLETE";
+  value.data.resources[0]!.pending_raw = true;
+  expect(() => parseInstallation(value)).toThrow();
+});
+it("rejects READY with missing sources/resources or unconfigured/inactive source", () => {
+  for (const field of ["sources", "resources"] as const) {
+    const value = installationV2Fixture("READY");
+    value.data[field] = [];
+    expect(() => parseInstallation(value)).toThrow();
+  }
+  for (const field of ["configured", "active"] as const) {
+    const value = installationV2Fixture("READY");
+    value.data.sources[0]![field] = false;
+    expect(() => parseInstallation(value)).toThrow();
+  }
+});

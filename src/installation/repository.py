@@ -14,7 +14,7 @@ from src.admin.repository import BigQueryOnboarding
 from src.analytics.cloud.transport import Transport, scalar
 from src.control_plane.model import StoreConfig
 from src.domain.models import SafeError
-from src.installation.model import ACTIVE, Limits, Row
+from src.installation.model import ACTIVE, Limits, Row, require_creatable_plan
 from src.observability.logging import event
 from src.utils.data import digest
 
@@ -122,6 +122,7 @@ class BigQueryLedger:
         return sql, params
 
     def create(self, config: StoreConfig, plan: Row, units: list[Row]) -> None:
+        require_creatable_plan(plan)
         saved = self.plans(config.store_id)
         if saved:
             if len(saved) == 1 and saved[0]["plan_id"] == plan["plan_id"]:

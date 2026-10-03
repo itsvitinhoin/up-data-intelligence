@@ -161,12 +161,15 @@ class MetaConnector:
                 if response.status_code == 200:
                     return response
             retryable = (
-                response is None or response.status_code == 429 or response.status_code >= 500
+                response is None or response.status_code == 429 or 500 <= response.status_code < 600
             )
-            if not retryable or attempt + 1 == self.attempts:
+            if not retryable:
                 if response is not None:
                     return response
-                raise SafeError("meta_request_failed")
+            if attempt + 1 == self.attempts:
+                # Only GET is retried here. Even an uncertain transport result is
+                # safe to defer; this does not authorize repeating ambiguous POSTs.
+                raise SafeError("meta_retry_deferred")
             delay = float(2**attempt)
             if response is not None and response.headers.get("Retry-After"):
                 try:
@@ -178,4 +181,4 @@ class MetaConnector:
             self.retries += 1
             event("meta_retry", attempt=attempt + 1)
             self.sleep(delay)
-        raise SafeError("meta_request_failed")
+        raise SafeError("meta_retry_deferred")
