@@ -557,6 +557,17 @@ def test_shared_schema_is_only_addition_and_old_terraform_preserved():
     ).items():
         content = (root / name).read_bytes()
         if name == "environments/dev.tfvars":
+            # #19 adds only the isolated health image and its own paused flag.
+            # Strip this exact approved pair before checking the immutable baseline.
+            health_inputs = re.search(
+                rb'\ndata_health_image *= "southamerica-east1-docker.pkg.dev/'
+                rb"up-data-intelligence-dev/up-data-intelligence/foundation@sha256:"
+                rb'9a025ecc0c7940be167f41c5a110fef7bfea5dc26b72ef434d059831d065620f"\n'
+                rb"data_health_scheduler_paused *= (?:true|false)\n$",
+                content,
+            )
+            if health_inputs:
+                content = content[: health_inputs.start()]
             # #18.4G pins one approved digest for both runtimes; Foundation remains intact.
             addition = (
                 b'\nbuild_submitter_member = "user:upagency.oficial@gmail.com"\n'

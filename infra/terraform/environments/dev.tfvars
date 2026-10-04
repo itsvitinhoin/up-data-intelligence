@@ -32,3 +32,6 @@ installation_image                = "southamerica-east1-docker.pkg.dev/up-data-i
 
 control_plane_scheduler_paused = false
 installation_scheduler_paused  = false
+
+data_health_image            = "southamerica-east1-docker.pkg.dev/up-data-intelligence-dev/up-data-intelligence/foundation@sha256:9a025ecc0c7940be167f41c5a110fef7bfea5dc26b72ef434d059831d065620f"
+data_health_scheduler_paused = false
