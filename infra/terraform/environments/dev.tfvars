@@ -29,3 +29,6 @@ build_submitter_member = "user:upagency.oficial@gmail.com"
 control_plane_image               = "southamerica-east1-docker.pkg.dev/up-data-intelligence-dev/up-data-intelligence/foundation@sha256:0157e83cd704c12fe071c523d841faf8021bbc6c86570cd22002c5488395f99a"
 control_plane_meta_secret_version = "1"
 installation_image                = "southamerica-east1-docker.pkg.dev/up-data-intelligence-dev/up-data-intelligence/foundation@sha256:0157e83cd704c12fe071c523d841faf8021bbc6c86570cd22002c5488395f99a"
+
+control_plane_scheduler_paused = false
+installation_scheduler_paused  = false
