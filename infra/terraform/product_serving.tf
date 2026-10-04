@@ -157,17 +157,30 @@ resource "google_project_iam_member" "product_firebase" {
   role     = each.value.name
   member   = "serviceAccount:${google_service_account.product[each.key].email}"
 }
-# Reuse the existing #18.2 SAGA privileges, restricted to its deterministic namespace.
+# Reuse #18.2 privileges. Its optional legacy admin roles may not exist in DEV;
+# create identical product-owned roles then, without enabling any legacy admin grants.
+resource "google_project_iam_custom_role" "product_onboarding_create" {
+  count       = local.product_enabled && var.control_plane_admin_member == null ? 1 : 0
+  role_id     = "upProductOnboardingCreate_dev"
+  title       = "Product onboarding secret container creation"
+  permissions = ["secretmanager.secrets.create"]
+}
+resource "google_project_iam_custom_role" "product_onboarding_reconcile" {
+  count       = local.product_enabled && var.control_plane_admin_member == null ? 1 : 0
+  role_id     = "upProductOnboardingReconcile_dev"
+  title       = "Product onboarding version write and reconciliation"
+  permissions = ["secretmanager.secrets.get", "secretmanager.versions.add", "secretmanager.versions.list", "secretmanager.versions.access"]
+}
 resource "google_project_iam_member" "product_secret_create" {
   count   = local.product_enabled ? 1 : 0
   project = var.project_id
-  role    = google_project_iam_custom_role.onboarding_secret_create[0].name
+  role    = var.control_plane_admin_member == null ? google_project_iam_custom_role.product_onboarding_create[0].name : google_project_iam_custom_role.onboarding_secret_create[0].name
   member  = "serviceAccount:${google_service_account.product["admin"].email}"
 }
 resource "google_project_iam_member" "product_secret_reconcile" {
   count   = local.product_enabled ? 1 : 0
   project = var.project_id
-  role    = google_project_iam_custom_role.onboarding_secret_reconcile[0].name
+  role    = var.control_plane_admin_member == null ? google_project_iam_custom_role.product_onboarding_reconcile[0].name : google_project_iam_custom_role.onboarding_secret_reconcile[0].name
   member  = "serviceAccount:${google_service_account.product["admin"].email}"
   condition {
     title      = "ProductOnboardingUPZeroNamespaceOnly"
@@ -235,8 +248,8 @@ resource "google_cloud_run_v2_service" "product_api" {
   }
   lifecycle {
     precondition {
-      condition     = var.product_subject_key != null && var.control_plane_admin_member != null
-      error_message = "Private subject key and existing narrow onboarding roles are required."
+      condition     = var.product_subject_key != null
+      error_message = "Private subject key is required."
 
     }
 

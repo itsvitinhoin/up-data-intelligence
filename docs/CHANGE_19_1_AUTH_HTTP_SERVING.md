@@ -122,6 +122,15 @@ is container-create only; version reconciliation privileges are conditioned to t
 (create/get/delete) are restricted to the existing lease bucket's leases/ objects.
 No owner/editor/bigquery.admin/secretmanager.admin role is introduced.
 
+The first Stage 1 plan could not be saved because the optional legacy admin is unset and
+its #18.2 custom roles do not exist. No apply occurred. Product serving now creates identical
+product-owned roles only when those legacy roles are absent; no legacy admin is enabled:
+`upProductOnboardingCreate_dev`: secretmanager.secrets.create;
+`upProductOnboardingReconcile_dev`: secretmanager.secrets.get, secretmanager.versions.add,
+secretmanager.versions.list, secretmanager.versions.access. The latter binding retains the
+same UP Zero namespace condition. This changes infrastructure composition only; no API
+image or business runtime changed.
+
 Web: roles/run.invoker only on Read/Admin. Public invocation is applied to up-web only in
 Stage 2, after private acceptance. No service-account key is created/downloaded.
 
