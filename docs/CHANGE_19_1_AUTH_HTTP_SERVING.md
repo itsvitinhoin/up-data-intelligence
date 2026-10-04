@@ -4,7 +4,9 @@
 
 Implementation and offline acceptance are complete on `change-19-1-auth-http-serving`,
 based on `9b6e9c5eddffafcc88c1180023fb8801c75c1cec`.
-This document is not live product acceptance. No PROD resources are authorized.
+Private DEV services are deployed and negative authentication acceptance passed.
+This document is not full live product acceptance: the authorized MX access gates and
+public web stage remain blocked by missing canonical ownership. No PROD resources are authorized.
 No ingestion, Analytics, Intelligence, recurring coverage, Installation or Data Health
 business semantics are changed.
 
@@ -146,6 +148,14 @@ where supplied, and a 64-hex double-submit token. `__Host-up_csrf` is Secure/Str
 only the CSRF token is readable by JS. Inputs are streamed with a 16KiB auth / 32KiB admin
 limit. Malformed JSON is 400. No GET logout exists.
 
+Cloud Run terminates TLS before Next standalone. Next can construct request.url from its
+internal 0.0.0.0:$PORT authority. Only when K_SERVICE=up-web, the BFF instead compares Origin
+against the actual incoming Host, restricted to the generated up-web-*.run.app HTTPS service
+hostname, and requires X-Forwarded-Proto=https. X-Forwarded-Host is never trusted. The CSRF
+cookie remains host-only; exact origin, Fetch Metadata and double-submit checks all remain.
+An explicit proxy test covers valid TLS termination and rejects changed origin/host/protocol.
+Custom production domains require a separately reviewed serving-origin configuration.
+
 Per-response CSP uses a nonce for Next scripts, self-only script origins, no wildcard
 scripts/connections, frame-ancestors none, object-src none, base-uri/form-action self.
 Firebase email/password needs only `https://identitytoolkit.googleapis.com` for account/
@@ -184,10 +194,10 @@ is pinned to 1.14.5 to address its published advisory.
 
 - Python full suite: 2163 passed (including 23 product-auth cases), 121.65s.
 - Ruff check/format and mypy: passed (162 source files at this checkpoint).
-- Frontend: 249 tests / 22 files, 2.70s; lint, typecheck, format-check passed.
+- Frontend: 250 tests / 22 files, 2.83s; lint, typecheck, format-check passed.
 - Next production build: passed outside the restricted sandbox; the restricted Turbopack
   attempt stalled and was terminated, then the qualified repeat completed.
-- Authenticated offline browser: 2 passed, Chrome, 5.8s. It uses synthetic intercepted
+- Authenticated offline browser: 2 passed, Chrome, 6.0s. It uses synthetic intercepted
   Firebase/BFF responses over local HTTPS, proves first access, verification messaging,
   server catalog, secure HttpOnly cookie, no browser token persistence, unavailable real
   coverage and header search without demo substitution, POST logout and protected-route denial.
@@ -199,8 +209,8 @@ is pinned to 1.14.5 to address its published advisory.
   across five packages). braces 3.0.3 has no published fix for that stack-exhaustion advisory;
   no unrelated mass upgrade/downgrade is applied. This is a documented tooling limitation,
   not a claim of a clean full npm audit. Production runtime excludes these dev packages.
-- Terraform fmt-check and validate: passed in a local backend-free copy. No live plan/apply
-  has occurred at this checkpoint.
+- Terraform fmt-check and validate: passed in a local backend-free copy. Live Stage 1
+  and its reconciliation are recorded below; a fresh final live plan returned No changes.
 
 For reproducible offline auth E2E:
 
@@ -216,7 +226,7 @@ The private key stays in /tmp, mode 0600; it is not a deployment credential. Tes
 ignoreHTTPSErrors applies to this disposable local certificate. Live acceptance must use the
 valid generated Cloud Run HTTPS URL and cannot ignore certificate failures.
 
-## Staged live acceptance (pending)
+## Staged live acceptance
 
 Build from clean pushed source: separate immutable Python product API and Next web images,
 record source SHA/build IDs/build+Artifact Registry digests. Exclude .env, credentials,
@@ -250,7 +260,77 @@ metrics must remain. Recheck current certified Data Health zero blocking and all
 states unchanged. Invalid ADMIN payload/missing CSRF/CLIENT_USER POST are non-mutating live cases;
 successful onboarding writes use existing synthetic tests only.
 
-Cloud Run URLs, builds, saved-plan hashes, live tests and final Git evidence remain **pending**.
+### Stage 1 actual evidence
+
+Immutable images were built from clean pushed commits using the existing approved DEV build
+service account and explicit source allowlist. No credentials were build inputs.
+
+| Image | Source commit | Build ID | Build and Artifact Registry digest |
+| --- | --- | --- | --- |
+| Product API | 51453f4d42563f1c7ba7c6d9b891883eecad20e0 | 79983fbc-dee4-4388-b250-c4a545ad9298 | sha256:309308234f0d8b5d3c746251fc0a4898805cf08cc25b08b49c7579912b5bc848 |
+| Web, not deployed | 5a21bd69187ff6283a69edb1f5130040764313f8 | d14a9d73-0556-443e-bb00-73c7e2a6d1b0 | sha256:f3cc6cb27d947e0f9d86b2159b68849a337785a0aca151ea64e3ad42f9dc931f |
+
+Both builds succeeded and each digest was independently matched against Artifact Registry.
+The earlier web build bf4a5ff4-d3c9-4577-998a-0da8dd76c372
+(sha256:a756f42fdcaf5cdd1117ee2a66812b0044b2b9ef815fc6125e69eab7de968192)
+is superseded by the HTTPS proxy CSRF fix; it was never deployed or accepted. API code did
+not change after its source commit; subsequent Terraform/docs/web changes do not require an
+API rebuild. Python and Node bases were digest-pinned, not moving build tags.
+
+The first composition plan failed before a saved plan/apply because the optional legacy
+admin's custom roles were absent. The product-owned equivalents described above fixed the
+composition without enabling that legacy admin or widening permissions.
+
+Saved plan R2 contained exactly 60 additive product resources, zero updates/deletes/replacements,
+no public web, and no changes to existing data/Job/Scheduler resources. Its binary SHA256 was
+`bffd71063af86e8a6466e8de1031526aa5c68217358699c94024c771265fc4b1`.
+It was applied once: 59 resources completed; Identity Platform configuration failed definitively
+because Cloud Shell's ADC quota project targeted its own tooling project. No ambiguous mutation
+was retried and the original saved plan was not reapplied.
+
+A product-only Google provider alias sets the explicit DEV billing/quota project; it does not
+change credentials, IAM grants, the default provider or data infrastructure. R3 reconciled all
+59 resources as no-op and contained only Identity Platform configuration creation. Saved binary
+SHA256: `19e30ea3ae85611d1cdae2543ad752026841d911e3e47fcf56d365dd1345c7c9`.
+One apply succeeded (exit 0); the fresh post-plan returned No changes (detailed exit 0).
+Private binary/JSON plans and deployment secrets remain outside Git.
+
+Private HTTPS services (Cloud Run IAM required):
+
+- Read: https://up-read-api-oynuekcxwa-rj.a.run.app
+- Admin: https://up-admin-api-oynuekcxwa-rj.a.run.app
+
+Neither has allUsers/allAuthenticatedUsers. Both are Ready and run the immutable product API
+image. Anonymous direct requests were denied by Cloud Run with 403. IAM-authenticated calls
+without a user session returned 401 unauthenticated; invalid sessions returned 401 invalid_session.
+The final service inventory independently confirmed the API digest and dedicated account on
+each private service, roles/run.invoker granted exclusively to the product Web service account,
+and up-web absent. No anonymous application service was introduced by Stage 1.
+Live project IAM matched the reviewed allowlist: Read has only jobUser and its get-user role;
+Admin has jobUser, its three-permission Firebase role and the two scoped onboarding roles;
+Web has no project role. All three service accounts have zero user-managed keys. Firebase
+custom roles' exact live permissions match the table above. Table/invoker/conditional bucket
+bindings reconciled against the saved plan with no drift.
+
+A disposable synthetic Firebase identity tested actual email/password authentication:
+unverified token exchange returned 403 verified_email_required; after test-only verification,
+exchange returned 403 access_not_provisioned. No session/grant was issued. The test identity was
+deleted successfully, its private password file removed, and no payload/token/password logged.
+
+The final read-only precheck again found 16 Data Health rules, zero blocking failures,
+MX ACTIVE/sync=true/revision 11/history=false/facts=true, and zero rows in bindings,
+onboarding_operations and principal_access. All six intended data schedulers remain ENABLED;
+up-foundation-dev-sync, up-foundation-dev-reconcile and up-foundation-dev-quality remain PAUSED.
+No business/source API, secret value read, data mutation or scheduler alteration was needed.
+
+### Remaining gates
+
+The owner tenant for legacy MX is still required. No ownership was guessed and no synthetic
+grant was allowed to authorize real MX data. Thus positive MX catalog/Overview, live tenant/
+workspace/client-admin isolation, permanent operator provisioning, deployed session revocation
+and browser acceptance are not yet certified. Their offline tests passed; that is not a claim
+of live acceptance. Stage 2 has not been planned/applied; up-web remains absent. No PROD exists.
+
 This change must not be titled authenticated product ready until all gates pass.
 
 ## Remaining production promotion
