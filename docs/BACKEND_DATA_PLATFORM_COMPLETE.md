@@ -4,6 +4,16 @@ Operational activation evidence is maintained in
 [CHANGE 18.4G](CHANGE_18_4G_RECURRING_BACKEND_ACTIVATION.md).
 This architecture document is not itself proof that live activation has completed.
 
+Current acceptance status: **STOPPED SAFELY — store_dispatch_global_lease_present**.
+The approved Stage 1 is deployed (nine image-only updates, five approved creates),
+post-plan is clean, nine help smokes passed and the global Installation no-op proved
+zero dispatches with unchanged metadata. MX remains READY/revision 9/sync=false,
+Installation COMPLETE/READY with 43/43 required units, and certified generation 3
+coverage `[2026-09-01,2026-10-03)`. All eight schedulers are PAUSED. No normal recurring
+cycle or Stage 2 activation has occurred. The old normal dispatcher global lease
+requires separate guarded recovery approval; it was not removed automatically.
+**Backend data platform operational completion has not yet been achieved.**
+
 ## Data and lifecycle
 
 Secure server-side onboarding persists configuration and pinned secret references,

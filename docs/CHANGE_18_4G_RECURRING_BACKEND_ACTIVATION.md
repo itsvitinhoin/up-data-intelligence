@@ -104,8 +104,8 @@ Offline Playwright: onboarding 1/1 and B2B/Installation 11/11 passed using insta
 Chrome. Terraform recursive fmt-check and validation passed (provider IPC needed
 the unrestricted validation process). No suite failure was ignored.
 
-Live build, deployment, activation and scheduler enablement are not yet performed.
-Their exact evidence must be appended before operational completion is declared.
+The initial offline checkpoint preceded build/deployment. The operational record below
+is authoritative for live progress; activation and scheduler enablement remain gated.
 
 ### Immutable build and audited Stage 1 plan
 
@@ -135,6 +135,127 @@ certified generation 3 window `[2026-09-01,2026-10-03)`, contiguous Facts covera
 catalog runs are complete but older than the requested cutoff; the normal Meta cycle
 must refresh them before Intelligence preflight. The freshness guard is unchanged.
 
-At this checkpoint, no Stage 1 apply, live smoke, activation, recurring cycle or
-scheduler enablement has occurred. MX remains READY/sync=false and all seven existing
-schedulers remain PAUSED. Operational completion is still pending.
+This was the pre-approval checkpoint. The approved Stage 1 was subsequently applied
+and its acceptance evidence is recorded below. Operational completion is still pending.
+
+### Approved Stage 1 — deployed and verified
+
+The user explicitly approved the exact saved binary, including all three additional
+metadata grants. Its SHA256 was rechecked immediately before apply and matched
+`10159f053faea4b93e85849d2b663793661f8b0fcda18c88c6678406ad52c5a3`.
+The original saved plan was applied exactly once, without regeneration or extra variables.
+Exit 0: **5 added, 9 changed, 0 destroyed**. The complete apply output was captured
+privately in Cloud Shell. Both immediate and final post-plans returned exit 0 / **No changes**.
+All nine approved Jobs use the qualified `0157e83c…95f99a` digest. No Foundation Job
+changed. The new Installation Scheduler exists and remains PAUSED.
+
+Exactly one help-only smoke per updated Job succeeded:
+
+| Job | Help execution | Result |
+| --- | --- | --- |
+| up-store-dispatcher | up-store-dispatcher-qhnms | SUCCESS |
+| up-upzero-worker | up-upzero-worker-qlxfj | SUCCESS |
+| up-meta-worker | up-meta-worker-kfdvs | SUCCESS |
+| up-analytics-worker | up-analytics-worker-zdj2s | SUCCESS |
+| up-intelligence-worker | up-intelligence-worker-gtv8t | SUCCESS |
+| up-installation-orchestrator | up-installation-orchestrator-bmrvz | SUCCESS |
+| up-installation-upzero-worker | up-installation-upzero-worker-rrhcr | SUCCESS |
+| up-installation-meta-worker | up-installation-meta-worker-h87tc | SUCCESS |
+| up-installation-analytics-worker | up-installation-analytics-worker-5wd6d | SUCCESS |
+
+These executions used only `--help`: no source, secret-value or business IO.
+
+### Global Installation no-op — passed
+
+Inventory contained only MX and no onboarding operations. Global execution
+`up-installation-orchestrator-kf4tg` used explicit
+`--dispatch --all-stores --auto-activate`, parallel/store/dispatch limits all 1,
+page budget 20 and soft budget 600 seconds. It completed successfully at
+`2026-10-04T02:09:23.057704Z`. Structured output proved `dispatches=0`.
+No installation worker was launched by that execution, no plan/work unit was created,
+and no onboarding operation was changed.
+
+Server-side full-row fingerprints before/after were identical for Registry,
+installation plans/work units, checkpoints, sync runs, onboarding and Analytics
+publications. MX remains revision 9 / READY / sync=false. The plan is COMPLETE,
+45/45 units COMPLETE, required progress 43/43 (100%, ETA 0), Installation State READY,
+history_complete=false and facts_complete=true. Analytics generation 3 remains
+`[2026-09-01,2026-10-03)`, as_of `2026-10-03T03:00:00Z`, publication
+`daf35780acf6259b69ed7cb542db09d2a0799e1d03aed1a96dc3a71a6749d4d7`.
+Legacy Facts remain completed at 429,911 records / 430 core pages under the original
+run/checkpoint. Counts remain 132 checkpoints / 147 sync runs; zero pending RAW or
+pending checkpoints. The canonical activation/configuration guard passed, and all
+four normal eligible-store inventories were empty.
+
+### Safety stop — normal dispatcher global lease
+
+**BACKEND ACTIVATION STOPPED SAFELY — store_dispatch_global_lease_present**
+
+The broader immediate pre-activation audit found the canonical normal Control Plane
+lease. Installation/store leases are absent, but this existing object blocks normal
+dispatch. It was not created by this change:
+
+- Bucket: `up-data-intelligence-dev-876521886531-leases`.
+- Key: `leases/1766ac512643efd281e46471d1cadbc43244d41c4a751c4d2571503510c7b47c`,
+  verified using canonical `digest("store-dispatch-global")`.
+- Generation: `1790967353906003`.
+- Created/updated: `2026-10-02T18:55:53.975000+00:00`.
+- Size: 36 bytes. **Body was not read. Object was not deleted or modified.**
+
+Historical candidate metadata (temporal correlation, not exact ownership proof):
+
+| Execution | Start UTC | Completion UTC | Result |
+| --- | --- | --- | --- |
+| up-store-dispatcher-zww44 | 2026-10-02T18:55:45.749367Z | 2026-10-02T19:56:22.153419Z | FAILED / NON_ZERO_EXIT_CODE |
+| up-upzero-worker-97khw | 2026-10-02T18:55:59.749307Z | 2026-10-02T19:56:16.159085Z | FAILED |
+
+Full candidate execution metadata was inspected. No matching structured terminal
+application events or object storage audit entries were returned by the historical
+queries (zero log entries returned for either historical candidate). Therefore exact
+lease ownership/cause is not asserted. The current inventory inspected 13 Jobs and
+147 executions, with no active execution; project-wide BigQuery running-job inventory
+is empty. Durable MX evidence is complete and unchanged, including the recovered legacy
+run/checkpoint and certified publication. Object age alone was not used as recovery proof.
+
+`cloud_lease` intentionally does not expire on ambiguous outcomes or process death.
+The current authorization does not permit automatic stale-lease deletion. Recovery
+requires a separate ownership/outcome review and explicit generation-matched removal
+scope, rechecking metadata immediately before any deletion. Never delete without a
+precondition, never retry an unknown delete, and never silently adopt a new generation.
+
+**Activation was not executed. No normal recurring pipeline was started. Stage 2 was
+not generated or applied.** No rollback was needed: MX never left READY/sync=false.
+All eight schedulers remain PAUSED:
+
+| Scheduler | State |
+| --- | --- |
+| up-upzero-dispatch | PAUSED |
+| up-meta-dispatch | PAUSED |
+| up-analytics-dispatch | PAUSED |
+| up-intelligence-dispatch | PAUSED |
+| up-installation-dispatch | PAUSED |
+| up-foundation-dev-sync | PAUSED |
+| up-foundation-dev-reconcile | PAUSED |
+| up-foundation-dev-quality | PAUSED |
+
+There is no ambiguous outcome from a mutation performed in this round: Stage 1 and
+the global no-op are proved complete. The historical lease remains an unresolved
+recovery gate. Backend automation is **not** declared complete or enabled.
+
+### Final checks at the safety boundary
+
+After live Stage 1/no-op: full pytest **2,103 passed in 128.23s**; Ruff lint/format,
+mypy (152 files), git diff-check, Terraform recursive fmt-check and validate passed.
+Frontend: **230 tests / 21 files**, lint, typecheck, format-check and production build
+passed (45 static pages). Offline E2E: onboarding **1 passed**; B2B/Installation
+**11 passed**. Next-generated development type/config changes were restored to their
+original repository content and typecheck/format-check were repeated. No generated
+files, caches, credentials, raw metadata or customer data are included in Git.
+The existing Terraform-preservation test now recognizes only the exact approved
+Stage 2 paused-variable pair, preserving the Foundation baseline checks.
+
+Safety: exact Stage 1 apply YES; unexpected IAM/infra NO; activation NO; normal
+business workers NO; UP Zero/Meta API NO; secret-value read NO; manual RAW/CORE DML NO;
+checkpoint/publication repair NO; MX replan NO; new secret version/credential change NO;
+history_complete forced NO; any scheduler enabled NO. Stop before lease recovery,
+activation, recurring processing and scheduler enablement.
