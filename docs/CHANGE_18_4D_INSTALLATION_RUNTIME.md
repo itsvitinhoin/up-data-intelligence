@@ -959,3 +959,309 @@ Only this existing runbook is committed/pushed on
 `change-18-4d-installation-runtime`. Private snapshots/helper/log files remain
 outside Git. No PR or merge.
 **STOP before dispatch, Meta verification or LEGACY_RESUME.**
+
+## CHANGE #18.4F — MX End-to-End Installation Completion (2026-10-03/04 UTC)
+
+**MX INSTALLATION COMPLETE — READY FOR ACTIVATION.**
+The existing V2 installation finished through canonical Installation Jobs only.
+All 45 work units are COMPLETE (43 required, two optional publications), the
+plan is COMPLETE, Registry is READY and Installation State is READY. Recurring
+sync remains disabled; no activation or Scheduler change was performed.
+
+### Initial state, scope and immutable identity
+
+Both local and Cloud Shell checkouts were on
+`change-18-4d-installation-runtime`, HEAD
+`2b40bc438fb5b8ce107d6068940b1ad86f6e20ac`, clean. Cloud Shell fast-forwarded the
+documentation-only baseline; no reset, branch switch or runtime code change.
+
+- Plan ID: `67ac3f1baed4d7fc8ea055a6c90c265a4a7f4b4b1b21c21d37d983c77fc04a15`.
+- Planner: `1.0.0`.
+- Config hash: `2e91000a8c229e772a1f1d86bf63f445fd4359a2bad09bf7c73e23fce9048c38`.
+- Initial semantic signature:
+  `b0c522d697abbd9640170ab36a2348fbb365271325909c221ad1aa35a781975a`.
+- Fixed target: `2026-10-03T03:00:00+00:00`.
+- Initial Registry: revision 5, DRAFT, sync=false, history_complete=false,
+  analytics_enabled=true, facts_complete=false. Plan RUNNING, all 45 units
+  PENDING, attempts zero, no dispatch/execution references.
+- Initial ledger: 97 checkpoints and 111 sync-runs, full row digests matched
+  the preceding audit. Legacy Facts evidence and publication revalidated.
+- UP Zero active; Meta pending with secret_resource_name=NULL; one compatible
+  Meta binding. No store identity, commercial policy or account change.
+- Three leases absent, no active related execution, seven Schedulers PAUSED,
+  no Installation Scheduler. Inventory covered normal, Foundation and
+  Installation Jobs, with full execution metadata for reconciliation.
+- All four Installation Jobs retained digest
+  `sha256:5e9b3d0752cd78abfabf580b39c69eedf487dd72b086c3e62f6f593ccc2288f0`.
+
+Each orchestrator launch explicitly used dispatch, MX store confirmation and
+DEV project confirmation, with max_stores=1, max_parallel_stores=1 and
+max_dispatches=1. Limits stayed at 20 pages / 600s soft budget between pages,
+1,073,741,824 maximum bytes/query and 137,438,953,472 maximum bytes/execution.
+No Cloud Run timeout or infrastructure configuration changed. The session-wide
+ceiling was 120 physical workers; actual usage was 50, all successful.
+
+A private bounded controller checked environment/state before each launch,
+created an exclusive attempted marker, issued one orchestrator execution and
+reconciled its persisted operation and worker execution before continuing.
+It checked durable status, counters, failure count and lease release. It never
+issued source calls, Secret reads or business DML itself. No repeated ambiguous
+POST, failed worker retry, lease deletion or business recovery was necessary.
+
+### Authorized canonical refresh and source verification
+
+The first dispatch performed the explicitly approved Registry revision 5 -> 6
+refresh: Facts coverage became
+`[2026-09-01T00:00Z, 2026-09-29T00:00Z)`, plan RUNNING -> PARTIAL, Registry still
+DRAFT/sync=false/history=false. The evidence came from adopted complete
+intervals and the existing certified publication, not pending legacy counters.
+Subsequent coverage increments used canonical prefix() with COMPLETE evidence.
+
+The first candidate was exactly UP Zero VERIFY_SOURCE, sequence 0, required,
+work unit `912a3094fb1c2d96cfe819817d9b84b86720244ae48c95e6550f40e1cd4926df`.
+Orchestrator `up-installation-orchestrator-d97dd` launched
+`up-installation-upzero-worker-5ks5n`, successful from
+`2026-10-03T22:19:18.759018Z` to `2026-10-03T22:19:41.157874Z`.
+The canonical pinned UP Zero credential authenticated the minimal customers
+limit=1 probe. Payload discarded, no RAW/CORE capture, no customer/credential
+logging. Unit COMPLETE, attempt 1 / failure 0; progress 1/43.
+
+Meta VERIFY_SOURCE then completed through
+`up-installation-orchestrator-wqg24` /
+`up-installation-meta-worker-m5j8x`. Only the pinned global Meta secret was read
+server-side, through the canonical adapter. Meta source pending -> active.
+UP Zero remained active. Verification changed only source updated_at (plus Meta
+status); secret references stayed identical, Meta source secret remained NULL,
+and the full Meta binding was unchanged. Progress 2/43; ETA null.
+
+### Legacy Facts resume, bounded yields and ingestion
+
+The original run and checkpoint remained authoritative throughout:
+
+- Run: `0264739c-d3c6-4984-b88e-74fb5554bd58`.
+- Checkpoint: `9a1ab3d71e25c60c73f0edc40c8e10af4dc7e867fc01cfb142726ea33fd2fbec`.
+- Unit: `b1b720c865ff0616655b806d047d918af3bedc41dcb6e6541c6a1926b7889e8e`.
+- Mode incremental and original filters unchanged; cursor ownership preserved.
+  No cursor is disclosed here, no refresh/restart/new legacy run.
+
+| Slice | Worker | Cumulative records | Cumulative pages | Durable result |
+| --- | --- | ---: | ---: | --- |
+| Initial evidence | none | 344,000 | 344 | pending legacy work |
+| 1 | up-installation-upzero-worker-fhp28 | 364,000 | 364 | healthy PENDING yield |
+| 2 | up-installation-upzero-worker-ql66n | 384,000 | 384 | healthy PENDING yield |
+| 3 | up-installation-upzero-worker-6whfz | 404,000 | 404 | healthy PENDING yield |
+| 4 | up-installation-upzero-worker-nbqqk | 424,000 | 424 | healthy PENDING yield |
+| 5 | up-installation-upzero-worker-lkrfj | 429,911 | 430 | COMPLETE, source exhausted |
+
+All five physical executions succeeded. Each healthy yield cleared pending RAW
+and advanced position only after complete RAW -> CORE promotion. The final
+checkpoint is complete, original sync-run completed, core_records_failed=0,
+pending_raw_id=NULL. Counters are cumulative, not sums of slice snapshots.
+This round advanced the legacy run by 85,911 records / 86 pages. Progress 3/43.
+
+Customers SYNC_SNAPSHOT completed with 1,203 records / eight pages through
+`up-installation-upzero-worker-p7455`; recovered historical Customers were not
+replayed or used as current freshness. Progress 4/43.
+
+Orders processed only the planned local 02 October gap through
+`up-installation-upzero-worker-mvv8j`: one record / one page, COMPLETE. The 33
+adopted complete intervals were reused, not re-created as work. Progress 41/43
+at this point in the canonical ordering.
+
+Facts gap `[2026-10-02T03:00Z, 2026-10-03T03:00Z)` did not overlap legacy work.
+Same unit `ec512c50279ac2d0be34bf7e530abfce88a32165b4cb316d1ec9494426ad0417`,
+same gap run `7ae0ba39-6281-492c-bd1d-bba0fa8e10ac` and checkpoint
+`92059fe83b3387e8bb82dd46d74daf8e47931a78896174761ee88c894f17abeb` across both
+slices: `up-installation-upzero-worker-kp5lx` yielded successfully at 15,000
+records / 15 pages under the soft time budget;
+`up-installation-upzero-worker-5kgkk` completed at 15,454 records / 16 pages.
+Mid-page read-only observation showed a pending RAW with source/CORE counters
+temporarily different; it was promoted canonically, never deleted/re-requested
+manually. Final pending RAW=NULL; run completed, checkpoint complete, no failed
+CORE record. Progress 42/43. No new Facts interval beyond the fixed target.
+
+### Meta catalog, insights and Analytics publications
+
+All Meta processing followed canonical source verification and the unchanged
+binding/config. Catalogs completed: accounts 1 record, campaigns 5, adsets 15,
+ads 36; one page/execution each. All 33 persisted META_INSIGHTS windows completed
+in 33 physical executions, one ledger record/page per window. These are
+operational counters, not campaign/KPI totals. No new window, account/API
+version/timezone/currency/connection change or per-store Meta secret.
+
+The priority/dependency ordering released the partial publication after the
+first 28 Meta windows, and final publication after the UP Zero gaps. The last
+Meta window subsequently completed; no dependency guard was bypassed. Both
+PUBLISH_ANALYTICS units finished canonically through all seven models and
+HEAD/RECEIPT, not merely worker startup or materialization initiation.
+
+| Generation | Window (end exclusive) | As of | Facts complete | Receipt |
+| --- | --- | --- | --- | --- |
+| 1, preserved receipt | 2026-09-01 -> 2026-09-28 | 2026-09-28T03:00Z | true for that window | 6a70891ac41d0cc2a8441888aa31b7f41ed6835fbc4728c2b06dadbe2c559d74 |
+| 2, partial | 2026-09-01 -> 2026-09-29 | 2026-09-29T03:00Z | false | c5dd08593419703c4f5c237060006509a19aaa42c0b1919df03631f720c780f7 |
+| 3, final HEAD/RECEIPT | 2026-09-01 -> 2026-10-03 | 2026-10-03T03:00Z | true | daf35780acf6259b69ed7cb542db09d2a0799e1d03aed1a96dc3a71a6749d4d7 |
+
+Partial worker: `up-installation-analytics-worker-hln8h`. Final worker:
+`up-installation-analytics-worker-fpxr5`. Both successful, both publication units
+COMPLETE. Final generation 3 HEAD and matching RECEIPT are completed and retain
+commercial policy hash
+`3098157d095a3bcb0c024dbc6263fa7e5eebdc099a2f72903ca82f7634b9c54c`.
+History remains incomplete in every publication; READY is not lifetime proof.
+
+### Final evidence, coverage and Installation State
+
+The final orchestrator `up-installation-orchestrator-lgzpt` selected no unit and
+launched no worker: canonical refresh only. Controller exited 0 and stopped.
+No second plan, new work ID, altered graph/filter/dependency/required flag or
+changed target/config hash. The initial semantic hash includes mutable adopted
+counters, so graph integrity was checked separately from advancing counters.
+
+| Item | Before | After |
+| --- | --- | --- |
+| Plan | RUNNING, 45 PENDING | COMPLETE, all 45 COMPLETE |
+| Required progress | 0/43 | 43/43, 100%, ETA 0 |
+| Registry revision / status | 5 / DRAFT | 9 / READY |
+| sync_enabled | false | false |
+| history_complete | false | false |
+| facts_complete | false | true |
+| Registry Facts coverage | NULL | [2026-09-01T00:00Z, 2026-10-03T03:00Z) |
+| Certified Dashboard window | [2026-09-01, 2026-09-28) | [2026-09-01, 2026-10-03) |
+| Checkpoints / sync-runs | 97 / 111 | 132 / 147 |
+| Pending RAW in MX checkpoints | 0 | 0 |
+| UP Zero / Meta source | active / pending | active / active |
+| Schedulers | seven PAUSED, no Installation Scheduler | unchanged |
+
+Only authorized Registry fields changed: revision, updated_at, status,
+facts_complete, facts_coverage_from/to. All remaining fields matched the original
+snapshot. All four eligible() checks (upzero/meta/analytics/intelligence) are
+false because sync remains disabled. Orders completed prefix now reaches
+2026-10-03T03:00Z from its adopted 2026-08-31T03:00Z start; Facts contiguous
+prefix reaches the fixed target from 2026-09-01T00:00Z. No gaps crossed by MIN/MAX.
+The dashboard report uses complete local days 01 September through 02 October.
+
+All required source units have a unique linked complete checkpoint and completed
+sync-run, zero core_records_failed and no pending RAW. Legacy run/checkpoint
+identity/mode/filters/cursor ownership are preserved. No BLOCKED, ambiguous,
+nonterminal work or active execution remains. No business repair DML occurred.
+Final lease metadata GETs confirmed MX, installation-work:mx-fashion and
+installation-orchestrator-global all absent; no lease body/read/delete/recovery.
+
+Canonical InstallationReader returned installation.v2, overall_state READY,
+installation_plan_status COMPLETE, CHUNKS 43/43, percent=100, ETA=0, both
+available_window and recommended_preview_window [2026-09-01, 2026-10-03),
+history_complete=false, facts_complete=true. Its remaining limitation is
+history_incomplete, not installation pending. ETA stayed null earlier while an
+unfinished resource group lacked three comparable completed units; final 0
+means no required work remains.
+
+Read-only DashboardService V2 validation under the operator's DEV IAM and
+explicit authorized MX B2B grant passed for Overview, Orders, Acquisition,
+Retention, Customers and Products. All six resolved the same generation 3,
+policy hash and final certified window. Overview returned 32 daily rows, Orders
+21 rows, Customers 17 rows, Products first page 25 rows. No customer identity or
+response payload was logged/saved to Git. This is canonical read-service
+acceptance, not a browser/HTTP deployment test or frontend cutover.
+
+LTV complete, definitive new Customers/CAC and uncertified paid revenue remained
+NULL; acquisition confirmed_new_customers and every returned Customer complete
+LTV stayed NULL. Monetary transport remained decimal strings, requested and
+fulfilled separate. Outside window [2026-10-03, 2026-10-04) was rejected with
+400 interval_outside_publication, not invented zeros. Existing limitations such
+as observed buyers, current CORE profiles, unmaterialized paid media and payment
+not certified remained explicit. Read guards used the approved 1GiB/query and
+128GiB total ceiling; no guard was removed or unlimited query introduced.
+
+### Work and execution inventory
+
+| Source | Resource / kind | Units COMPLETE | Physical executions | Final records / pages |
+| --- | --- | ---: | ---: | ---: |
+| UP Zero | verification / VERIFY_SOURCE | 1 | 1 | 0 / 0 |
+| Meta | verification / VERIFY_SOURCE | 1 | 1 | 0 / 0 |
+| UP Zero | analytics_facts / LEGACY_RESUME | 1 | 5 | 429,911 / 430, cumulative |
+| UP Zero | customers / SYNC_SNAPSHOT | 1 | 1 | 1,203 / 8 |
+| UP Zero | orders / SYNC_WINDOW | 1 | 1 | 1 / 1 |
+| UP Zero | analytics_facts / SYNC_WINDOW | 1 | 2 | 15,454 / 16, cumulative |
+| Meta | accounts / META_CATALOG | 1 | 1 | 1 / 1 |
+| Meta | campaigns / META_CATALOG | 1 | 1 | 5 / 1 |
+| Meta | adsets / META_CATALOG | 1 | 1 | 15 / 1 |
+| Meta | ads / META_CATALOG | 1 | 1 | 36 / 1 |
+| Meta | insights / META_INSIGHTS | 33 | 33 | 33 / 33 |
+| Analytics | publication / PUBLISH_ANALYTICS | 2 | 2 | 0 / 0, publication has no data weight |
+
+Total: 50 successful workers (UP Zero 10, Meta 38, Analytics two), 51 successful
+orchestrators (50 launches + one final refresh without launch). Attempt counters
+sum to exactly 50 worker executions. Progress milestones: 0/43 -> 2/43 source
+verification -> 3/43 legacy completion -> 4/43 Customers -> 36/43 first 28 Meta
+windows/catalogs -> partial publication (still 36/43) -> 40/43 -> Orders 41/43 ->
+Facts gap 42/43 -> final publication (still 42/43) -> last Meta window 43/43.
+
+Execution names below are listed newest first; no failed/cancelled execution or
+normal/stray worker was introduced. Full operation/terminal execution metadata
+and safe per-slice snapshots remain in private /tmp audit files outside Git.
+An initial inventory comparison omitted the pre-existing up-analytics-dev Job;
+its sole unmatched execution up-analytics-dev-cgl9d was created/completed on
+2026-09-29, not in this round. Read-only historical comparison against the early
+full inventory resolved the private helper's false alarm. No runtime code fix
+or external business mutation was involved. A tuple/list comparison and a
+snapshot key name were also corrected only in private diagnostic helpers.
+
+`up-installation-orchestrator` execution suffixes (prefix the Job name plus `-`):
+
+```text
+lgzpt dkkpd pr85r drmrx gmbvn 9fwlm r6j6q nv2gr rs4zc hm5qh
+5f5hn p7xss gtmrc vj849 ml7s7 d7jdx jj67r rttn9 42w96 4ndc4
+r8q56 ltdf9 r4xfj 79ldh xrszk fxpkj 8c2fk 7m54p 67psc vzb2r
+4vgrt cflm9 xtzk2 kgx5k nb955 p7bcd fnwsx 9sntw cd5rn 4k7rl
+r7fb5 4fnn5 8fdjf np5lg qbzt7 5g8p5 kdv5f h6t67 6m4r6 wqg24
+d97dd
+```
+
+`up-installation-upzero-worker` suffixes:
+
+```text
+5kgkk kp5lx mvv8j p7455 lkrfj nbqqk 6whfz ql66n fhp28 5ks5n
+```
+
+`up-installation-meta-worker` suffixes:
+
+```text
+z6bzf 665ws mr5pp v9nv7 fr7s4 7ks55 r8x29 sbbsn gn2qx w45h5
+fdxdw 6htkl 6m8zc d7mxt ng9v4 8hprc sb5h7 6qnjj vgnk8 khggr
+mcmcj bzrwx z2qds gfl9w scbj5 knrx5 5ttmr lblrw np4hr zbskx
+84kdr l6lfb 8n68v gzfdq cqrn5 7x6bv 2swx5 m5j8x
+```
+
+`up-installation-analytics-worker` suffixes:
+
+```text
+fpxr5 hln8h
+```
+
+### Tests, unchanged runtime, safety and stop
+
+- Installation suite: **88 passed**, 16.01s.
+- Full Python suite: **2,052 passed**, 134.22s.
+- Ruff check: passed. Ruff format check: 270 files already formatted.
+- Mypy src: passed, 150 source files. Git diff whitespace check passed and is
+  repeated for this documentation update.
+- Runtime code, frontend, policy, graph, schema and Terraform unchanged.
+  No code fix, image build, redeploy, Terraform plan/apply or migration.
+  The four approved Job image digests stayed identical.
+
+UP Zero API: YES, canonical verification and planned ingestion only.
+Meta API: YES, canonical verification/catalog/33 insights windows only.
+Secret value read: YES, pinned UP Zero and global Meta secrets server-side only.
+No secret version created/changed/deleted, value logged or credential committed.
+Plan ID changed: NO. Replan/new units: NO. Manual RAW DML: NO.
+Manual CORE DML: NO. Manual checkpoint repair: NO. Manual publication DML: NO.
+history_complete forced/changed: NO. Normal Control Plane executed: NO.
+Schedulers enabled/changed: NO. ACTIVE/recurring sync activation: NO.
+Lease recovery/delete: NO. Terraform: NO. Source API payload/PII logging: NO.
+RAW/CORE/checkpoint/run/publication changes occurred only through authorized
+canonical Installation workers; plan/Registry transitions through orchestrator.
+
+Only this runbook is changed/committed/pushed on the existing branch. No PR or
+merge. Private helpers/snapshots/operational logs and screenshot stay outside
+Git; no real customer data, tokens, secrets, tfstate or tfplan are included.
+**STOP: READY with sync=false. Do not activate the store, recurring sync,
+Schedulers or another dispatch in this change.**
