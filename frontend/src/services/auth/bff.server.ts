@@ -25,15 +25,28 @@ export function cookie(request: Request, name: string) {
     .filter((v) => v.startsWith(name + "="));
   return values.length === 1 ? values[0].slice(name.length + 1) : "";
 }
-export function assertCsrf(request: Request) {
+function servingOrigin(request: Request) {
   const url = new URL(request.url);
+  if (process.env.K_SERVICE === "up-web") {
+    // Cloud Run terminates TLS. Next standalone may build request.url with its
+    // internal 0.0.0.0:$PORT hostname. Use the actual incoming serving authority,
+    // never X-Forwarded-Host, and require this service's generated HTTPS host.
+    const host = request.headers.get("host") ?? "";
+    if (
+      request.headers.get("x-forwarded-proto") !== "https" ||
+      !/^up-web-[a-z0-9-]+(?:\.[a-z0-9-]+)*\.run\.app$/.test(host)
+    )
+      throw new Error("https_serving_origin_required");
+    return "https://" + host;
+  }
+  if (url.protocol !== "https:") throw new Error("https_required");
+  return url.origin;
+}
+export function assertCsrf(request: Request) {
+  const expectedOrigin = servingOrigin(request);
   const origin = request.headers.get("origin");
   const site = request.headers.get("sec-fetch-site");
-  if (
-    url.protocol !== "https:" ||
-    origin !== url.origin ||
-    (site !== null && site !== "same-origin")
-  )
+  if (origin !== expectedOrigin || (site !== null && site !== "same-origin"))
     throw new Error("csrf_origin_required");
   const c = cookie(request, "__Host-up_csrf"),
     t = request.headers.get("x-up-csrf") ?? "";
@@ -45,8 +58,11 @@ export function assertCsrf(request: Request) {
     throw new Error("csrf_token_required");
 }
 export function csrfResponse(request: Request) {
-  if (new URL(request.url).protocol !== "https:")
+  try {
+    servingOrigin(request);
+  } catch {
     return authError(403, "https_required");
+  }
   const value = randomBytes(32).toString("hex");
   return Response.json(
     { data: { csrf_token: value } },

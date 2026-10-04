@@ -108,6 +108,30 @@ describe("authenticated product BFF", () => {
     );
     expect(r.headers.get("set-cookie")).not.toContain("__Host-up_session");
   });
+  it("checks the public HTTPS authority behind Cloud Run TLS termination", () => {
+    vi.stubEnv("K_SERVICE", "up-web");
+    const headers = new Headers(request("/api/auth/session", "POST").headers);
+    headers.set("host", "up-web-123456.southamerica-east1.run.app");
+    headers.set("origin", "https://up-web-123456.southamerica-east1.run.app");
+    headers.set("x-forwarded-proto", "https");
+    const proxied = () =>
+      new Request("https://0.0.0.0:8080/api/auth/session", {
+        method: "POST",
+        headers,
+      });
+    expect(() => assertCsrf(proxied())).not.toThrow();
+    expect(csrfResponse(proxied()).status).toBe(200);
+    headers.set("origin", "https://different.run.app");
+    expect(() => assertCsrf(proxied())).toThrow();
+    headers.set("origin", "https://up-web-123456.southamerica-east1.run.app");
+    headers.set("x-forwarded-host", "attacker.example");
+    expect(() => assertCsrf(proxied())).not.toThrow();
+    headers.set("host", "attacker.example");
+    expect(() => assertCsrf(proxied())).toThrow();
+    headers.set("host", "up-web-123456.southamerica-east1.run.app");
+    headers.set("x-forwarded-proto", "http");
+    expect(() => assertCsrf(proxied())).toThrow();
+  });
   it("sets a twelve-hour HttpOnly server session, never JSON", async () => {
     const call: PrivateCaller = vi.fn().mockResolvedValue(
       new Response("{}", {
