@@ -1,0 +1,21 @@
+# Build only; source must be a clean pushed commit. The caller pins the base digest.
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --platform=linux/amd64
+      - --file=product.Dockerfile
+      - --build-arg=PYTHON_BASE=${_PYTHON_BASE}
+      - --tag=southamerica-east1-docker.pkg.dev/up-data-intelligence-dev/up-data-intelligence/product-api:${_VERSION}
+      - .
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - run
+      - --rm
+      - --network=none
+      - southamerica-east1-docker.pkg.dev/up-data-intelligence-dev/up-data-intelligence/product-api:${_VERSION}
+      - --version
+images:
+  - southamerica-east1-docker.pkg.dev/up-data-intelligence-dev/up-data-intelligence/product-api:${_VERSION}
+options:
+  logging: CLOUD_LOGGING_ONLY

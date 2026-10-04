@@ -1,0 +1,42 @@
+[
+  {
+    "name": "row_key",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "identity_hash",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "role",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "tenant_id",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "workspace_operation_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "status",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "created_at",
+    "type": "TIMESTAMP",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "updated_at",
+    "type": "TIMESTAMP",
+    "mode": "REQUIRED"
+  }
+]

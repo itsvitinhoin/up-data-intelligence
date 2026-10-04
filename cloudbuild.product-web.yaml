@@ -1,0 +1,14 @@
+# Build only. No Firebase secret, private API URL or user credential is a build argument.
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --platform=linux/amd64
+      - --file=frontend/Dockerfile
+      - --build-arg=NODE_BASE=${_NODE_BASE}
+      - --tag=southamerica-east1-docker.pkg.dev/up-data-intelligence-dev/up-data-intelligence/product-web:${_VERSION}
+      - frontend
+images:
+  - southamerica-east1-docker.pkg.dev/up-data-intelligence-dev/up-data-intelligence/product-web:${_VERSION}
+options:
+  logging: CLOUD_LOGGING_ONLY
