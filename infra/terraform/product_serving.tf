@@ -1,4 +1,11 @@
 # Isolated additive DEV product serving. No data Jobs/Schedulers or business policies.
+provider "google" {
+  alias                 = "product_identity"
+  project               = var.project_id
+  region                = var.region
+  billing_project       = var.project_id
+  user_project_override = true
+}
 variable "product_api_image" {
   type     = string
   default  = null
@@ -60,6 +67,7 @@ resource "google_project_service" "product" {
   disable_on_destroy = false
 }
 resource "google_identity_platform_config" "product" {
+  provider           = google.product_identity
   count              = local.product_enabled ? 1 : 0
   project            = var.project_id
   authorized_domains = concat(["${var.project_id}.firebaseapp.com"], var.product_web_image == null ? [] : [replace(google_cloud_run_v2_service.product_web[0].uri, "https://", "")])
