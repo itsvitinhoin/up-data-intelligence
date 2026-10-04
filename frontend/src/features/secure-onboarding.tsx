@@ -1,4 +1,5 @@
 "use client";
+import { useWorkspace } from "./providers";
 import { useEffect, useRef, useState } from "react";
 import { submitOnboarding } from "@/services/api/onboarding";
 import { Input } from "@/components/ui/input";
@@ -13,6 +14,7 @@ export function SecureOnboardingForm({
   tenant: string;
   onCreated: (result: OnboardingResult) => void;
 }) {
+  const { dataMode } = useWorkspace();
   const [upzero, setUpzero] = useState(false),
     [meta, setMeta] = useState(false);
   const [busy, setBusy] = useState(false),
@@ -74,6 +76,8 @@ export function SecureOnboardingForm({
             request,
             idempotency.current,
             abort.current.signal,
+            fetch,
+            dataMode === "live",
           );
           onCreated(result);
           form.reset();
@@ -91,8 +95,9 @@ export function SecureOnboardingForm({
       }}
     >
       <Notice>
-        Onboarding DEV explícito. O login demo não é autenticação de produção. A
-        marca será DRAFT, sem ingestão.
+        {dataMode === "live"
+          ? "Cadastro seguro da marca. A instalação seguirá o fluxo automático aprovado."
+          : "Onboarding DEV explícito. O login demo não é autenticação de produção. A marca será DRAFT, sem ingestão."}
       </Notice>
       <label className="form-field">
         Nome da marca

@@ -1,3 +1,5 @@
+import { getDashboardDataMode } from "./server";
+import { liveOnboarding } from "@/services/auth/bff.server";
 /** Explicit local DEV only. Demo identity never becomes production ADMIN_UP. */
 import { parseOnboarding } from "./onboarding";
 export function onboardingDevEnabled() {
@@ -38,6 +40,9 @@ export async function handleOnboardingBridge(
     fetcher?: typeof fetch;
   } = {},
 ) {
+  if (getDashboardDataMode() === "live")
+    return liveOnboarding(request, operationId);
+
   try {
     const config = (deps.config ?? configuration)();
     if (!config) return error(404, "admin_preview_disabled");

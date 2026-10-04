@@ -27,9 +27,7 @@ export function PeriodFilter() {
     useWorkspace();
   const path = usePathname();
   const previewRoute =
-    isB2BReadPage(path) &&
-    scope?.operation === "B2B" &&
-    dataMode === "read-api-preview";
+    isB2BReadPage(path) && scope?.operation === "B2B" && dataMode !== "demo";
   const current = activePageState(path, dataMode, scope, dashboardPageState);
   const installation = useInstallation();
   const available = installation.data?.data.available_window;

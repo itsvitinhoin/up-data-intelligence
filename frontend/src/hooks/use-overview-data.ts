@@ -35,11 +35,14 @@ export async function readOverview(
   context: ReturnType<typeof useRequestContext>,
   fetcher: typeof fetch = fetch,
 ): Promise<OverviewData> {
-  if (mode !== "read-api-preview" || context.scope.operation !== "B2B")
+  if (mode === "live" && context.scope.operation !== "B2B")
+    throw new ApiError(424, "Cobertura ainda não certificada.");
+  if (mode === "demo" || context.scope.operation !== "B2B")
     return { source: "demo", overview: await api.read("overview", context) };
   const params = new URLSearchParams({
     tenant_id: context.scope.tenant_id,
-    workspace_operation_id: context.scope.store_id,
+    workspace_operation_id:
+      context.scope.workspace_operation_id ?? context.scope.store_id,
     operation: context.scope.operation,
   });
   if (context.filters.from && context.filters.to) {
@@ -51,7 +54,7 @@ export async function readOverview(
     signal: context.signal,
     cache: "no-store",
   });
-  if (response.status === 404) {
+  if (mode !== "live" && response.status === 404) {
     const payload: unknown = await response.json();
     if (
       typeof payload === "object" &&

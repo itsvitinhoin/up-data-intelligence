@@ -2,9 +2,12 @@ import type { ErpData } from "./erp";
 import type { RetentionSummary } from "@/services/demo/retention-summary";
 export type Role = "ADMIN" | "MANAGER" | "VIEWER";
 export type Operation = "B2B" | "B2C";
-export type DashboardDataMode = "demo" | "read-api-preview";
+export type DashboardDataMode = "demo" | "read-api-preview" | "live";
 export interface Scope {
   tenant_id: string;
+  /** Canonical browser workspace identity. Present for every live scope. */
+  workspace_operation_id?: string;
+  /** Legacy UI workspace alias, never the technical data store ID. */
   store_id: string;
   operation: Operation;
 }

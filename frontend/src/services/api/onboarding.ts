@@ -1,3 +1,4 @@
+import { csrf } from "@/services/auth/client";
 import { parseInstallation } from "./installation";
 /** Secret submission deliberately avoids React Query, Company and persistent browser storage. */
 import { ApiError } from "./access";
@@ -123,6 +124,7 @@ export async function submitOnboarding(
   key: string,
   signal?: AbortSignal,
   fetcher: typeof fetch = fetch,
+  live = false,
 ): Promise<OnboardingResult> {
   let body = JSON.stringify(payload);
   try {
@@ -130,7 +132,11 @@ export async function submitOnboarding(
       method: "POST",
       credentials: "same-origin",
       cache: "no-store",
-      headers: { "Content-Type": "application/json", "Idempotency-Key": key },
+      headers: {
+        "Content-Type": "application/json",
+        "Idempotency-Key": key,
+        ...(live ? { "X-UP-CSRF": await csrf() } : {}),
+      },
       body,
       signal,
     });

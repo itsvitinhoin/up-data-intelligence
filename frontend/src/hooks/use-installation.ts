@@ -1,7 +1,6 @@
 "use client";
 import { useQuery } from "@tanstack/react-query";
 import { useWorkspace } from "@/features/providers";
-import { authorizedTenants } from "@/services/api";
 import { ApiError } from "@/services/api/access";
 import {
   installationPollingInterval,
@@ -28,7 +27,7 @@ export async function readInstallation(
     throw new ApiError(403, "Contrato B2B necessário.");
   const params = new URLSearchParams({
     tenant_id: scope.tenant_id,
-    workspace_operation_id: scope.store_id,
+    workspace_operation_id: scope.workspace_operation_id ?? scope.store_id,
     operation: scope.operation,
   });
   const response = await fetcher(`/api/dashboard/installation?${params}`, {
@@ -58,12 +57,12 @@ export async function readInstallation(
   return parseInstallation(await response.json());
 }
 export function useInstallation(suppliedScope?: Scope | null) {
-  const { scope: current, session, dataMode } = useWorkspace();
+  const { scope: current, session, dataMode, tenants } = useWorkspace();
   const scope = suppliedScope === undefined ? current : suppliedScope;
   const authorized =
     !!scope &&
     !!session &&
-    authorizedTenants(session).some(
+    tenants.some(
       (t) =>
         t.id === scope.tenant_id &&
         t.brands.some((b) =>
@@ -73,7 +72,7 @@ export function useInstallation(suppliedScope?: Scope | null) {
         ),
     );
   const enabled =
-    dataMode === "read-api-preview" && scope?.operation === "B2B" && authorized;
+    dataMode !== "demo" && scope?.operation === "B2B" && authorized;
   const result = useQuery({
     queryKey: installationKey(session, scope),
     queryFn: ({ signal }) => readInstallation(scope!, signal),

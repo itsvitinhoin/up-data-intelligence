@@ -37,8 +37,7 @@ export function B2BReadBoundary({
   const path = usePathname(),
     scopeKey = overviewScopeKey(context.scope);
   const base = { ...context, filters: defaultFilters };
-  const preview =
-    dataMode === "read-api-preview" && context.scope.operation === "B2B";
+  const preview = dataMode !== "demo" && context.scope.operation === "B2B";
   const result = useQuery({
     queryKey: overviewQueryKey(dataMode, base),
     queryFn: ({ signal }) => readOverview(dataMode, { ...base, signal }),
@@ -101,7 +100,8 @@ export async function readDashboard<K extends ReadResource>(
   );
   const params = new URLSearchParams({
     tenant_id: context.scope.tenant_id,
-    workspace_operation_id: context.scope.store_id,
+    workspace_operation_id:
+      context.scope.workspace_operation_id ?? context.scope.store_id,
     operation: context.scope.operation,
   });
   if (

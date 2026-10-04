@@ -1,3 +1,4 @@
+import { liveRead } from "@/services/auth/bff.server";
 /** DEV loopback only; production identity semantics are unchanged. */
 import { createServerDashboardReadApi, getDashboardDataMode } from "./server";
 import {
@@ -19,6 +20,9 @@ export async function handleInstallationBridge(
     readApi?: typeof createServerDashboardReadApi;
   } = {},
 ) {
+  if (getDashboardDataMode() === "live")
+    return liveRead(request, "installation");
+
   if ((dependencies.mode ?? getDashboardDataMode)() !== "read-api-preview")
     return error(404, "preview_disabled");
   const url = new URL(request.url);

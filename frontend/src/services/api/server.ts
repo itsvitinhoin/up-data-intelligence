@@ -3,6 +3,7 @@ import { createHttpApi } from "./http";
 import type { DashboardDataMode } from "@/types/domain";
 
 export function getDashboardDataMode(): DashboardDataMode {
+  if (process.env.DASHBOARD_DATA_MODE === "live") return "live";
   return process.env.NODE_ENV === "development" &&
     process.env.DASHBOARD_DATA_MODE === "read-api-preview"
     ? "read-api-preview"

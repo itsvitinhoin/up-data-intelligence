@@ -25,6 +25,8 @@ import {
 } from "@/lib/dashboard-source";
 import { useWorkspace } from "@/features/providers";
 import { useResource } from "@/hooks/use-resource";
+import { useQuery } from "@tanstack/react-query";
+import { decodeReadEnvelope } from "@/services/api/http";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -43,7 +45,7 @@ import {
 } from "@/components/ui/dialog";
 import { Choice, Empty } from "@/components/ui-kit";
 import { Login, OperationPicker } from "@/features/auth";
-import { authorizedTenants } from "@/services/api";
+import { LiveBrands } from "@/features/live-brands";
 import { AdminShell, CompaniesPage } from "@/features/admin";
 function Redirect({ to }: { to: string }) {
   const router = useRouter();
@@ -53,9 +55,24 @@ function Redirect({ to }: { to: string }) {
   return null;
 }
 export function Access({ children }: { children: React.ReactNode }) {
-  const { session, scope } = useWorkspace();
+  const { session, scope, dataMode, tenants, sessionLoading, sessionError } =
+    useWorkspace();
   const pathname = usePathname();
-  if (!session) return <Login />;
+  if (sessionLoading)
+    return <main className="workspace-screen">Conectando sua sessão…</main>;
+  if (!session)
+    return (
+      <>
+        <Login />
+        {sessionError && <p role="alert">{sessionError}</p>}
+      </>
+    );
+  if (dataMode === "live" && pathname.startsWith("/admin"))
+    return session.role === "ADMIN" ? (
+      <LiveBrands />
+    ) : (
+      <main className="workspace-screen">Acesso restrito</main>
+    );
   if (pathname === "/" || pathname === "/login") {
     if (session.role === "ADMIN") return <Redirect to="/admin" />;
     if (!scope) return <OperationPicker />;
@@ -90,7 +107,7 @@ export function Access({ children }: { children: React.ReactNode }) {
       ? "B2C"
       : undefined;
   if (required && scope.operation !== required) {
-    const available = authorizedTenants(session).some((t) =>
+    const available = tenants.some((t) =>
       t.brands.some((b) => b.operations.some((o) => o.type === required)),
     );
     return available ? (
@@ -99,18 +116,28 @@ export function Access({ children }: { children: React.ReactNode }) {
       <Redirect to={"/" + scope.operation.toLowerCase()} />
     );
   }
+  if (
+    dataMode === "live" &&
+    (scope.operation !== "B2B" || !isB2BReadPage(pathname))
+  )
+    return (
+      <Shell>
+        <main className="workspace-screen">
+          <h1>Indisponível</h1>
+          <p>Cobertura ainda não certificada</p>
+        </main>
+      </Shell>
+    );
   return <Shell>{children}</Shell>;
 }
 function Navigation({ close }: { close?: () => void }) {
   const path = usePathname();
-  const { scope, session, select } = useWorkspace();
+  const { scope, session, select, tenants } = useWorkspace();
   const [expanded, setExpanded] = useState<string[]>([
     ...(path.startsWith("/erp") ? ["ERP"] : []),
     ...(path.startsWith("/campaigns") ? ["Campanhas"] : []),
   ]);
-  const tenant = (session ? authorizedTenants(session) : []).find(
-    (t) => t.id === scope?.tenant_id,
-  );
+  const tenant = tenants.find((t) => t.id === scope?.tenant_id);
   const brand = tenant?.brands.find((b) =>
     b.operations.some((o) => o.id === scope?.store_id),
   );
@@ -237,10 +264,43 @@ function SearchDialog() {
   const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
   const data = useResource("customers");
+  const { dataMode, scope } = useWorkspace();
+  const real = useQuery({
+    queryKey: [
+      "live-customer-search",
+      scope?.tenant_id,
+      scope?.workspace_operation_id,
+      scope?.operation,
+    ],
+    enabled: dataMode === "live" && open && scope?.operation === "B2B",
+    retry: false,
+    queryFn: async ({ signal }) => {
+      const params = new URLSearchParams({
+        tenant_id: scope!.tenant_id,
+        workspace_operation_id: scope!.workspace_operation_id!,
+        operation: scope!.operation,
+        page_size: "25",
+      });
+      const response = await fetch(`/api/dashboard/customers?${params}`, {
+        cache: "no-store",
+        signal,
+      });
+      if (!response.ok) throw new Error("customer_search_unavailable");
+      return decodeReadEnvelope("customers", await response.json());
+    },
+  });
+  const records =
+    dataMode === "live"
+      ? real.data?.data.map((c) => ({
+          id: c.customer_id,
+          name: c.name ?? "Nome não disponível",
+          city: c.city,
+          state: c.state,
+        }))
+      : data.data;
   const matches =
-    data.data?.filter((c) =>
-      c.name.toLowerCase().includes(text.toLowerCase()),
-    ) ?? [];
+    records?.filter((c) => c.name.toLowerCase().includes(text.toLowerCase())) ??
+    [];
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -252,7 +312,11 @@ function SearchDialog() {
       </DialogTrigger>
       <DialogContent className="glass">
         <DialogTitle>Encontre um cliente</DialogTitle>
-        <DialogDescription>Busca na operação selecionada.</DialogDescription>
+        <DialogDescription>
+          {dataMode === "live"
+            ? "Busca na página atual de até 25 clientes autorizados. A lista completa está em Clientes."
+            : "Busca na operação selecionada."}
+        </DialogDescription>
         <Input
           aria-label="Buscar cliente pelo nome"
           placeholder="Nome da empresa"
@@ -275,20 +339,36 @@ function SearchDialog() {
               <ArrowUpRight size={16} />
             </Link>
           ))}
-          {!matches.length && <Empty />}
+          {dataMode === "live" && real.isError ? (
+            <p>Cobertura ainda não certificada</p>
+          ) : (
+            !matches.length && <Empty />
+          )}
+          {dataMode === "live" && (
+            <Link href="/customers" onClick={() => setOpen(false)}>
+              Abrir Clientes
+            </Link>
+          )}
         </div>
       </DialogContent>
     </Dialog>
   );
 }
 export function Shell({ children }: { children: React.ReactNode }) {
-  const { session, scope, select, logout, dataMode, dashboardPageState } =
-    useWorkspace();
+  const {
+    session,
+    scope,
+    select,
+    logout,
+    dataMode,
+    dashboardPageState,
+    tenants,
+  } = useWorkspace();
   const router = useRouter();
   const path = usePathname();
   const [menu, setMenu] = useState(false);
   const [notifications, setNotifications] = useState(true);
-  const options = (session ? authorizedTenants(session) : [])
+  const options = tenants
     .filter((t) => session?.tenant_ids.includes(t.id))
     .flatMap((t) =>
       t.brands.flatMap((b) =>
@@ -302,9 +382,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
     );
   const selected = options.find((o) => o.value === scope?.store_id);
   const overviewPreview =
-    isB2BReadPage(path) &&
-    dataMode === "read-api-preview" &&
-    scope?.operation === "B2B";
+    isB2BReadPage(path) && dataMode !== "demo" && scope?.operation === "B2B";
   const currentRead = activePageState(
     path,
     dataMode,
@@ -330,7 +408,10 @@ export function Shell({ children }: { children: React.ReactNode }) {
           <span className="avatar">UP</span>
           <div className="who">
             {session?.name}
-            <small>{session?.role.toLowerCase()} · Demo</small>
+            <small>
+              {session?.role.toLowerCase()} ·{" "}
+              {dataMode === "live" ? "Dados reais" : "Demo"}
+            </small>
           </div>
           <Button
             size="icon"
@@ -367,7 +448,9 @@ export function Shell({ children }: { children: React.ReactNode }) {
             <b>{scope?.operation}</b>
           </div>
           <div className="spacer" />
-          {overviewPreview && currentRead?.source !== "demo" ? (
+          {dataMode === "read-api-preview" &&
+          overviewPreview &&
+          currentRead?.source !== "demo" ? (
             <button
               className="search glass"
               disabled

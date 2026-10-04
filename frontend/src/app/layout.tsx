@@ -1,3 +1,4 @@
+import { headers } from "next/headers";
 import type { Metadata } from "next";
 import "@fontsource/hanken-grotesk/400.css";
 import "@fontsource/hanken-grotesk/500.css";
@@ -15,11 +16,12 @@ export const metadata: Metadata = {
   },
   description: "Inteligência comercial para marcas de moda.",
 };
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  await headers(); // Request rendering is required for per-response CSP nonces and runtime live mode.
   return (
     <html lang="pt-BR" className="dark">
       <body>

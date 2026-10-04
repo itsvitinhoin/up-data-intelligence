@@ -40,11 +40,7 @@ export function activePageState(
   scope: Scope | null,
   state: DashboardPageState | null,
 ) {
-  if (
-    mode !== "read-api-preview" ||
-    scope?.operation !== "B2B" ||
-    !isB2BReadPage(path)
-  )
+  if (mode === "demo" || scope?.operation !== "B2B" || !isB2BReadPage(path))
     return null;
   return state?.path === path &&
     state.scopeKey === `${scope.tenant_id}/${scope.store_id}/${scope.operation}`
@@ -57,16 +53,21 @@ export function dashboardSourceLabel(
   scope: Scope | null,
   state: DashboardPageState | null,
 ) {
+  if (mode === "demo" || scope?.operation !== "B2B" || !isB2BReadPage(path))
+    return mode === "live"
+      ? "Cobertura ainda não certificada"
+      : "Dados demonstrativos";
   if (
-    mode !== "read-api-preview" ||
-    scope?.operation !== "B2B" ||
-    !isB2BReadPage(path)
+    mode === "live" &&
+    (!scope || scope.operation !== "B2B" || !isB2BReadPage(path))
   )
-    return "Dados demonstrativos";
+    return "Cobertura ainda não certificada";
   const current = activePageState(path, mode, scope, state);
   switch (current?.source) {
     case "demo":
-      return "Dados demonstrativos";
+      return mode === "live"
+        ? "Cobertura ainda não certificada"
+        : "Dados demonstrativos";
     case "real":
       return current.metadata?.publication_domain === "intelligence"
         ? "Dados reais · Intelligence"

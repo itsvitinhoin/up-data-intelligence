@@ -3,15 +3,17 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Building2, ShoppingBag, ShieldCheck } from "lucide-react";
 import { useWorkspace } from "@/features/providers";
-import { authorizedTenants, demoUsers } from "@/services/api";
+import { demoUsers } from "@/services/api";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Choice } from "@/components/ui-kit";
 import type { Operation } from "@/types/domain";
+import { LiveLogin } from "./live-login";
 export function Login() {
-  const { login } = useWorkspace();
+  const { login, dataMode } = useWorkspace();
   const router = useRouter();
   const [account, setAccount] = useState("up-admin");
+  if (dataMode === "live") return <LiveLogin />;
   return (
     <main id="main" className="auth-screen">
       <div className="auth-intro">
@@ -79,7 +81,7 @@ export function Login() {
   );
 }
 export function OperationPicker({ required }: { required?: Operation }) {
-  const { session, select, logout } = useWorkspace();
+  const { session, select, logout, tenants } = useWorkspace();
   const router = useRouter();
   if (!session) return null;
   return (
@@ -92,7 +94,7 @@ export function OperationPicker({ required }: { required?: Operation }) {
       <h1>
         Escolha sua <em className="hl hl--up">operação.</em>
       </h1>
-      {authorizedTenants(session).map((t) => (
+      {tenants.map((t) => (
         <section key={t.id} className="workspace-company">
           <div className="workspace-grid">
             {t.brands.map((b) => (

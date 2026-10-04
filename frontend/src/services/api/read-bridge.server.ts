@@ -1,3 +1,4 @@
+import { liveRead } from "@/services/auth/bff.server";
 /** Explicit, loopback-only resource allowlist. No browser-selected upstream paths. */
 import {
   intelligenceResources,
@@ -27,6 +28,9 @@ export async function handleReadBridge(
     readApi?: typeof createServerDashboardReadApi;
   } = {},
 ) {
+  if (getDashboardDataMode() === "live")
+    return liveRead(request, resource, customerId);
+
   if ((dependencies.mode ?? getDashboardDataMode)() !== "read-api-preview")
     return error(404, "preview_disabled");
   const url = new URL(request.url);
