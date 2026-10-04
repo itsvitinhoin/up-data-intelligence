@@ -568,6 +568,13 @@ def test_shared_schema_is_only_addition_and_old_terraform_preserved():
                 b"up-data-intelligence-dev/up-data-intelligence/foundation@sha256:"
                 b'0157e83cd704c12fe071c523d841faf8021bbc6c86570cd22002c5488395f99a"\n'
             )
+            # Stage 2 may append only this exact approved pair after manual acceptance.
+            scheduler_inputs = re.search(
+                rb"\ncontrol_plane_scheduler_paused *= false\ninstallation_scheduler_paused *= false\n$",
+                content,
+            )
+            if scheduler_inputs:
+                content = content[: scheduler_inputs.start()]
             assert content.endswith(addition)
             content = content.removesuffix(addition)
         assert hashlib.sha256(content).hexdigest() == sha
