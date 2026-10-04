@@ -259,3 +259,178 @@ business workers NO; UP Zero/Meta API NO; secret-value read NO; manual RAW/CORE 
 checkpoint/publication repair NO; MX replan NO; new secret version/credential change NO;
 history_complete forced NO; any scheduler enabled NO. Stop before lease recovery,
 activation, recurring processing and scheduler enablement.
+
+
+### Authorized continuation — legacy lease recovery and activation
+
+The user explicitly authorized generation-matched removal of the old normal global
+lease and continuation through the manual equivalent cycle and exact Stage 2 gates.
+Initial Git: `5b102f14e09f7ee7cc57a029472b4d6e97799fe1`, same branch, clean tree.
+Cloud Shell restarted and its temporary directory was lost. The audited commit was
+restored to a private `/tmp` source tree without changing the Cloud Shell checkout.
+Stage 1 was neither regenerated nor applied again.
+
+Fresh read-only gates proved nine Jobs still on `0157e83c…95f99a`, all eight schedules
+PAUSED, no active execution or BigQuery job, MX READY/revision 9/sync=false, complete
+plan/work graph, zero pending RAW, valid generation 3 receipt and unchanged canonical
+legacy state. Only MX exists in Registry; no INSTALLING onboarding operation exists.
+The fixed legacy lease still had generation `1790967353906003` and the original
+creation/update timestamps. The deletion used `if_generation_match=1790967353906003`
+with SDK retry disabled, exactly once. Result SUCCESS; immediate metadata reconciliation
+proved ABSENT. No body was read, and no other lease was removed.
+
+Canonical StoreAdmin activation then completed once, confirmed by a fresh Registry
+read: revision 9 → 10, READY/sync=false → ACTIVE/sync=true. The exact changed field
+set was status, sync_enabled, revision and updated_at. Coverage, commercial policy,
+connections, history_complete=false and facts_complete=true were unchanged. All four
+normal pipelines now select only MX. All schedulers remained PAUSED.
+
+The private diagnostic scripts required corrections to request page size, Transport
+parameters, SQL fingerprint delimiter and JSON tuple/list comparison before their
+respective mutation guards passed. These were private helper representation/API fixes,
+not runtime changes or evidence repairs. No failed helper reached an activation POST.
+
+Normal manual UP Zero dispatcher `up-store-dispatcher-29kn2` launched
+`up-upzero-worker-52lkb` once with previous-closed-day and parallel limit 1.
+The closed local day is `[2026-10-03,2026-10-04)`, cutoff `2026-10-04T03:00Z`.
+Its Customers/Orders incremental and open-order reconciliation semantics are preserved;
+Facts uses the canonical 72-hour lookback. No reset or replay is used.
+Further acceptance evidence is recorded after terminal reconciliation below.
+
+UP Zero terminal reconciliation passed. Dispatcher `up-store-dispatcher-29kn2`
+completed at 18:44:49.560194Z; worker `up-upzero-worker-52lkb` completed at
+18:44:43.556379Z, both successful. Facts incremental run
+`a20ac296-e017-4a76-b0f7-53f659541b06` exhausted successfully with 100,468 records,
+101 pages and zero core failures. Customers: 200 records/1 page; Orders incremental:
+24/1; four reconcile runs: 2/1, 1/1, 1/1, 1/1, all completed without core failures.
+Canonical contiguous coverage proof and Registry CAS passed: revision 10 → 11,
+coverage_to → `2026-10-04T03:00:00Z`, ACTIVE/sync=true, history_complete=false.
+Checkpoint/run counts are now 136/154; no pending RAW or nonterminal checkpoint,
+all leases absent, sources/Meta binding unchanged, all schedules still PAUSED.
+Normal Meta dispatcher `up-store-dispatcher-r9mmt` launched `up-meta-worker-2wwj6`
+once for the same daily closed window. Its terminal acceptance is recorded below.
+
+Meta dispatcher completed at 18:51:57.584457Z and worker at 18:51:53.571999Z,
+both successful. Catalog refresh completed accounts/campaigns/adsets/ads with
+1/5/15/36 records respectively, one page each and zero failures. The canonical
+daily Insights run completed with one processed row and zero core failures.
+The canonical
+Meta coverage helper accepted 34 compatible daily checkpoints for
+`[2026-09-01,2026-10-04)`; deterministic evidence digest:
+`88b1d3cdf90873e22dec7303683b6926bc4d66164e97a9e354c4090a79e63bdb`.
+Fresh catalog evidence, binding equality, source identity, no pending RAW,
+137 checkpoints/159 runs and released leases were verified before Analytics.
+No per-store Meta secret or configuration change was made.
+
+Analytics dispatcher `up-store-dispatcher-q7p9c` and worker
+`up-analytics-worker-lmh9v` both succeeded (completed 18:57:23.543565Z and
+18:57:17.632730Z respectively). Canonical receipt validation and monotonicity passed:
+generation 3 → 4; report_from remained `2026-09-01`; report_to advanced
+`2026-10-03` → `2026-10-04`; as_of advanced to `2026-10-04T03:00Z`.
+Publication ID: `be83b8272c27656947091ff123a56e2a649d1ff1ce33347a4c323289a167433b`.
+Registry remained revision 11/ACTIVE/sync=true, history_complete=false and
+facts_complete=true. No ambiguous outcome or lease remained before Intelligence.
+
+Intelligence dispatcher `up-store-dispatcher-9smc7` and worker
+`up-intelligence-worker-mft4x` succeeded. The dispatcher completed at
+19:13:03.559955Z. Event streaming finished with 461,109 rows in 34 chunks,
+largest chunk 27,524 rows. Terminal canonical checks accepted the cumulative
+Analytics generation 4 base and daily Meta union; no pending RAW/nonterminal
+checkpoint or retained lease remained. Registry stayed revision 11/ACTIVE/sync=true.
+The publication identities and Dashboard acceptance are recorded below.
+
+Intelligence generation 2 committed publication
+`6479bed313dbd8115af9fd5597b09803ba7ed1c973754be977ecf56c8f1e7b4d`,
+with base_generation=4 and the exact Analytics publication ID above. Worker completed
+at 19:12:57.677978Z. All four pipelines were independently reconciled before the next
+launch; each had one dispatcher/worker pair, terminal success and released leases.
+
+### Dashboard and immutable installation acceptance
+
+Read-only calls through the real Dashboard service/BigQuery adapter passed for
+Overview, Orders, Acquisition, Retention, Customers and Products. Every envelope used
+generation 4 and `[2026-09-01,2026-10-04)`. Lifetime-sensitive metrics remained NULL;
+money remained decimal strings; unsupported paid values were not invented.
+Outside the certified interval, the request failed with
+`400 interval_outside_publication`. No production HTTP/frontend cutover was performed.
+Installation State is READY, plan COMPLETE, CHUNKS 43/43, 100%, eta_seconds=0;
+available window is `[2026-09-01,2026-10-04)`.
+
+Server-side full-row fingerprints for the installation plan, 45 work units,
+source_connections, meta_account_bindings and onboarding_operations remained identical
+to the pre-activation baseline. No replan, extra unit, onboarding operation or second
+brand was created. Checkpoints/runs advanced canonically from 132/147 to 137/159.
+There is no pending RAW or nonterminal checkpoint. Registry before/after is
+9/READY/sync=false → 11/ACTIVE/sync=true; its exact changed fields are status,
+sync_enabled, revision, updated_at and facts_coverage_to. All other fields, including
+history_complete=false, facts_complete=true, policy, connections and source identity,
+are preserved. The four normal pipelines each select only MX.
+
+### Stage 2 — exact five scheduler updates
+
+After the complete manual cycle and Dashboard acceptance, fresh audits proved no active
+related execution, no relevant lease, only MX eligible and all eight schedules PAUSED.
+Only these DEV values were added:
+`control_plane_scheduler_paused=false`, `installation_scheduler_paused=false`.
+Terraform formatting was applied to that approved pair; no other environment values
+changed. A new saved Stage 2 plan was generated, without regenerating Stage 1.
+
+Saved plan: `/tmp/mx-activation-18-4g/stage2.plan`.
+SHA256: `3391878a1653c8a7a337a7466346c607c7baccc6c497f1cec19f7ceb0471c66e`.
+JSON guard accepted exactly five Scheduler paused true → false updates, zero creates,
+deletes or replacements. Only a provider-computed Scheduler state was unknown;
+every other requested attribute was identical. No Job, IAM, BigQuery, Secret,
+service account, image, Foundation scheduler or resource outside those five changed.
+Hash was revalidated immediately before one exact saved-plan apply. Exit 0.
+Apply summary: 0 added, 5 changed, 0 destroyed.
+Fresh post-plan: exit 0, **No changes**. No ambiguous mutation occurred.
+
+| Scheduler | Final state | Schedule / timezone |
+| --- | --- | --- |
+| up-upzero-dispatch | ENABLED | 0 3 * * * / Etc/UTC |
+| up-meta-dispatch | ENABLED | 0 4 * * * / Etc/UTC |
+| up-analytics-dispatch | ENABLED | 0 5 * * * / Etc/UTC |
+| up-intelligence-dispatch | ENABLED | 0 6 * * * / Etc/UTC |
+| up-installation-dispatch | ENABLED | * * * * * / Etc/UTC |
+| up-foundation-dev-sync | PAUSED | */15 * * * * / America/Sao_Paulo |
+| up-foundation-dev-reconcile | PAUSED | 0 3 * * * / America/Sao_Paulo |
+| up-foundation-dev-quality | PAUSED | */30 * * * * / America/Sao_Paulo |
+
+Live Scheduler metadata verified the explicit Installation override
+`--dispatch --all-stores --auto-activate`, minute frequency and scoped orchestrator
+target. Nine Jobs retain digest
+`sha256:0157e83cd704c12fe071c523d841faf8021bbc6c86570cd22002c5488395f99a`.
+No runtime code/image change, build or redeploy was required in this continuation.
+Post-enable durable verification again passed at Registry revision 11. Metadata GETs
+proved MX, normal global dispatcher, Installation global and Installation work leases
+all ABSENT. Source states remain UP Zero active and Meta active.
+
+### Final verification and outcome
+
+After live acceptance: Python **2,103 passed in 122.30s**; Ruff check passed,
+276 files formatted; mypy passed on 152 source files. Frontend **230 tests / 21 files**,
+lint, typecheck, format-check and production build passed (45 static pages).
+An earlier restricted build stalled and was interrupted; the qualified repeat and
+final production build both passed. No runtime change was needed for that environment issue.
+Offline E2E: onboarding 1 passed (4.0s), B2B/Installation 11 passed (12.7s).
+Next-generated development type/config edits were restored to original content,
+then typecheck and format-check repeated. Terraform recursive fmt-check/validate and
+git diff-check passed. No test failure was dismissed as pre-existing.
+Synthetic recurring/automation suites cover cumulative monotonicity, Meta gaps/extra
+intervals, coverage CAS/unknown outcomes, bounded global preparation, per-store
+isolation and positive/negative auto-activation gates. No second live brand was created.
+
+Safety: exact approved Stage 1 saved plan applied YES (previous round, not repeated);
+unexpected IAM NO; unexpected infrastructure NO; history_complete forced NO;
+manual RAW/CORE DML NO; manual checkpoint repair NO; manual publication DML NO;
+MX replan NO; new secret version NO; credential change NO; Foundation scheduler
+enabled NO. Business ingestion/publication in this continuation used only canonical
+normal workers. UP Zero and global Meta pinned secrets were consumed server-side;
+no secret value, payload, PII or cursor was included in this runbook or Git.
+
+**BACKEND DATA PLATFORM COMPLETE — MX ACTIVE + AUTOMATION ENABLED**.
+Acceptance is the successful manual equivalent cycle, deployed automatic onboarding
+contract and enabled scheduler configuration. This does not claim that a future normal
+daily cron has already executed. Stop here: production HTTP authentication, public
+Read/Admin API serving/cutover, frontend production binding and client-facing deployment
+remain separate Product Go-Live work.
