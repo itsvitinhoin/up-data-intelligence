@@ -38,10 +38,11 @@ export type OnboardingResult = {
     | "SECRET_READY"
     | "FINALIZING"
     | "INSTALLING"
+    | "READY"
     | "BLOCKED";
   current_step: string;
   error_code: string | null;
   created_at: string;
   updated_at: string;
-  sources: { source: "upzero" | "meta"; state: "PENDING" }[];
+  sources: { source: "upzero" | "meta"; state: "PENDING" | "ACTIVE" }[];
 };

@@ -7,7 +7,7 @@ from contextlib import AbstractContextManager
 from pathlib import Path
 from typing import Any
 
-from src.control_plane.model import StoreConfig, Window, instant
+from src.control_plane.model import StoreConfig, instant
 from src.domain.models import SafeError
 from src.installation.model import Limits, Row, require_creatable_plan
 from src.installation.planner import Planner
@@ -54,7 +54,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--fixture", type=Path)
     parser.add_argument("--adopt", action="store_true")
     parser.add_argument("--target-as-of")
-    parser.add_argument("--store-id", required=True)
+    parser.add_argument("--store-id")
+    parser.add_argument("--all-stores", action="store_true")
+    parser.add_argument("--auto-activate", action="store_true")
     parser.add_argument("--confirm-store")
     parser.add_argument("--live", action="store_true")
     parser.add_argument("--project")
@@ -79,6 +81,12 @@ def main(argv: list[str] | None = None) -> int:
     configure()
     execution_id.set(os.environ.get("CLOUD_RUN_EXECUTION"))
     try:
+        if args.all_stores and (not args.dispatch or args.store_id or args.confirm_store):
+            raise SafeError("invalid_global_installation_scope")
+        if args.auto_activate and not (args.dispatch and args.all_stores):
+            raise SafeError("invalid_global_installation_scope")
+        if not args.all_stores and not args.store_id:
+            raise SafeError("store_confirmation_required")
         limits = Limits(
             page_budget=args.page_budget,
             soft_time_budget_seconds=args.soft_time_budget_seconds,
@@ -113,7 +121,7 @@ def main(argv: list[str] | None = None) -> int:
 
         transport, _ = clients(args)
         ledger = BigQueryLedger(transport)
-        c = ledger.config(args.store_id)
+        c = ledger.config(args.store_id) if args.store_id else None
 
         def lease(key: str) -> AbstractContextManager[None]:
             return cloud_lease(args.lease_bucket, key)
@@ -143,6 +151,7 @@ def main(argv: list[str] | None = None) -> int:
                 return rows
 
         if args.plan_only or args.create_plan:
+            assert c is not None
             # Discovery and persistence share canonical leases for create-plan.
             # Inspection remains read-only and never acquires a lease.
             from contextlib import nullcontext
@@ -263,38 +272,9 @@ def main(argv: list[str] | None = None) -> int:
             )
             return 0
 
-        def prepare(store: str | None) -> None:
-            # Automatic new onboarding only. Legacy adoption remains explicitly authorized.
-            operations = ledger.rows(
-                "onboarding_operations",
-                "store_id=@store AND status='INSTALLING'",
-                [scalar("store", "STRING", store)],
-                limit=3,
-            )
-            if len(operations) > 1:
-                raise SafeError("installation_plan_conflict")
-            if operations and not ledger.plans(store):
-                current = ledger.config(store or "")
-                if current.status != "DRAFT" or current.sync_enabled:
-                    raise SafeError("installation_store_not_admissible")
-                for system in ("upzero", "meta"):
-                    if getattr(current, system + "_enabled"):
-                        source(current, system)
-                target = Window.previous_closed_day(current.timezone or "", now()).as_of
-                params = [scalar("store", "STRING", current.store_id)]
-                checkpoints = ledger.rows("sync_checkpoints", "store_id=@store", params)
-                runs = ledger.rows("sync_runs", "store_id=@store", params)
-                config, plan, units = Planner(limits).calculate(
-                    current,
-                    target,
-                    now(),
-                    operation=operations[0],
-                    checkpoints=checkpoints,
-                    runs=runs,
-                )
-                require_creatable_plan(plan)
-                with lease(current.store_id):
-                    ledger.create(config, plan, units)
+        from src.installation.automation import AutoPrepare
+
+        prepare = AutoPrepare(ledger, source, lease, limits)
 
         import google.auth
         import httpx
@@ -320,9 +300,21 @@ def main(argv: list[str] | None = None) -> int:
                 maximum_total_bytes_billed=args.maximum_total_bytes_billed,
                 limits=limits,
             )
-            Orchestrator(
-                ledger, gateway, lease, publications, limits=limits, prepare=prepare
+            dispatched = Orchestrator(
+                ledger,
+                gateway,
+                lease,
+                publications,
+                limits=limits,
+                prepare=prepare,
+                auto_activate=args.auto_activate,
+                activation=Prerequisites(transport).activation,
             ).dispatch(args.store_id)
+            print(
+                json.dumps(
+                    {"status": "completed", "dispatches": dispatched, "all_stores": args.all_stores}
+                )
+            )
         return 0
     except Exception as exc:
         from src.observability.logging import event

@@ -256,7 +256,7 @@ def test_worker_rechecks_revision_eligibility_and_lease_isolation(tmp_path):
     )
     two = replace(one, store_id="brand-two")
     registry = MemoryRegistry([one, two])
-    action = Mock()
+    action = Mock(return_value=None)
     worker = StoreWorker(
         registry, lambda *a: None, lambda key: local_lease(str(tmp_path / key)), action, lambda: {}
     )
@@ -600,7 +600,11 @@ def test_shared_terraform_constant_pipeline_inventory_and_paused_schedulers():
         and "var.pilot" not in source
         and "config/analytics" not in source
     )
-    assert "paused    = true" in source and "max_retries     = 0" in source
+    assert (
+        "paused    = var.control_plane_scheduler_paused" in source
+        and "max_retries     = 0" in source
+    )
+    assert 'variable "control_plane_scheduler_paused"' in source and "default     = true" in source
     assert "control_plane_max_parallel_stores" in source and "default = 2" in source
     assert '"run.jobs.runWithOverrides"' in source
     assert (
@@ -646,7 +650,7 @@ def test_no_client_discovery_without_dev_gates(monkeypatch):
 
 def test_store_worker_does_not_run_action_on_failed_dependencies():
     c = config(status="ACTIVE", sync_enabled=True, intelligence_enabled=True)
-    action = Mock()
+    action = Mock(return_value=None)
     worker = StoreWorker(
         MemoryRegistry([c]),
         Mock(side_effect=SafeError("meta_source_not_complete")),
@@ -659,39 +663,24 @@ def test_store_worker_does_not_run_action_on_failed_dependencies():
     action.assert_not_called()
 
 
-def test_dynamic_analytics_publication_parameters_are_isolated_and_initialized_once():
+def test_dynamic_analytics_requires_certified_publication_and_keeps_generation():
+    from tests.control_plane.test_recurring import head
+
     c = config(upzero_enabled=True, analytics_enabled=True, upzero_connection_id="up-one")
-    fake = FakeTransport([])
-    action = Actions(fake, Mock(), lease_bucket="synthetic")
+    pre = Mock()
+    pre.publication.return_value = []
+    action = Actions(FakeTransport([]), pre, lease_bucket="synthetic")
     with patch("src.control_plane.worker.analytics_materialize") as publish:
+        with pytest.raises(SafeError, match="recurring_publication_required"):
+            action.analytics(c, WINDOW)
+        publish.assert_not_called()
+        pre.publication.return_value = [
+            head(c, start=WINDOW.report_from, end=WINDOW.report_to, as_of=WINDOW.as_of)
+        ]
         action.analytics(c, WINDOW)
-    assert len(fake.calls) == 2
-    assert "store_id=@store AND policy_hash=@policy" in fake.calls[0][0]
-    pub = publish.call_args.args[2]
-    assert (
-        pub.policy.store_id == c.store_id
-        and pub.expected_generation == 0
-        and pub.source.completeness_confirmed
-    )
-    assert pub.policy.report_from == WINDOW.report_from and pub.policy.as_of == WINDOW.as_of
-    fake.records = [
-        {
-            "record_kind": "HEAD",
-            "generation": 3,
-            "status": "completed",
-            "publication_id": "synthetic",
-        },
-        {
-            "record_kind": "RECEIPT",
-            "generation": 3,
-            "status": "completed",
-            "publication_id": "synthetic",
-        },
-    ]
-    fake.calls = []
-    with patch("src.control_plane.worker.analytics_materialize") as publish:
-        action.analytics(c, WINDOW)
-    assert len(fake.calls) == 1 and publish.call_args.args[2].expected_generation == 3
+        pub = publish.call_args.args[2]
+        assert pub.expected_generation == 3 and pub.policy.store_id == c.store_id
+        assert pub.policy.report_from == WINDOW.report_from
 
 
 def test_unavailable_meta_does_not_block_independent_upzero_or_v1_analytics():
@@ -743,11 +732,18 @@ def test_meta_checkpoint_requires_exact_account_window_completed_run():
             "insights": {**report.snapshot(), "level": "campaign"},
         },
         "run_id": "synthetic-meta",
+        "store_id": c.store_id,
+        "plan_key": "synthetic-plan",
+        "source": "meta",
     }
     run = {
         "run_id": "synthetic-meta",
+        "store_id": c.store_id,
+        "plan_key": "synthetic-plan",
+        "source": "meta",
         "status": "completed",
         "core_records_failed": 0,
+        "resource": "meta_live_insights_daily",
         "finished_at": WINDOW.source_snapshot_at,
     }
     catalogs = [
@@ -763,10 +759,10 @@ def test_meta_checkpoint_requires_exact_account_window_completed_run():
     pre.account = lambda _: account
     pre.meta_complete(c, WINDOW)
     run["status"] = "failed"
-    with pytest.raises(SafeError, match="meta_source_not_complete"):
+    with pytest.raises(SafeError, match="meta_complete_checkpoint_required"):
         pre.meta_complete(c, WINDOW)
     run["status"] = "completed"
-    cp["filters"]["insights"]["since"] = "2026-08-01"
+    cp["filters"]["insights"]["until"] = "2026-08-01"
     with pytest.raises(SafeError, match="meta_complete_checkpoint_required"):
         pre.meta_complete(c, WINDOW)
 
@@ -1106,7 +1102,7 @@ def test_mixed_store_dispatches_only_requested_enabled_pipeline(pipeline):
     ]
     gateway = Mock()
     gateway.run_and_wait.return_value = True
-    worker_action = Mock()
+    worker_action = Mock(return_value=None)
     registry = MemoryRegistry(stores)
     worker = StoreWorker(
         registry, lambda cfg, *_: cfg.ready(), lambda _: nullcontext(), worker_action, lambda: {}
@@ -1136,6 +1132,11 @@ def test_mixed_worker_materializes_same_b2b_policy_once(pipeline):
     c = intelligence_config(operation_b2c=True)
     fake = FakeTransport([])
     prerequisites = Mock()
+    from tests.control_plane.test_recurring import head
+
+    prerequisites.publication.return_value = [
+        head(c, start=WINDOW.report_from, end=WINDOW.report_to, as_of=WINDOW.as_of)
+    ]
     action = Actions(fake, prerequisites, lease_bucket="synthetic")
     with (
         patch("src.control_plane.worker.analytics_materialize") as analytics,

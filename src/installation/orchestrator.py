@@ -36,6 +36,8 @@ class Orchestrator:
         limits: Limits = DEFAULT_LIMITS,
         clock: Callable[[], str] = now,
         prepare: Callable[[str | None], None] | None = None,
+        auto_activate: bool = False,
+        activation: Callable[[StoreConfig], None] | None = None,
     ):
         self.ledger, self.gateway, self.lease, self.publication = (
             ledger,
@@ -44,7 +46,7 @@ class Orchestrator:
             publication,
         )
         self.limits, self.clock = limits, clock
-        self.prepare = prepare
+        self.prepare, self.auto_activate, self.activation = prepare, auto_activate, activation
 
     def refresh(self, plan: Row) -> Row:
         config = self.ledger.config(plan["store_id"])
@@ -177,7 +179,53 @@ class Orchestrator:
             for row in rows:
                 if row["status"] in ACTIVE and row["plan_id"] in selected_ids:
                     self.reconcile(row)
-            plans = [self.refresh(p) for p in selected]
+            rows = self.ledger.units()
+            plans = []
+            busy = {r["store_id"] for r in rows if r["status"] in ACTIVE}
+            for p in selected:
+                if any(r["plan_id"] == p["plan_id"] and r["status"] in AMBIGUOUS for r in rows):
+                    updated = self.ledger.update_plan(
+                        p,
+                        status="OUTCOME_UNKNOWN",
+                        error_code="work_execution_outcome_unknown",
+                        updated_at=self.clock(),
+                    )
+                    if self.auto_activate:
+                        raise SafeError("work_execution_outcome_unknown")
+                    plans.append(updated)
+                    continue
+                if p["store_id"] in busy:
+                    plans.append(p)
+                    continue
+                updated = p
+                try:
+                    with self.lease(p["store_id"]):
+                        updated = self.refresh(p)
+                        if updated["status"] == "OUTCOME_UNKNOWN":
+                            raise SafeError("work_execution_outcome_unknown")
+                        if (
+                            self.auto_activate
+                            and updated["status"] == "COMPLETE"
+                            and updated.get("onboarding_operation_id")
+                        ):
+                            c = self.ledger.config(p["store_id"])
+                            if not self.activation:
+                                raise SafeError("installation_activation_required")
+                            self.activation(c)
+                            updated = self.ledger.activate(updated, c, self.clock())
+                        plans.append(updated)
+                except SafeError as exc:
+                    if exc.code.endswith("outcome_unknown"):
+                        raise
+                    if exc.code in {"store_busy_or_lease_unavailable", "store_busy"}:
+                        plans.append(p)
+                        continue
+                    if store is not None:
+                        raise
+                    self.ledger.update_plan(
+                        updated, status="BLOCKED", error_code=exc.code, updated_at=self.clock()
+                    )
+                    event("installation_onboarding_blocked", store_id=p["store_id"], code=exc.code)
             rows = self.ledger.units()
             active = {r["store_id"] for r in rows if r["status"] in ACTIVE}
             complete = {r["work_unit_id"] for r in rows if r["status"] == "COMPLETE"}
@@ -239,6 +287,8 @@ class Orchestrator:
                         last_error_code=exc.code,
                         updated_at=self.clock(),
                     )
+                    if self.auto_activate and exc.code != "installation_launch_rejected":
+                        raise SafeError("work_dispatch_unknown") from None
                 active.add(row["store_id"])
                 seen.add(row["store_id"])
                 count += 1

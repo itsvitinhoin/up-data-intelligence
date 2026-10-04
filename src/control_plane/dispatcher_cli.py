@@ -106,9 +106,15 @@ def main() -> int:
                 lambda store: cloud_lease(args.lease_bucket, store),
                 args.max_parallel_stores,
             )
+
+            def window(config: StoreConfig) -> Window:
+                daily = fixed or Window.previous_closed_day(config.timezone or "", at)
+                reader, _ = clients(args)
+                return Prerequisites(reader).recurring_window(config, args.pipeline, daily)
+
             results = dispatcher.run(
                 args.pipeline,
-                lambda config: fixed or Window.previous_closed_day(config.timezone or "", at),
+                window,
             )
             print(json.dumps([asdict(result) for result in results]))
             return int(any(r.status != "completed" for r in results))

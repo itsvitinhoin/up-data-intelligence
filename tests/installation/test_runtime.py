@@ -57,7 +57,10 @@ def setup(error=None):
 
 def test_reservation_before_post_one_store_and_no_duplicate_claim():
     ledger, gateway, orchestrator, leases = setup()
-    assert orchestrator.dispatch() == 1 and leases == ["installation-orchestrator-global"]
+    assert orchestrator.dispatch() == 1 and leases == [
+        "installation-orchestrator-global",
+        ledger.c.store_id,
+    ]
     row = next(r for r in ledger.units() if r["status"] == "DISPATCHING")
     assert row["attempt_count"] == 1 and row["dispatch_operation_name"]
     worker = Worker(

@@ -10,6 +10,7 @@ from src.analytics.cloud.transport import Transport, scalar
 from src.analytics.config import AnalyticsPolicy
 from src.bigquery.catalog import TABLES
 from src.connectors.meta.config import Account, Insights
+from src.control_plane.recurring import meta_coverage, meta_evidence_hash
 from src.dashboard.contracts import Grant, Principal
 from src.dashboard.repository import BigQueryReadSession, ReadBudget
 from src.dashboard.service import DashboardService
@@ -122,6 +123,8 @@ def materialize(
         scalar("snapshot_at", "TIMESTAMP", snapshot_at),
         scalar("as_of", "TIMESTAMP", policy.as_of),
         scalar("history_from", "TIMESTAMP", policy.history_from),
+        scalar("report_from", "DATE", policy.report_from),
+        scalar("report_to", "DATE", policy.report_to),
     ]
     specs = {
         "customers": "store_id source_system customer_id customer_type company_name trade_name state city version_id observed_at".split(),
@@ -165,7 +168,7 @@ def materialize(
         rows, _ = transport.query(
             f"SELECT * FROM `{transport.config.project}.up_core.meta_live_{resource}` FOR SYSTEM_TIME AS OF @snapshot_at WHERE store_id=@store AND account_id=@account"
             + (
-                " AND configuration_hash=@configuration AND date_start>=DATE(@history_from) AND date_start<DATE(@as_of)"
+                " AND configuration_hash=@configuration AND date_start>=@report_from AND date_start<@report_to"
                 if resource == "insights_daily"
                 else ""
             ),
@@ -175,26 +178,17 @@ def materialize(
     report = reporting(account, policy)
     config = configuration_hash(account, report)
     checkpoints, _ = transport.query(
-        f"SELECT filters,run_id,status,pending_raw_id FROM `{transport.config.project}.up_ops.sync_checkpoints` FOR SYSTEM_TIME AS OF @snapshot_at WHERE store_id=@store AND resource='meta_live_insights_daily' AND status='complete' AND pending_raw_id IS NULL",
+        f"SELECT * FROM `{transport.config.project}.up_ops.sync_checkpoints` FOR SYSTEM_TIME AS OF @snapshot_at WHERE store_id=@store AND resource='meta_live_insights_daily' AND status='complete' AND pending_raw_id IS NULL",
         params,
     )
     for r in checkpoints:
         if isinstance(r.get("filters"), str):
             r["filters"] = json.loads(r["filters"])
-    compatible = [
-        r
-        for r in primitive(checkpoints)
-        if r["filters"]
-        == {"account": account.snapshot(), "insights": {**report.snapshot(), "level": "campaign"}}
-    ]
-    if len(compatible) != 1:
-        raise ValueError("meta_complete_checkpoint_required")
     runs, _ = transport.query(
-        f"SELECT status,core_records_failed FROM `{transport.config.project}.up_ops.sync_runs` FOR SYSTEM_TIME AS OF @snapshot_at WHERE store_id=@store AND run_id=@run",
-        params + [scalar("run", "STRING", compatible[0]["run_id"])],
+        f"SELECT * FROM `{transport.config.project}.up_ops.sync_runs` FOR SYSTEM_TIME AS OF @snapshot_at WHERE store_id=@store AND source='meta'",
+        params,
     )
-    if len(runs) != 1 or runs[0]["status"] != "completed" or runs[0]["core_records_failed"] != 0:
-        raise ValueError("meta_sync_incomplete")
+    compatible = meta_coverage(account, report, primitive(checkpoints), primitive(runs))
     publication = f"`{transport.config.project}.up_analytics.{PUBLICATION}`"
     keys = [
         scalar("store", "STRING", policy.store_id),
@@ -219,7 +213,7 @@ def materialize(
         policy.report_to,
         config,
         True,
-        digest(compatible),
+        meta_evidence_hash(compatible),
     )
     with Spool() as spool:
         evidence = DiskEvidenceIndex(

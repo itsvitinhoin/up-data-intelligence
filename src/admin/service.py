@@ -154,7 +154,7 @@ class OnboardingService:
                         secret_version_name=reference,
                         error_code=None,
                     )
-            if operation["status"] == "INSTALLING":
+            if operation["status"] in {"INSTALLING", "READY"}:
                 return self.public(operation)
             if operation["current_step"] == "FINALIZING":
                 # An unresolved earlier finalization must never receive a second mutation.
@@ -182,7 +182,7 @@ class OnboardingService:
             # Do not mutate after any ambiguous BQ outcome. Its durable intent is the receipt.
             if exc.code == "onboarding_write_outcome_unknown":
                 raise
-            if operation["status"] == "INSTALLING":
+            if operation["status"] in {"INSTALLING", "READY"}:
                 raise  # A rejected retry never downgrades an already committed operation.
             step = operation["current_step"]
             if exc.code == "secret_write_failed" and step == "VERSION_INTENT":
@@ -201,7 +201,7 @@ class OnboardingService:
             raise AdminError("onboarding_operation_not_found", 404)
         admin.authorize_tenant(operation["tenant_id"])
         result = self.public(operation)
-        if self.installation and operation["status"] == "INSTALLING":
+        if self.installation and operation["status"] in {"INSTALLING", "READY"}:
             result["installation"] = self.installation(
                 operation["tenant_id"], operation["store_id"]
             )
@@ -244,7 +244,10 @@ class OnboardingService:
             "created_at": operation["created_at"],
             "updated_at": operation["updated_at"],
             "sources": [
-                {"source": source, "state": "PENDING"}
+                {
+                    "source": source,
+                    "state": "ACTIVE" if operation["status"] == "READY" else "PENDING",
+                }
                 for source, enabled in (
                     ("upzero", config.upzero_enabled),
                     ("meta", config.meta_enabled),

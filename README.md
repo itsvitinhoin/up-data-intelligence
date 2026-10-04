@@ -226,3 +226,7 @@ secrets, com bridge exclusivamente DEV e fixtures sintéticas. Não inicia pipel
 ### Installation Planner + Orchestrator V2 (CHANGE #18.3)
 
 Fundação offline de instalação por work units duráveis, slices resumíveis e publicação parcial certificada. Não ativa sync normal nem schedulers. Consulte [arquitetura, limites e runbook de adoção](docs/CHANGE_18_3_INSTALLATION_ORCHESTRATOR.md) antes de qualquer provisionamento ou execução DEV.
+
+## Backend operacional
+
+Arquitetura e limites da automação: [Backend Data Platform](docs/BACKEND_DATA_PLATFORM_COMPLETE.md). Evidência de ativação DEV e gates: [CHANGE 18.4G](docs/CHANGE_18_4G_RECURRING_BACKEND_ACTIVATION.md).

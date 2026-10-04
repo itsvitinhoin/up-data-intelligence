@@ -46,6 +46,22 @@ describe("secure onboarding contract", () => {
     bad.workspace_operations[0]!.id = bad.store_id;
     expect(() => parseOnboarding(bad)).toThrow();
   });
+  it("accepts final READY/ACTIVE contract and refuses pending source claims", () => {
+    const result = {
+      ...onboardingResult(),
+      status: "READY",
+      current_step: "ACTIVE",
+      sources: [{ source: "upzero", state: "ACTIVE" }],
+    };
+    expect(parseOnboarding(result).status).toBe("READY");
+    expect(parseOnboarding(result).sources[0]?.state).toBe("ACTIVE");
+    expect(() =>
+      parseOnboarding({
+        ...result,
+        sources: [{ source: "upzero", state: "PENDING" }],
+      }),
+    ).toThrow();
+  });
   it.each([true, false])(
     "POST uses body only and clears secret after settle (ok=%s)",
     async (ok) => {

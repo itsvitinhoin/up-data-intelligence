@@ -52,7 +52,12 @@ def available(
     h = heads[0]
     start, end = str(h.get("receipt_from")), str(h.get("receipt_to"))
     cutoff = str(h.get("receipt_as_of"))
-    if instant(cutoff) > instant(publications[0]["filters"]["as_of"]):
+    recurring = (
+        config.status == "ACTIVE"
+        and config.sync_enabled
+        and all(r["status"] == "COMPLETE" for r in rows)
+    )
+    if not recurring and instant(cutoff) > instant(publications[0]["filters"]["as_of"]):
         raise ReadError(503, "publication_invalid")
     # Coverage flags come from the materialized snapshot, including legacy HEADs.
     # Never infer published facts_complete from a newly adopted global registry flag.

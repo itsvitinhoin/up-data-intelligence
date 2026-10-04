@@ -43,6 +43,9 @@ def cloud_lease(bucket: str, store: str) -> Iterator[None]:
             "worker_execution_outcome_unknown",
             "registry_write_outcome_unknown",
             "checkpoint_recovery_outcome_unknown",
+            "source_verification_outcome_unknown",
+            "work_execution_outcome_unknown",
+            "work_dispatch_unknown",
         }
         raise
     finally:

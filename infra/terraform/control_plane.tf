@@ -1,3 +1,8 @@
+variable "control_plane_scheduler_paused" {
+  description = "Fail-closed recurring automation; enable only after the DEV acceptance cycle."
+  type        = bool
+  default     = true
+}
 # Shared control plane. No store-specific resources or pilot-policy dependencies.
 variable "control_plane_image" {
   description = "New immutable shared-worker image; null keeps jobs/schedulers unprovisioned until image approval."
@@ -66,7 +71,7 @@ locals {
   }
   control_plane_writes = {
     # This is a constant table inventory, never a store inventory.
-    upzero       = toset([for name, spec in local.tables : name if spec.dataset != "up_analytics" && !contains(["store_runtime_config", "source_connections", "workspace_store_bindings", "onboarding_operations", "installation_plans", "installation_work_units"], name) && !startswith(name, "meta_")])
+    upzero       = setunion(toset(["store_runtime_config"]), toset([for name, spec in local.tables : name if spec.dataset != "up_analytics" && !contains(["store_runtime_config", "source_connections", "workspace_store_bindings", "onboarding_operations", "installation_plans", "installation_work_units"], name) && !startswith(name, "meta_")]))
     meta         = setunion(setsubtract(local.change16_meta_tables, toset(["meta_account_bindings"])), toset(["sync_runs", "sync_checkpoints", "quality_results"]))
     analytics    = local.analytics_write_tables
     intelligence = local.change16_intelligence_tables
@@ -253,7 +258,7 @@ resource "google_cloud_scheduler_job" "control_plane" {
   region    = var.region
   schedule  = each.value
   time_zone = "Etc/UTC"
-  paused    = true
+  paused    = var.control_plane_scheduler_paused
   http_target {
     http_method = "POST"
     uri         = "https://run.googleapis.com/v2/projects/${var.project_id}/locations/${var.region}/jobs/${google_cloud_run_v2_job.control_plane_dispatcher[0].name}:run"

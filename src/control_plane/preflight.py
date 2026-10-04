@@ -1,6 +1,7 @@
 """Fail closed on source ownership, unresolved batches or unproven coverage."""
 
 import re
+from dataclasses import replace
 from datetime import UTC, date, datetime, time, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -9,9 +10,12 @@ from src.analytics.cloud.transport import Transport, scalar
 from src.connectors.meta.config import Account
 from src.control_plane.model import StoreConfig, Window, instant
 from src.control_plane.recovery_repository import BigQueryRecovery
+from src.control_plane.recurring import certified_window, cumulative, meta_coverage
 from src.control_plane.repository import decoded
+from src.dashboard.queries import build
 from src.domain.models import SafeError
 from src.ingestion.checkpoints import CHECKPOINT_RECOVERED, checkpoint_pending
+from src.installation.adoption import prefix
 from src.intelligence.live.runtime import binding, reporting
 
 
@@ -59,6 +63,65 @@ class Prerequisites:
         ):
             raise SafeError("registry_meta_binding_mismatch")
         return account
+
+    def publication(self, c: StoreConfig, window: Window) -> list[dict[str, Any]]:
+        probe = (
+            c.policy(window)
+            if not c.analytics_enabled
+            else replace(c, facts_complete=False).policy(window)
+        )
+        q = build(
+            self.transport.config.project,
+            "head",
+            store=c.store_id,
+            policy=probe.policy_hash,
+            snapshot_at=window.source_snapshot_at,
+        )
+        rows, _ = self.transport.query(
+            q.sql, [scalar(k, t, v) for k, (t, v) in q.parameters.items()]
+        )
+        return rows
+
+    def recurring_window(self, c: StoreConfig, pipeline: str, daily: Window) -> Window:
+        return (
+            cumulative(c, daily, self.publication(c, daily))
+            if pipeline in {"analytics", "intelligence"}
+            else daily
+        )
+
+    def activation(self, c: StoreConfig) -> None:
+        self.configuration(c)
+        checkpoints = self.rows(c.store_id, "up_ops.sync_checkpoints")
+        if any(checkpoint_pending(r) for r in checkpoints):
+            raise SafeError("activation_source_not_complete")
+        plans = self.rows(c.store_id, "up_ops.installation_plans")
+        if plans:
+            if len(plans) != 1 or plans[0].get("status") != "COMPLETE":
+                raise SafeError("installation_not_complete")
+            units = self.rows(c.store_id, "up_ops.installation_work_units")
+            if not units or any(
+                r.get("plan_id") != plans[0]["plan_id"] or r.get("status") != "COMPLETE"
+                for r in units
+            ):
+                raise SafeError("installation_not_complete")
+        sources = self.rows(c.store_id, "up_core.source_connections")
+        for system in ("upzero", "meta"):
+            if getattr(c, system + "_enabled"):
+                selected = [r for r in sources if r["source_system"] == system]
+                if (
+                    len(selected) != 1
+                    or selected[0]["status"] != "active"
+                    or selected[0]["connection_id"] != getattr(c, system + "_connection_id")
+                ):
+                    raise SafeError("source_verification_required")
+        if c.analytics_enabled:
+            from src.utils.data import now
+
+            at = now()
+            daily = Window.previous_closed_day(c.timezone or "", at)
+            current = certified_window(c, self.publication(c, daily), at)
+            c.policy(current).reference()
+            self.upzero_complete(c, current)
 
     def configuration(self, c: StoreConfig) -> None:
         c.ready()
@@ -157,11 +220,12 @@ class Prerequisites:
                     intervals.append((start, end))
                 except (KeyError, ValueError):
                     continue
-            covered = instant(c.history_from or "")
-            for start, end in sorted(intervals):
-                if start <= covered:
-                    covered = max(covered, end)
-            if covered < instant(window.as_of):
+            covered = prefix(
+                c.history_from or "",
+                window.as_of,
+                [(a.isoformat(), b.isoformat()) for a, b in intervals],
+            )
+            if instant(covered) < instant(window.as_of):
                 raise SafeError("upzero_history_window_not_covered")
 
     def meta_complete(self, c: StoreConfig, window: Window) -> None:
@@ -170,29 +234,8 @@ class Prerequisites:
         checkpoints = self.rows(
             c.store_id, "up_ops.sync_checkpoints", snapshot=window.source_snapshot_at
         )
-        expected = {
-            "account": account.snapshot(),
-            "insights": {**report.snapshot(), "level": "campaign"},
-        }
-        found = [
-            r
-            for r in checkpoints
-            if r["resource"] == "meta_live_insights_daily"
-            and r["status"] == "complete"
-            and not r.get("pending_raw_id")
-            and r["filters"] == expected
-        ]
-        if len(found) != 1:
-            raise SafeError("meta_complete_checkpoint_required")
-        runs = self.rows(
-            c.store_id,
-            "up_ops.sync_runs",
-            "run_id,status,finished_at,core_records_failed",
-            window.source_snapshot_at,
-        )
-        run = [r for r in runs if r["run_id"] == found[0]["run_id"]]
-        if len(run) != 1 or run[0]["status"] != "completed" or run[0]["core_records_failed"] != 0:
-            raise SafeError("meta_source_not_complete")
+        runs = self.rows(c.store_id, "up_ops.sync_runs", snapshot=window.source_snapshot_at)
+        meta_coverage(account, report, checkpoints, runs)
         # Catalog snapshots are also dependencies; old Insights do not prove a failed
         # campaigns/adsets/ads extraction was complete.
         for resource in ("accounts", "campaigns", "adsets", "ads"):

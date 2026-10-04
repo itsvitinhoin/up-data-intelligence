@@ -219,3 +219,28 @@ def test_v2_ready_requires_sync_explicitly_disabled(sync_enabled):
         installation_v2=True,
     ).installation(PRINCIPAL, GRANT)["data"]
     assert data["overall_state"] != "READY"
+
+
+def test_v2_active_recurring_remains_ready_with_extended_certified_window():
+    reader = PlannedReader(True)
+    reader.registry[0].update(
+        status="ACTIVE", sync_enabled=True, facts_coverage_to="2026-10-04T03:00:00Z"
+    )
+    reader.registry[0]["snapshot_at"] = "2026-10-04T07:00:00Z"
+    reader.policy = replace(reader.policy, report_to="2026-10-04", as_of="2026-10-04T03:00:00Z")
+    reader.heads = [head(reader.policy)]
+    service = DashboardService(
+        "up-data-intelligence-dev",
+        {},
+        lambda: reader,
+        b"synthetic-key-not-a-real-secret-32b",
+        installation_v2=True,
+    )
+    result = service.installation(PRINCIPAL, GRANT)["data"]
+    assert result["overall_state"] == "READY"
+    assert result["progress"]["percent"] == 100
+    assert result["available_window"]["to"] == "2026-10-04"
+    assert result["history_complete"] is False
+    service._scope(PRINCIPAL, GRANT)
+    assert service.policy.report_from == reader.policy.report_from
+    assert service.policy.report_to == "2026-10-04"

@@ -345,23 +345,20 @@ class AnalyticsHeadTransport:
 
 
 @pytest.mark.parametrize("existing", [False, True])
-def test_control_plane_initializes_valid_head_sql_and_preserves_existing_head(existing):
+def test_recurring_control_plane_requires_completed_receipt_without_initializing(existing):
     c = config(upzero_enabled=True, analytics_enabled=True, upzero_connection_id="synthetic-up")
     transport = AnalyticsHeadTransport(c, existing=existing)
+    prerequisites = Mock()
+    prerequisites.publication.return_value = transport.rows
+    before = transport.rows
     try:
-        action = Actions(transport, Mock(), lease_bucket="synthetic")
+        action = Actions(transport, prerequisites, lease_bucket="synthetic")
         with patch("src.control_plane.worker.analytics_materialize") as materialize:
-            action.analytics(c, WINDOW)
-            action.analytics(c, WINDOW)
-        assert len(transport.rows) == 1 and transport.rows[0]["generation"] == 0
-        initializers = [sql for sql, _ in transport.calls if sql.startswith("INSERT")]
-        assert len(initializers) == (0 if existing else 1)
-        for sql in initializers:
-            assert_singleton_head_sql(sql)
-        assert materialize.call_count == 2
-        for call in materialize.call_args_list:
-            assert call.args[2].expected_generation == 0
-            assert call.args[2].full_refresh_authorized
+            with pytest.raises(SafeError, match="recurring_publication_required"):
+                action.analytics(c, WINDOW)
+        assert transport.rows == before
+        assert transport.calls == []
+        materialize.assert_not_called()
     finally:
         transport.db.close()
 

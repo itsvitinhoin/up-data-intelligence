@@ -3,15 +3,13 @@
 import time
 from collections.abc import Callable
 from contextlib import AbstractContextManager, nullcontext
-from dataclasses import replace
+from dataclasses import asdict, replace
 from datetime import date, timedelta
 from typing import Any
 
-from google.api_core.exceptions import BadRequest, Forbidden, Unauthorized
-
 from src.analytics.cloud.reader import BigQueryAnalyticsReader, SourceGeneration
 from src.analytics.cloud.runner import materialize as analytics_materialize
-from src.analytics.cloud.transport import Transport, scalar
+from src.analytics.cloud.transport import Transport
 from src.analytics.cloud.writer import BigQueryAnalyticsWriter, Publication
 from src.analytics.materialization import CoreSnapshot, plan_changes
 from src.bigquery.repository import BigQueryRepository
@@ -22,6 +20,7 @@ from src.connectors.upzero.client import UpZeroConnector
 from src.control_plane.model import StoreConfig, Window
 from src.control_plane.preflight import Prerequisites
 from src.control_plane.recovery_repository import BigQueryRecovery
+from src.control_plane.recurring import certified_window, facts_coverage, monotonic
 from src.control_plane.registry import Registry
 from src.domain.models import SafeError
 from src.ingestion.checkpoints import CHECKPOINT_RECOVERED, checkpoint_pending
@@ -41,7 +40,7 @@ class StoreWorker:
         registry: Registry,
         prerequisites: Callable[[StoreConfig, str, Window], None],
         lease: Callable[[str], AbstractContextManager[None]],
-        action: Callable[[StoreConfig, str, Window], None],
+        action: Callable[[StoreConfig, str, Window], StoreConfig | None],
         metrics: Callable[[], dict[str, Any]],
     ):
         self.registry, self.prerequisites, self.lease, self.action, self.metrics = (
@@ -67,7 +66,26 @@ class StoreWorker:
                 if not config.eligible(pipeline):
                     raise SafeError("store_not_eligible")
                 self.prerequisites(config, pipeline, window)
-                self.action(config, pipeline, window)
+                updated = self.action(config, pipeline, window)
+                if updated is not None and updated != config:
+                    permitted = {
+                        "facts_coverage_from",
+                        "facts_coverage_to",
+                        "facts_complete",
+                        "revision",
+                        "updated_at",
+                    }
+                    if (
+                        pipeline != "upzero"
+                        or updated.revision != config.revision + 1
+                        or any(
+                            value != asdict(updated)[key]
+                            for key, value in asdict(config).items()
+                            if key not in permitted
+                        )
+                    ):
+                        raise SafeError("invalid_recurring_registry_update")
+                    self.registry.save(updated, config.revision)
                 status = "completed"
         finally:
             event(
@@ -102,10 +120,18 @@ class Actions:
         repo.project, repo.location = self.transport.config.project, self.transport.config.location
         return repo
 
-    def __call__(self, c: StoreConfig, pipeline: str, w: Window) -> None:
+    def __call__(self, c: StoreConfig, pipeline: str, w: Window) -> StoreConfig | None:
         try:
             if pipeline == "upzero":
                 self.upzero(c, w)
+                repo = self.repository()
+                return facts_coverage(
+                    c,
+                    repo.read("sync_checkpoints", c.store_id),
+                    repo.read("sync_runs", c.store_id),
+                    w.as_of,
+                    now(),
+                )
             elif pipeline == "meta":
                 self.meta(c, w)
             elif pipeline == "analytics":
@@ -128,6 +154,7 @@ class Actions:
             if getattr(self.transport.client, "budget_exhausted", False) is True:
                 raise SafeError("store_execution_budget_exhausted") from None
             raise
+        return None
 
     def upzero(self, c: StoreConfig, w: Window) -> None:
         source = self.prerequisites.source(c)
@@ -282,51 +309,9 @@ class Actions:
 
     def analytics(self, c: StoreConfig, w: Window) -> None:
         policy = c.policy(w)
-        target = f"`{self.transport.config.project}.up_analytics.analytics_publications`"
-        params = [
-            scalar("store", "STRING", c.store_id),
-            scalar("policy", "STRING", policy.policy_hash),
-        ]
-        rows, _ = self.transport.query(
-            f"SELECT record_kind,generation,status,publication_id,as_of FROM {target} WHERE store_id=@store AND policy_hash=@policy",
-            params,
-        )
-        heads = [r for r in rows if r["record_kind"] == "HEAD"]
-        if not rows:
-            # Only the leased ACTIVE worker may initialize its own new publication domain.
-            try:
-                self.transport.query(
-                    f"INSERT INTO {target}(row_key,record_kind,store_id,policy_hash,generation,status) SELECT @head,'HEAD',@store,@policy,0,'initialized' FROM UNNEST([1]) WHERE NOT EXISTS(SELECT 1 FROM {target} WHERE store_id=@store AND policy_hash=@policy)",
-                    params
-                    + [scalar("head", "STRING", digest([c.store_id, policy.policy_hash, "HEAD"]))],
-                )
-            except (BadRequest, Forbidden, Unauthorized):
-                raise SafeError("analytics_head_initialization_failed") from None
-            except Exception:
-                raise SafeError("bigquery_write_outcome_unknown") from None
-            heads = [{"generation": 0, "status": "initialized"}]
-        if (
-            len(heads) != 1
-            or type(heads[0]["generation"]) is not int
-            or heads[0]["generation"] < 0
-            or heads[0]["status"] not in {"initialized", "completed"}
-        ):
-            raise SafeError("invalid_analytics_publication_domain")
-        generation = heads[0]["generation"]
-        receipts = [r for r in rows if r["record_kind"] == "RECEIPT"]
-        if generation == 0:
-            if receipts or heads[0]["status"] != "initialized":
-                raise SafeError("invalid_analytics_publication_domain")
-        else:
-            matching = [
-                r
-                for r in receipts
-                if r["generation"] == generation
-                and r["publication_id"] == heads[0].get("publication_id")
-                and r["status"] == "completed"
-            ]
-            if len(matching) != 1 or max(r["generation"] for r in receipts) != generation:
-                raise SafeError("invalid_analytics_head_receipt")
+        heads = self.prerequisites.publication(c, w)
+        current = certified_window(c, heads, w.source_snapshot_at)
+        monotonic(current, w)
         source = SourceGeneration(
             w.source_snapshot_at, digest([c.store_id, c.revision, w.source_snapshot_at]), True
         )

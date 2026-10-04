@@ -741,10 +741,26 @@ def test_runtime_routes_events_through_partitions_and_initializes_head_only_at_c
                             "insights": {**reporting(account, p).snapshot(), "level": "campaign"},
                         },
                         "run_id": "synthetic-run",
+                        "plan_key": "synthetic-plan",
+                        "store_id": account.store_id,
+                        "connection_id": account.connection_id,
+                        "resource": "meta_live_insights_daily",
+                        "status": "complete",
+                        "pending_raw_id": None,
                     }
                 ], None
             if ".up_ops.sync_runs`" in sql:
-                return [{"status": "completed", "core_records_failed": 0}], None
+                return [
+                    {
+                        "run_id": "synthetic-run",
+                        "plan_key": "synthetic-plan",
+                        "store_id": account.store_id,
+                        "source": "meta",
+                        "resource": "meta_live_insights_daily",
+                        "status": "completed",
+                        "core_records_failed": 0,
+                    }
+                ], None
             if sql.startswith("SELECT generation"):
                 return [], None
             return stage.query(sql, params, **kwargs)

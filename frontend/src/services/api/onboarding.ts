@@ -52,6 +52,7 @@ export function parseOnboarding(value: unknown): OnboardingResult {
     "SECRET_READY",
     "FINALIZING",
     "INSTALLING",
+    "READY",
     "BLOCKED",
   ] as const;
   if (!statuses.includes(r.status as OnboardingResult["status"]))
@@ -86,10 +87,13 @@ export function parseOnboarding(value: unknown): OnboardingResult {
       const s = record(value, ["source", "state"]);
       if (
         (s.source !== "upzero" && s.source !== "meta") ||
-        s.state !== "PENDING"
+        (r.status === "READY" ? s.state !== "ACTIVE" : s.state !== "PENDING")
       )
         throw invalid();
-      return { source: s.source, state: s.state };
+      return {
+        source: s.source,
+        state: r.status === "READY" ? "ACTIVE" : "PENDING",
+      };
     },
   );
   for (const t of [r.created_at, r.updated_at])

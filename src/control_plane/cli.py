@@ -37,7 +37,15 @@ def gated(args: Any) -> None:
         or not args.lease_bucket
     ):
         raise SafeError("control_plane_dev_confirmation_required")
-    if hasattr(args, "store_id") and (not args.store_id or args.confirm_store != args.store_id):
+    if getattr(args, "all_stores", False) and (
+        not getattr(args, "dispatch", False) or args.store_id or args.confirm_store
+    ):
+        raise SafeError("invalid_global_installation_scope")
+    if (
+        hasattr(args, "store_id")
+        and not getattr(args, "all_stores", False)
+        and (not args.store_id or args.confirm_store != args.store_id)
+    ):
         raise SafeError("store_confirmation_required")
 
 
@@ -150,7 +158,9 @@ def main() -> int:
         service = StoreAdmin(
             BigQueryRegistry(transport),
             lambda store: cloud_lease(args.lease_bucket, store),
-            Prerequisites(transport).configuration,
+            Prerequisites(transport).activation
+            if args.command == "activate-store"
+            else Prerequisites(transport).configuration,
         )
         # Trusted internal operator CLI, authenticated by ADC/IAM; not a public role field.
         admin = Admin("adc-internal-operator", "ADMIN_UP")

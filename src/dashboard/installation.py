@@ -510,7 +510,10 @@ class InstallationReader:
                 and all(r["status"] == "COMPLETE" for r in work)
                 and facts is True
                 and window is not None
-                and registry.get("sync_enabled") is False
+                and (
+                    (registry.get("status") == "READY" and registry.get("sync_enabled") is False)
+                    or (registry.get("status") == "ACTIVE" and registry.get("sync_enabled") is True)
+                )
                 and bool(sources)
                 and all(
                     s.configured and s.active is True and s.state == "COMPLETE" for s in sources

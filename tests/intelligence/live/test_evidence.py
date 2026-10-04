@@ -627,6 +627,12 @@ def test_full_runtime_evidence_stream_failure_retry_and_no_query_per_fact():
                 return [
                     {
                         "run_id": "synthetic-run",
+                        "plan_key": "synthetic-plan",
+                        "store_id": a["account"].store_id,
+                        "connection_id": a["account"].connection_id,
+                        "resource": "meta_live_insights_daily",
+                        "status": "complete",
+                        "pending_raw_id": None,
                         "filters": {
                             "account": a["account"].snapshot(),
                             "insights": {
@@ -637,7 +643,17 @@ def test_full_runtime_evidence_stream_failure_retry_and_no_query_per_fact():
                     }
                 ], None
             if ".up_ops.sync_runs`" in sql:
-                return [{"status": "completed", "core_records_failed": 0}], None
+                return [
+                    {
+                        "run_id": "synthetic-run",
+                        "plan_key": "synthetic-plan",
+                        "store_id": a["account"].store_id,
+                        "source": "meta",
+                        "resource": "meta_live_insights_daily",
+                        "status": "completed",
+                        "core_records_failed": 0,
+                    }
+                ], None
             if sql.startswith("SELECT generation"):
                 return [], None
             return stage.query(sql, params, **kwargs)

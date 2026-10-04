@@ -101,6 +101,10 @@ def test_schemas_only_two_new_tables_existing_are_unchanged():
             f["name"] for f in schema
         }
     terraform = (root / "installation.tf").read_text()
-    assert "google_cloud_scheduler" not in terraform and "secretAccessor" not in terraform
+    assert (
+        'name      = "up-installation-dispatch"' in terraform and "secretAccessor" not in terraform
+    )
+    assert "paused    = var.installation_scheduler_paused" in terraform
+    assert 'schedule  = "* * * * *"' in terraform and "default     = true" in terraform
     assert 'timeout         = "3600s"' in terraform and "max_retries     = 0" in terraform
     assert "google_service_account.control_plane[each.key].email" in terraform

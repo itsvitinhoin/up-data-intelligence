@@ -1,4 +1,9 @@
-# CHANGE #18.3: separate installation runtime; no scheduler, no activation.
+variable "installation_scheduler_paused" {
+  description = "New installation automation must be deployed paused before acceptance."
+  type        = bool
+  default     = true
+}
+# Separate bounded installation runtime; automation remains fail-closed by default.
 variable "installation_image" {
   description = "Future approved immutable installation image; null leaves all four jobs absent."
   type        = string
@@ -28,13 +33,13 @@ variable "installation_soft_time_budget_seconds" {
 locals {
   installation_workers = toset(["upzero", "meta", "analytics"])
   installation_read = {
-    orchestrator = toset(["onboarding_operations", "store_runtime_config", "source_connections", "sync_runs", "sync_checkpoints", "analytics_publications", "analytics_store_daily", "analytics_funnel_daily", "installation_plans", "installation_work_units"])
+    orchestrator = toset(["onboarding_operations", "meta_account_bindings", "store_runtime_config", "source_connections", "sync_runs", "sync_checkpoints", "analytics_publications", "analytics_store_daily", "analytics_funnel_daily", "installation_plans", "installation_work_units"])
     upzero       = toset(["installation_plans", "installation_work_units"])
     meta         = toset(["installation_plans", "installation_work_units"])
     analytics    = toset(["installation_plans", "installation_work_units"])
   }
   installation_write = {
-    orchestrator = toset(["installation_plans", "installation_work_units", "store_runtime_config"])
+    orchestrator = toset(["installation_plans", "installation_work_units", "store_runtime_config", "onboarding_operations"])
     upzero       = toset(["installation_work_units", "source_connections"])
     meta         = toset(["installation_work_units", "source_connections"])
     analytics    = toset(["installation_work_units"])
@@ -148,4 +153,31 @@ resource "google_bigquery_table_iam_member" "installation_admin_read" {
   table_id   = google_bigquery_table.tables[each.key].table_id
   role       = "roles/bigquery.dataViewer"
   member     = var.control_plane_admin_member
+}
+
+resource "google_cloud_run_v2_job_iam_member" "installation_schedule" {
+  count    = var.installation_image == null ? 0 : 1
+  name     = google_cloud_run_v2_job.installation_orchestrator[0].name
+  location = var.region
+  role     = google_project_iam_custom_role.control_plane_run.name
+  member   = "serviceAccount:${google_service_account.control_plane["scheduler"].email}"
+}
+resource "google_cloud_scheduler_job" "installation" {
+  count     = var.installation_image == null ? 0 : 1
+  name      = "up-installation-dispatch"
+  region    = var.region
+  schedule  = "* * * * *"
+  time_zone = "Etc/UTC"
+  paused    = var.installation_scheduler_paused
+  http_target {
+    http_method = "POST"
+    uri         = "https://run.googleapis.com/v2/projects/${var.project_id}/locations/${var.region}/jobs/${google_cloud_run_v2_job.installation_orchestrator[0].name}:run"
+    body        = base64encode(jsonencode({ overrides = { containerOverrides = [{ name = "orchestrator", args = concat(local.installation_args, ["--dispatch", "--all-stores", "--auto-activate", "--project-number", data.google_project.control_plane.number]) }], taskCount = 1 } }))
+    headers     = { "Content-Type" = "application/json" }
+    oauth_token {
+      service_account_email = google_service_account.control_plane["scheduler"].email
+      scope                 = "https://www.googleapis.com/auth/cloud-platform"
+    }
+  }
+  depends_on = [google_cloud_run_v2_job_iam_member.installation_schedule]
 }
