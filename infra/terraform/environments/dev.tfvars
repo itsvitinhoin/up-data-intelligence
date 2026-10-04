@@ -26,6 +26,6 @@ analytics_maximum_total_bytes_billed = 137438953472
 
 build_submitter_member = "user:upagency.oficial@gmail.com"
 
-control_plane_image               = "southamerica-east1-docker.pkg.dev/up-data-intelligence-dev/up-data-intelligence/foundation@sha256:47e4ce9ecd849642950fecff6e0a6ab88756e9cba04c9729c20dacbcd9dfcd2e"
+control_plane_image               = "southamerica-east1-docker.pkg.dev/up-data-intelligence-dev/up-data-intelligence/foundation@sha256:0157e83cd704c12fe071c523d841faf8021bbc6c86570cd22002c5488395f99a"
 control_plane_meta_secret_version = "1"
-installation_image                = "southamerica-east1-docker.pkg.dev/up-data-intelligence-dev/up-data-intelligence/foundation@sha256:5e9b3d0752cd78abfabf580b39c69eedf487dd72b086c3e62f6f593ccc2288f0"
+installation_image                = "southamerica-east1-docker.pkg.dev/up-data-intelligence-dev/up-data-intelligence/foundation@sha256:0157e83cd704c12fe071c523d841faf8021bbc6c86570cd22002c5488395f99a"
