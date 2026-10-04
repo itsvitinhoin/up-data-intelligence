@@ -557,16 +557,16 @@ def test_shared_schema_is_only_addition_and_old_terraform_preserved():
     ).items():
         content = (root / name).read_bytes()
         if name == "environments/dev.tfvars":
-            # #18.4C/#18.4D authorize only these additive, non-secret DEV inputs.
+            # #18.4G pins one approved digest for both runtimes; Foundation remains intact.
             addition = (
                 b'\nbuild_submitter_member = "user:upagency.oficial@gmail.com"\n'
                 b'\ncontrol_plane_image               = "southamerica-east1-docker.pkg.dev/'
                 b"up-data-intelligence-dev/up-data-intelligence/foundation@sha256:"
-                b'47e4ce9ecd849642950fecff6e0a6ab88756e9cba04c9729c20dacbcd9dfcd2e"\n'
+                b'0157e83cd704c12fe071c523d841faf8021bbc6c86570cd22002c5488395f99a"\n'
                 b'control_plane_meta_secret_version = "1"\n'
                 b'installation_image                = "southamerica-east1-docker.pkg.dev/'
                 b"up-data-intelligence-dev/up-data-intelligence/foundation@sha256:"
-                b'5e9b3d0752cd78abfabf580b39c69eedf487dd72b086c3e62f6f593ccc2288f0"\n'
+                b'0157e83cd704c12fe071c523d841faf8021bbc6c86570cd22002c5488395f99a"\n'
             )
             assert content.endswith(addition)
             content = content.removesuffix(addition)

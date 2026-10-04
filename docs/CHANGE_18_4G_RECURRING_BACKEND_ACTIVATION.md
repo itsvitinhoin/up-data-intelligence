@@ -106,3 +106,35 @@ the unrestricted validation process). No suite failure was ignored.
 
 Live build, deployment, activation and scheduler enablement are not yet performed.
 Their exact evidence must be appended before operational completion is declared.
+
+### Immutable build and audited Stage 1 plan
+
+Runtime source commit: `79eaa98f5b70530607fa27ffd4a7276b193927ad`.
+Qualified Cloud Build: `3c6045c3-5f92-4584-a842-eb6ee6b44692`, SUCCESS.
+Build and Artifact Registry agree on
+`sha256:0157e83cd704c12fe071c523d841faf8021bbc6c86570cd22002c5488395f99a`.
+The build context contained 239 allowlisted files, no credentials or customer data.
+Container smokes ran without network. The first build attempt
+`6a93eb77-8c13-4da8-b623-b73f5c074a8d` failed definitively before publishing an image:
+private staging permissions under umask 077 prevented the non-root container from
+reading source files. Correcting staging readability and the private smoke entrypoint
+resolved it; runtime source, Dockerfile and repository build configuration were unchanged.
+
+The Stage 1 saved plan, `/tmp/mx-activation-18-4g/stage1.plan` in Cloud Shell, has SHA256
+`10159f053faea4b93e85849d2b663793661f8b0fcda18c88c6678406ad52c5a3`.
+An exact resource/path guard passed: nine image-only updates, five creates, no deletes
+or replacements. Creates are the paused Installation Scheduler, its scoped invocation
+binding and the three table-scoped metadata grants described above. All other resource
+changes are absent; 36 provider-computed drift entries passed the existing benign-drift
+allowlist. Because the three metadata grants exceed the initial two-create estimate,
+explicit approval of this concrete saved plan was requested before apply.
+
+Read-only preflight confirmed only MX in Registry, no onboarding operations, the
+certified generation 3 window `[2026-09-01,2026-10-03)`, contiguous Facts coverage through
+`2026-10-03T03:00:00Z`, and 33 compatible Meta Insights checkpoints. Existing Meta
+catalog runs are complete but older than the requested cutoff; the normal Meta cycle
+must refresh them before Intelligence preflight. The freshness guard is unchanged.
+
+At this checkpoint, no Stage 1 apply, live smoke, activation, recurring cycle or
+scheduler enablement has occurred. MX remains READY/sync=false and all seven existing
+schedulers remain PAUSED. Operational completion is still pending.
