@@ -25,7 +25,9 @@ def key(parts: str) -> str:
     return f"LOWER(TO_HEX(SHA256(TO_JSON_STRING(JSON_ARRAY({parts})))))"
 
 
-def sources(project: str, fixtures: bool) -> str:
+def sources(project: str, fixtures: bool, snapshot: bool = False) -> str:
+    if fixtures and snapshot:
+        raise ValueError("fixture_snapshot_not_supported")
     if not re.fullmatch(r"[a-z][a-z0-9-]{4,62}", project):
         raise ValueError("invalid_project")
     parts = []
@@ -47,7 +49,9 @@ def sources(project: str, fixtures: bool) -> str:
             query = (
                 "SELECT "
                 + ",".join(f"`{f}`" for f in fields)
-                + f" FROM `{project}.up_core.{table}` WHERE store_id=@store AND source_system='upzero'"
+                + f" FROM `{project}.up_core.{table}`"
+                + (" FOR SYSTEM_TIME AS OF @source_snapshot_at" if snapshot else "")
+                + " WHERE store_id=@store AND source_system='upzero'"
             )
             if table == "orders":
                 query += " AND created_at>=@history_from AND created_at<@as_of"
@@ -73,13 +77,20 @@ def replace_sources(sql: str) -> str:
     return sql
 
 
-def compile_model(model: str, *, project: str, fixtures: bool = False) -> str:
+def compile_model(
+    model: str, *, project: str, fixtures: bool = False, snapshot: bool = False
+) -> str:
+    """Compile a reference model; audits may pin every CORE input to one snapshot.
+
+    The default and fixture paths retain their existing behavior. Snapshot audits
+    bind source_snapshot_at as a TIMESTAMP query parameter, never a SQL literal.
+    """
     if model not in SCHEMAS:
         raise ValueError("invalid_analytics_model")
     base = (ROOT / "sql/analytics/business_reference.sql").read_text()
     product = (ROOT / "sql/analytics/products_reference.sql").read_text()
     funnel = (ROOT / "sql/analytics/funnel_reference.sql").read_text()
-    common = sources(project, fixtures)
+    common = sources(project, fixtures, snapshot)
     if model != "analytics_funnel_daily":
         for name in (
             "source_orders",
