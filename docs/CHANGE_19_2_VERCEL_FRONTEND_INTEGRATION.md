@@ -217,3 +217,67 @@ The validated runtime code has not changed since its complete offline suites: Py
 Production remains `dpl_6QZMoStEdzScJ2XPWBPLZPj7NVaZ` at canonical main `797dbbff09df0d8a5d93f3c24332c508b25d6012`; previous production remains available. Production env inventory is unchanged, including its unused legacy `META_ACCESS_TOKEN` name, whose value was never read or copied. No production variable change, promotion, merge, PR or deletion of Cloud Run up-web occurred.
 
 Next action requires explicit user approval: configure production application variables with the production provider, remove the unused frontend source-token variable, disable/remove temporary preview trust through a separately audited saved plan, promote/rebuild the reviewed runtime, and repeat production auth/isolation/parity acceptance. Keep the current production rollback deployment and up-web. The preview approval alone does not authorize these actions.
+
+## Explicitly authorized production promotion — accepted
+
+The user subsequently approved production configuration, removal of the legacy frontend Meta variable and temporary preview federation, promotion, and repeated production acceptance. The preview stop boundary above records the earlier state; this section supersedes its pending production action. Backend serving/data still uses the existing **DEV** project. This is internal DEV product acceptance on the Vercel production target, not creation or promotion of a GCP PROD data environment.
+
+### Preview trust removal and production configuration
+
+Saved removal plan: `/tmp/change19-2/remove-preview.plan`, SHA256 `ef784cb17ec5e6894693ddda01d9098e09e04e3b2fd4164073aecaa601e053b8`. Strict audit proved exactly two deletes: `google_iam_workload_identity_pool_provider.product_vercel["preview"]` and `google_service_account_iam_member.product_vercel_federation["preview"]`; no creates, updates, replacements, Jobs, data resources or schedulers. Applied exactly once after revalidating the hash, exit 0. Fresh post-plan returned exit 0 / **No changes**. The production provider remains ACTIVE; the service account has exactly the canonical production subject federation member. Provider conditions additionally enforce the reviewed team/project IDs. A private inspection initially compared subject names against IDs; the assertion was corrected to the existing canonical subject contract, with no IAM or runtime change.
+
+Ten encrypted variables were configured for the production target, with `DASHBOARD_DATA_MODE=live` and `GCP_WORKLOAD_IDENTITY_POOL_PROVIDER_ID=up-product-vercel-production`. Remaining values are the same approved private API URLs, public Firebase configuration and federation identifiers used by the accepted runtime. `META_ACCESS_TOKEN` was removed from the Vercel production environment. Its value was never read; no source token, Secret Manager version, credential or binding was changed. Vercel runtime continues using short-lived OIDC federation; no service-account key or browser service credential exists.
+
+### Promotion and rollback
+
+Promoted exactly accepted preview `dpl_Gxex3P9DvNKk5vkus2Lw4SiLcDpo` once using the existing project. Vercel created a new production build with production variables, rather than reusing preview build bytes:
+
+- production deployment: `dpl_EA5gpJfDQuyLS7LqfpuWUw8Km9e5`;
+- immutable URL: `https://up-data-intelligence-1q5gd7e5n-victorcheunin-6445s-projects.vercel.app`;
+- canonical URL: `https://up-data-intelligence.vercel.app`;
+- source runtime commit: `09d21f469036c22c51469194c9604696e77e5e1a`, unchanged from the accepted preview;
+- API-confirmed target production, action promote, status READY; actual production build passed;
+- old production `dpl_6QZMoStEdzScJ2XPWBPLZPj7NVaZ` remains READY and available for rollback;
+- `up-web` remains available at its existing Cloud Run URL, with its serving condition True.
+
+Rollback may restore the preserved deployment using the project's deployment rollback action after a deliberate operational decision; do not delete the prior deployment. Reassess authentication/federation configuration if intentionally reverting to the previous demo runtime. No PR, merge or main-branch change is part of this cutover.
+
+### Repeated production HTTPS acceptance
+
+The canonical domain directly served the real login and public Firebase configuration. Existing Vercel project protection settings were preserved; **no automation bypass was needed or generated for production acceptance**. Four new disposable synthetic Firebase identities and two temporary grants were used. No permanent administrator credential, customer identity or business data was used in artifacts.
+
+| Production gate | Result |
+| --- | --- |
+| Real ADMIN_UP browser login and canonical MX catalog | PASS |
+| CLIENT_USER login and explicit MX B2B workspace | PASS |
+| Unverified / verified-unprovisioned accounts | 403 / 403, no session |
+| Wrong tenant / wrong workspace | 403 / 403 |
+| Browser technical-store injection | 400, rejected |
+| CLIENT_USER admin POST | 403 |
+| ADMIN_UP invalid authorized payload | 400 before durable onboarding mutation |
+| Missing CSRF on session/admin/logout | 403 |
+| Disabled grant with existing session | 403 immediately |
+| Session | Secure, HttpOnly, SameSite=Lax, Path=/, maximum 12 hours |
+| Browser storage | No auth token in localStorage/sessionStorage/IndexedDB; session not JS-readable |
+| Logout / old cookie replay | Cookie cleared / 401 |
+| Security headers | CSP, nosniff, private/no-store present |
+| Private APIs anonymous access | Read 403 / Admin 403 |
+| Outside certified period | 400; no invented zero |
+| ERP / unauthorized MX B2C | Unavailable without fixture / 403 |
+| Public JavaScript scan | 13 scripts; no private-key, STS/IAM Credentials, federation account or Meta token marker |
+
+Existing menu navigation loaded Overview, Orders, Acquisition, Retention, Customers, Products, Performance and Meta Campaigns with the final **Dados reais** badge. Production screenshots retained the approved shell/components/layout. The installation response remained READY, plan COMPLETE, 45 complete units, required progress 43/43. Unsupported or history-sensitive fields remain unavailable.
+
+All nine production envelopes returned HTTP 200 and matched full normalized current canonical-service response digests, including Installation. Comparison excludes only session-bound cursors, request identity and snapshot time, and normalizes integral non-monetary JSON number representation. Money and NULL values are preserved. Actual Analytics generation **5**, Intelligence generation **3** / Analytics base **5**, window `[2026-09-01, 2026-10-04)`, as-of `2026-10-04T03:00:00Z`, policy hash `3098157d095a3bcb0c024dbc6263fa7e5eebdc099a2f72903ca82f7634b9c54c`, `history_complete=false`, `facts_complete=true`. Requested `99033.96` and fulfilled `85384.51` remain distinct; complete LTV, CAC, confirmed-new and paid revenue remain NULL.
+
+### Freeze, cleanup, tests and stop
+
+Final Data Health: 16 rules, zero blocking failures, certified check timestamp `2026-10-04T21:11:30.241700Z`. All six data/installation/health schedulers remain ENABLED and the three Foundation schedulers PAUSED, as enumerated above. No scheduler or data-layer semantic change occurred. No source API call, source secret value read, worker execution, ingestion, business DML, checkpoint repair, publication write, replan or new real brand was performed by this promotion.
+
+Both temporary grants were revoked via the canonical CLI; all four synthetic Firebase users were deleted and absence verified. Private password/session/response artifacts are removed after acceptance. The earlier preview bypass was already revoked; production created none.
+
+No runtime file changed after the tested immutable source commit. Its recorded complete suites remain Python 2,163 tests; Ruff check/format 294 files; mypy 162 sources; frontend 262 tests/23 files plus lint/typecheck/format/build; 15 relevant offline Playwright tests; Terraform fmt/validate. This round additionally passed the actual Vercel production build, production browser/auth/isolation/security acceptance, nine-resource canonical parity, coverage/nullability checks, public-bundle scan and Terraform post-plan. Documentation-only diff is checked before commit.
+
+**VERCEL PRODUCT READY — EXISTING UI + REAL AUTH + REAL DATA**
+
+Stop after documenting and pushing this acceptance on `change-19-2-vercel-frontend-integration`. Preserve `up-web` and rollback. GCP PROD promotion, production data environment, production domain/DNS strategy and other Product Production Promotion work remain separate; do not start another Change automatically.
