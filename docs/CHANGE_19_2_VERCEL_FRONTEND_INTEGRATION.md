@@ -111,3 +111,16 @@ Existing Vercel project: `prj_97pqMmRY596f2PNg4ipCsA1r8Jbo`, team `team_t671r3SZ
 Preview trust is not active. Its proposed separate provider trusts the exact same team/project with environment `preview`. Vercel's documented OIDC claims do not include a branch/deployment identity; this IAM scope therefore covers that project's previews, not just this branch. Environment configuration can be restricted to this branch, but is not an IAM branch restriction. Both providers grant only `roles/iam.workloadIdentityUser` on the dedicated account, which has only `roles/run.invoker` on the two private product APIs. No data-layer or secret permissions are proposed.
 
 Live preview, parity, final security isolation and user-approved production promotion remain pending. No success claim yet.
+
+
+## Preview build and pending federation review
+
+Source commit `09d21f469036c22c51469194c9604696e77e5e1a` is pushed on `change-19-2-vercel-frontend-integration`, without merge/PR. The Git integration created preview `dpl_8pswemnJTGRbb5NFexxBmNamhJy2` at `https://up-data-intelligence-dmbkg8kue-victorcheunin-6445s-projects.vercel.app`. Actual Vercel `npm run build` with Next.js 16.3.7 Turbopack passed (compiled in 29.9s; 48 pages generated; Build Completed in 52s). Thus the local Turbopack restriction is not reproduced on Vercel. The preview remains Vercel-protected and not functionally accepted: runtime environment configuration and WIF are not applied yet.
+
+Anonymous requests to both private Read/Admin `/v1/session` returned HTTP 403. Static browser bundle scan found no STS/IAM Credentials endpoints, WIF configuration, dedicated service account, private-key marker or OIDC exchange function. Actual deployed browser-token/session acceptance remains pending.
+
+Read-only Terraform saved plan: `/tmp/change19-2/vercel-federation.plan` on Cloud Shell, SHA256 `e207bdbcd70f3e036be2ac70f4e707c4b10669dc8d3e4cda45a0f495942b485d`. Proposed changes: ten creates (dedicated SA/pool, production and separately reviewed preview providers, STS/IAM Credentials service resources, two scoped federation members and two private-service invoker members); one update adding only `up-data-intelligence.vercel.app` to Firebase authorized domains. No destroys/replacements/data Jobs/schedulers. All prior authorized domains remain. No apply.
+
+The automatic approval review rejected the attempt to configure branch-scoped preview application variables before the required preview-scope review. That command did not execute; no environment values were changed. The explicit user question now covers the saved plan and this branch's application configuration. Preview provider stays default-disabled in code and must not be applied before that response. No production promotion is authorized by preview-trust approval.
+
+Production promotion must follow the actual Vercel platform behavior. Official documentation states preview promotion rebuilds with production variables: https://vercel.com/docs/deployments/promote-preview-to-production . Revalidate production runtime identity, build, auth, metadata and parity after promotion; do not describe a rebuilt deployment as byte-identical to the preview. Preserve the previous production deployment for rollback.
