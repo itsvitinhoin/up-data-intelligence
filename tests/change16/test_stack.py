@@ -16,6 +16,7 @@ from src.bigquery.catalog import META_TABLE_NAMES
 from src.bigquery.repository import SQLiteRepository
 from src.connectors.meta.client import MetaConnector
 from src.connectors.meta.live import MetaAccountLister, MetaFoundationLiveConnector
+from src.connectors.upzero.catalog_schema import TABLE_NAMES as CATALOG_TABLE_NAMES
 from src.dashboard.contracts import Grant, Principal, ReadError
 from src.dashboard.intelligence import IntelligenceDashboardService
 from src.domain.models import SafeError
@@ -558,24 +559,25 @@ def test_terraform_additive_baseline_and_canonical_families():
     old = json.loads(Path("tests/fixtures/change16/base_tables.json").read_text())
     active = json.loads((root / "tables.json").read_text())
     assert {k: active[k] for k in old} == old
-    assert (
-        set(active) - set(old)
-        == META_ACTIVE
-        | set(SCHEMAS)
-        | {
-            "store_runtime_config",
-            "workspace_store_bindings",
-            "onboarding_operations",
-            "installation_plans",
-            "installation_work_units",
-        }
-        and len(set(active) - set(old)) == 34
-    )
+    assert set(active) - set(old) == META_ACTIVE | set(SCHEMAS) | CATALOG_TABLE_NAMES | {
+        "store_runtime_config",
+        "workspace_store_bindings",
+        "onboarding_operations",
+        "installation_plans",
+        "installation_work_units",
+        "installation_extension_plans",
+        "installation_extension_work_units",
+        "integration_operations",
+        "meta_creative_insights_daily",
+        "meta_creative_insights_daily_versions",
+    } and len(set(active) - set(old)) == 39 + len(CATALOG_TABLE_NAMES)
     for name, sha in json.loads(
         Path("tests/fixtures/change16/base_schema_hashes.json").read_text()
     ).items():
         assert hashlib.sha256((root / "schemas" / (name + ".json")).read_bytes()).hexdigest() == sha
-    assert not (META_TABLE_NAMES - META_ACTIVE) & set(active)
+    creative = {"meta_creative_insights_daily", "meta_creative_insights_daily_versions"}
+    assert not (META_TABLE_NAMES - META_ACTIVE - creative) & set(active)
+    assert all(active[name]["cluster"] == ["store_id", "account_id", "ad_id"] for name in creative)
     assert all(SCHEMAS[n].fields["generation"] == "INT64" for n in SCHEMAS)
     tf = (root / "change16.tf").read_text()
     assert (

@@ -357,3 +357,28 @@ def test_cli_live_guards_before_clients(monkeypatch, capsys):
         == 1
     )
     assert capsys.readouterr().out == ""
+
+
+def test_opt_in_catalog_graph_is_deterministic_and_does_not_rewrite_legacy_plan():
+    operation = {
+        "operation_id": "synthetic-onboarding",
+        "status": "INSTALLING",
+        "store_id": "synthetic-mx",
+    }
+    _, old_plan, old_units = Planner().calculate(config(), END, NOW, operation=operation)
+    _, plan, units = Planner(catalog_snapshots=True).calculate(
+        config(), END, NOW, operation=operation
+    )
+    _, same_plan, same_units = Planner(catalog_snapshots=True).calculate(
+        config(), END, NOW, operation=operation
+    )
+    assert plan["plan_id"] == same_plan["plan_id"] != old_plan["plan_id"]
+    assert [u["work_unit_id"] for u in units] == [u["work_unit_id"] for u in same_units]
+    assert len(units) == len(old_units) + 1
+    assert not any(u["resource"] == "catalog" for u in old_units)
+    catalog = next(u for u in units if u["resource"] == "catalog")
+    verify = next(u for u in units if u["source"] == "upzero" and u["unit_kind"] == "VERIFY_SOURCE")
+    assert catalog["dependencies"] == [verify["work_unit_id"]]
+    assert catalog["filters"] == {"catalog_as_of": END}
+    assert catalog["required"] is True and catalog["checkpoint_plan_key"] is None
+    assert catalog["unit_kind"] == "SYNC_SNAPSHOT"

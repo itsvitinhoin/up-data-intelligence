@@ -59,6 +59,8 @@ SAFE_FIELDS = {
     "request_id",
     "generation",
     "query_duration_ms",
+    "slot_ms",
+    "cache_hit",
     "row_count",
     "payload_bytes",
     "record_bytes",

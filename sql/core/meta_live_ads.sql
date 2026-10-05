@@ -13,6 +13,11 @@ CREATE TABLE IF NOT EXISTS `${project_id}.up_core.meta_live_ads` (
   `creative_id` STRING,
   `status` STRING,
   `effective_status` STRING,
+  `creative_name` STRING,
+  `creative_image_url` STRING,
+  `creative_thumbnail_url` STRING,
+  `creative_video_id` STRING,
+  `creative_story_id` STRING,
   `version_id` STRING,
   `payload_hash` STRING,
   `source_system` STRING

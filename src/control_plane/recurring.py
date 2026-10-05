@@ -56,24 +56,22 @@ def facts_coverage(
     config: StoreConfig, checkpoints: list[Row], runs: list[Row], target: str, at: str
 ) -> StoreConfig:
     evidence = inspect(config, checkpoints, runs, target)
+    start = min(
+        instant(config.history_from or ""),
+        instant(config.facts_coverage_from or config.history_from or ""),
+    ).isoformat()
     if evidence["pending"]:
         raise SafeError("upzero_source_not_complete")
     if not evidence["customers_fresh"]:
         raise SafeError("customers_complete_scan_required")
     for resource in ("orders", "analytics_facts"):
-        if instant(
-            prefix(config.history_from or "", target, evidence["coverage"][resource])
-        ) < instant(target):
+        if instant(prefix(start, target, evidence["coverage"][resource])) < instant(target):
             raise SafeError("upzero_history_window_not_covered")
     # A replay for an older closed day cannot regress previously certified coverage.
     end = max(instant(target), instant(config.facts_coverage_to or target)).isoformat()
-    if instant(
-        prefix(config.history_from or "", end, evidence["coverage"]["analytics_facts"])
-    ) < instant(end):
+    if instant(prefix(start, end, evidence["coverage"]["analytics_facts"])) < instant(end):
         raise SafeError("upzero_history_window_not_covered")
-    updated = replace(
-        config, facts_coverage_from=config.history_from, facts_coverage_to=end, facts_complete=True
-    )
+    updated = replace(config, facts_coverage_from=start, facts_coverage_to=end, facts_complete=True)
     return (
         replace(updated, revision=config.revision + 1, updated_at=at)
         if updated != config
@@ -82,7 +80,13 @@ def facts_coverage(
 
 
 def meta_coverage(
-    account: Account, report: Insights, checkpoints: list[Row], runs: list[Row]
+    account: Account,
+    report: Insights,
+    checkpoints: list[Row],
+    runs: list[Row],
+    *,
+    level: str = "campaign",
+    resource: str = "meta_live_insights_daily",
 ) -> list[Row]:
     """Prove a contiguous union of exact compatible daily/range evidence.
 
@@ -90,14 +94,19 @@ def meta_coverage(
     certified intervals outside the request are allowed. Every selected row needs
     its own completed, same-store/source/resource/connection run.
     """
-    definition = {**report.definition(), "level": "campaign"}
+    if (level, resource) not in {
+        ("campaign", "meta_live_insights_daily"),
+        ("ad", "meta_creative_insights_daily"),
+    }:
+        raise SafeError("meta_coverage_grain_invalid")
+    definition = {**report.definition(), "level": level}
     matching: list[Row] = []
     intervals: list[tuple[str, str]] = []
     for cp in checkpoints:
         if (
             cp.get("store_id") != account.store_id
             or cp.get("connection_id") != account.connection_id
-            or cp.get("resource") != "meta_live_insights_daily"
+            or cp.get("resource") != resource
         ):
             continue
         f = cp.get("filters") or {}
@@ -123,7 +132,7 @@ def meta_coverage(
             or linked[0].get("store_id") != account.store_id
             or linked[0].get("plan_key") != cp.get("plan_key")
             or linked[0].get("source") != "meta"
-            or linked[0].get("resource") != "meta_live_insights_daily"
+            or linked[0].get("resource") != resource
             or linked[0].get("status") != "completed"
             or linked[0].get("core_records_failed") != 0
         ):

@@ -28,6 +28,37 @@ const requiredCount = (v: unknown) => count(v) ?? invalid();
 const flag = (v: unknown): boolean | null =>
   v === null ? null : typeof v === "boolean" ? v : invalid();
 const array = (v: unknown): unknown[] => (Array.isArray(v) ? v : invalid());
+export type CatalogEvidence = {
+  basis: "current_source_snapshot";
+  snapshot_as_of: string;
+  evidence_hash: string;
+};
+export function parseCatalogEvidence(value: unknown): CatalogEvidence | null {
+  if (value === null) return null;
+  const row = object(value);
+  const stamp = text(row.snapshot_as_of);
+  if (
+    row.basis !== "current_source_snapshot" ||
+    !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(
+      stamp,
+    ) ||
+    !Number.isFinite(Date.parse(stamp))
+  )
+    invalid();
+  return {
+    basis: "current_source_snapshot",
+    snapshot_as_of: stamp,
+    evidence_hash: key(row.evidence_hash),
+  };
+}
+function catalogDimensions(row: Record<string, unknown>) {
+  const catalog =
+    row.catalog === undefined ? null : parseCatalogEvidence(row.catalog);
+  const color = nullableText(row.color ?? null),
+    size = nullableText(row.size ?? null);
+  if (!catalog && (color !== null || size !== null)) invalid();
+  return { color, size, ...(row.catalog === undefined ? {} : { catalog }) };
+}
 const key = (v: unknown): string =>
   typeof v === "string" && /^[a-f0-9]{64}$/.test(v) ? v : invalid();
 export function parseOrderDetail(
@@ -53,8 +84,10 @@ export function parseOrderDetail(
       name: nullableText(i.name),
       sku: nullableText(i.sku),
       image: nullableText(i.image),
-      color: absent(i.color),
-      size: absent(i.size),
+      ...catalogDimensions(i),
+      ...(i.reference === undefined
+        ? {}
+        : { reference: nullableText(i.reference) }),
       status: text(i.status),
       requested_quantity: decimal(i.requested_quantity),
       fulfilled_quantity: decimal(i.fulfilled_quantity),
@@ -104,11 +137,89 @@ export function parseProductDetail(
     row.revenue_basis !== "line_gross_at_current_unit_price"
   )
     invalid();
+  const dimensions = catalogDimensions(row);
+  const stock = decimal(row.stock);
+  const active = flag(row.active ?? null),
+    salePrice = decimal(row.sale_price ?? null);
+  const colorHex = nullableText(row.color_hex ?? null);
+  if (colorHex !== null && !/^#[a-fA-F0-9]{6}$/.test(colorHex)) invalid();
+  if (stock !== null && Number(stock) < 0) invalid();
+  if (
+    !dimensions.catalog &&
+    (stock !== null ||
+      active !== null ||
+      salePrice !== null ||
+      colorHex !== null)
+  )
+    invalid();
+  let variants = undefined;
+  if (row.variants !== undefined) {
+    variants =
+      row.variants === null
+        ? null
+        : array(row.variants).map((value) => {
+            const v = object(value),
+              dimensions = catalogDimensions(v);
+            const stock = decimal(v.stock),
+              salePrice = decimal(v.sale_price),
+              hex = nullableText(v.color_hex);
+            if (
+              !dimensions.catalog ||
+              !product.catalog ||
+              dimensions.catalog.evidence_hash !==
+                product.catalog.evidence_hash ||
+              dimensions.catalog.snapshot_as_of !==
+                product.catalog.snapshot_as_of ||
+              v.product_id !== product.product_id ||
+              (stock !== null && Number(stock) < 0) ||
+              (hex !== null && !/^#[a-fA-F0-9]{6}$/.test(hex))
+            )
+              invalid();
+            return {
+              variant_id: text(v.variant_id),
+              product_id: nullableText(v.product_id),
+              sku: nullableText(v.sku),
+              ...dimensions,
+              stock,
+              sale_price: salePrice,
+              color_hex: hex,
+              active: flag(v.active),
+              requested_revenue: decimal(v.requested_revenue),
+              fulfilled_revenue: decimal(v.fulfilled_revenue),
+              units_requested: decimal(v.units_requested),
+              units_fulfilled: decimal(v.units_fulfilled),
+              orders_observed: count(v.orders_observed),
+              buyers_observed: count(v.buyers_observed),
+            };
+          });
+    if (
+      variants &&
+      (variants.length > 1000 ||
+        new Set(variants.map((v) => v.variant_id)).size !== variants.length ||
+        row.variant_sales_basis !== "observed_line_gross_current_catalog")
+    )
+      invalid();
+    if (variants === null && row.variant_sales_basis !== null) invalid();
+  }
   return {
     ...product,
+    ...(row.variants === undefined
+      ? {}
+      : {
+          variants,
+          variant_sales_basis: nullableText(row.variant_sales_basis),
+        }),
+    ...(row.catalog === undefined &&
+    row.color === undefined &&
+    row.size === undefined
+      ? {}
+      : dimensions),
+    ...(row.active === undefined ? {} : { active }),
+    ...(row.sale_price === undefined ? {} : { sale_price: salePrice }),
+    ...(row.color_hex === undefined ? {} : { color_hex: colorHex }),
     variant_id: nullableText(row.variant_id),
     image: nullableText(row.image),
-    stock: absent(row.stock),
+    stock,
     sizes: absent(row.sizes),
     colors: absent(row.colors),
     abc: absent(row.abc),

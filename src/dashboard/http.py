@@ -48,12 +48,15 @@ def dispatch(
         "/v1/performance": ("performance", None),
         "/v1/campaigns": ("campaigns", None),
     }
-    match = re.fullmatch(r"/v1/customers/([^/]+)/(timeline|intelligence|products)", path)
+    match = re.fullmatch(r"/v1/customers/([^/]+)/(timeline|intelligence|products|campaigns)", path)
     if match:
         intelligence_routes[path] = (
-            {"timeline": "timeline", "intelligence": "customer360", "products": "customerProducts"}[
-                match.group(2)
-            ],
+            {
+                "timeline": "timeline",
+                "intelligence": "customer360",
+                "products": "customerProducts",
+                "campaigns": "customerCampaigns",
+            }[match.group(2)],
             unquote(match.group(1)),
         )
     match = re.fullmatch(r"/v1/campaigns/([^/]+)(?:/(customers|orders))?", path)
@@ -123,6 +126,7 @@ def dispatch(
         "/v1/products",
         "/v1/funnel",
         "/v1/geography",
+        "/v1/creatives",
     }:
         resource, store = path.rsplit("/", 1)[-1], _value(query, "store_id")
     else:
@@ -140,6 +144,7 @@ def dispatch(
         "funnel",
         "product",
         "geography",
+        "creatives",
     }:
         allowed.update({"from", "to"})
     if resource in {"orders", "customers", "products", "customer_orders"}:
@@ -182,6 +187,10 @@ def dispatch(
         )
     elif resource == "acquisition":
         result = service.acquisition(
+            principal, grant, from_day=_value(query, "from"), to_day=_value(query, "to")
+        )
+    elif resource == "creatives":
+        result = service.creatives(
             principal, grant, from_day=_value(query, "from"), to_day=_value(query, "to")
         )
     elif resource == "customer":

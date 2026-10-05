@@ -103,6 +103,13 @@ resource "google_cloud_run_v2_job" "installation_worker" {
             value = "projects/${var.project_id}/secrets/${var.change16_meta_secret_id}/versions/${var.control_plane_meta_secret_version}"
           }
         }
+        dynamic "env" {
+          for_each = var.dashboard_completion_enabled ? [1] : []
+          content {
+            name  = "UP_INSTALLATION_EXTENSIONS_ENABLED"
+            value = "1"
+          }
+        }
         resources { limits = { cpu = "2", memory = "4Gi" } }
       }
     }
@@ -127,6 +134,20 @@ resource "google_cloud_run_v2_job" "installation_orchestrator" {
         command = ["python", "-m", "src.installation.cli"]
         # Manual scope intentionally required; do not dispatch all stores accidentally.
         args = concat(local.installation_args, ["--dispatch", "--project-number", data.google_project.control_plane.number])
+        dynamic "env" {
+          for_each = var.dashboard_completion_enabled ? [1] : []
+          content {
+            name  = "UP_INSTALLATION_EXTENSIONS_ENABLED"
+            value = "1"
+          }
+        }
+        dynamic "env" {
+          for_each = var.dashboard_completion_enabled && var.dashboard_completion_automatic_enrichment ? [1] : []
+          content {
+            name  = "UP_INSTALLATION_ENRICHMENT_ENABLED"
+            value = "1"
+          }
+        }
         resources { limits = { cpu = "1", memory = "512Mi" } }
       }
     }

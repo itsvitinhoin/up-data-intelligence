@@ -4,6 +4,7 @@ export const intelligenceResources = [
   "customer360",
   "timeline",
   "customerProducts",
+  "customerCampaigns",
   "performance",
   "campaigns",
   "campaign",
@@ -30,6 +31,7 @@ export type IntelligenceResourceMap = {
   performance: IntelligenceRow;
   timeline: IntelligenceRow[];
   customerProducts: IntelligenceRow[];
+  customerCampaigns: IntelligenceRow[];
   campaigns: IntelligenceRow[];
   campaign: IntelligenceRow[];
   campaignCustomers: IntelligenceRow[];
@@ -172,6 +174,7 @@ export function parseIntelligence<K extends IntelligenceResource>(
     result = value.map(record);
     const identifiers: Partial<Record<IntelligenceResource, string[]>> = {
       campaigns: ["campaign_id"],
+      customerCampaigns: ["campaign_id"],
       campaign: ["campaign_id"],
       campaignCustomers: ["campaign_id", "customer_id"],
       campaignOrders: ["campaign_id", "customer_id", "order_id"],

@@ -57,6 +57,7 @@ export async function handleReadBridge(
       "products",
       "funnel",
       "geography",
+      "creatives",
       "product",
     ].includes(resource);
   const paged =
@@ -99,6 +100,7 @@ export async function handleReadBridge(
       "customer360",
       "timeline",
       "customerProducts",
+      "customerCampaigns",
       "campaign",
       "campaignCustomers",
       "campaignOrders",

@@ -16,7 +16,9 @@ export function StockMatrix({ product }: { product: Product }) {
             <tr>
               <th>Cor / tamanho</th>
               {sizes.map((size) => (
-                <th key={size}>{size}</th>
+                <th key={size ?? "unknown"}>
+                  {size ?? "Tamanho não informado"}
+                </th>
               ))}
               <th>Total</th>
             </tr>
@@ -25,14 +27,17 @@ export function StockMatrix({ product }: { product: Product }) {
             {colors.map((color) => {
               const rows = variants.filter((v) => v.color === color);
               return (
-                <tr key={color}>
-                  <th>{color}</th>
+                <tr key={color ?? "unknown"}>
+                  <th>{color ?? "Cor não informada"}</th>
                   {sizes.map((size) => {
+                    const cell = rows.filter((v) => v.size === size);
                     const stock =
-                      rows.find((v) => v.size === size)?.stock ?? null;
+                      cell.length && cell.every((v) => v.stock !== null)
+                        ? cell.reduce((sum, v) => sum + (v.stock ?? 0), 0)
+                        : null;
                     return (
                       <td
-                        key={size}
+                        key={size ?? "unknown"}
                         className={stock === 0 ? "stock-zero" : ""}
                       >
                         {stock === null ? "—" : stock}
@@ -59,7 +64,9 @@ export function StockMatrix({ product }: { product: Product }) {
       </div>
       <p className="metric-hint mt-3">
         Zero indica ruptura da variante. Traço indica estoque desconhecido.
-        Quantidades demonstrativas.
+        {product.catalog
+          ? ` Estoque das variantes do catálogo em ${new Date(product.catalog.snapshot_as_of).toLocaleDateString("pt-BR")}; traços não comprovam ruptura.`
+          : " Quantidades demonstrativas."}
       </p>
     </>
   );

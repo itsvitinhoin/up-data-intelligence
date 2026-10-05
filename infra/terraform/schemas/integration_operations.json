@@ -1,0 +1,102 @@
+[
+  {
+    "name": "row_key",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "operation_id",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "tenant_id",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "workspace_operation_id",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "store_id",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "provider",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "action",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "admin_subject_hash",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "request_hash",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "status",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "current_step",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "candidate_reference",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "error_code",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "registry_revision",
+    "type": "INT64",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "revision",
+    "type": "INT64",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "source_snapshot",
+    "type": "JSON",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "version_baseline",
+    "type": "JSON",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "created_at",
+    "type": "TIMESTAMP",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "updated_at",
+    "type": "TIMESTAMP",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "completed_at",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE"
+  }
+]

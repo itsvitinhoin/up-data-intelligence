@@ -1,4 +1,5 @@
 "use client";
+import { compareJourney } from "@/lib/journey";
 import { useState } from "react";
 import { useProduct } from "@/hooks/use-resource";
 import { useWorkspace } from "@/features/providers";
@@ -82,7 +83,9 @@ export function ProductDrawer({
             <span className="prod-name">
               {product.name ?? product.sku ?? "Identificação indisponível"}
             </span>
-            <span className="prod-sku block">{product.sku}</span>
+            <span className="prod-sku block">
+              {product.sku ?? product.reference}
+            </span>
           </span>
         </button>
       </SheetTrigger>
@@ -91,7 +94,7 @@ export function ProductDrawer({
           {product.name ?? product.sku ?? "Identificação indisponível"}
         </SheetTitle>
         <SheetDescription>
-          {product.sku ?? "SKU indisponível"} · Curva{" "}
+          {product.sku ?? product.reference ?? "SKU indisponível"} · Curva{" "}
           {product.abc ?? "indisponível"}
         </SheetDescription>
         <Panel title="Desempenho comercial">
@@ -129,8 +132,9 @@ export function ProductDrawer({
             cobertura
           </p>
           <span className="metric-hint">
-            Disponibilidade não certificada na fonte atual; traço indica dado
-            indisponível.
+            {product.catalog
+              ? "Estoque atual certificado; métricas comerciais acima pertencem ao SKU selecionado. Atributos atuais não reconstituem o catálogo histórico."
+              : "Disponibilidade não certificada na fonte atual; traço indica dado indisponível."}
           </span>
         </Panel>
         <ProductSales product={product} />
@@ -368,38 +372,52 @@ const eventIcons: Record<string, typeof Radio> = {
 export function Timeline({ events }: { events: TimelineEvent[] }) {
   return (
     <>
-      <ListExport
-        rows={events.toSorted((a, b) => a.date.localeCompare(b.date))}
-        name="jornada"
-      />
+      <ListExport rows={events.toSorted(compareJourney)} name="jornada" />
       <ol className="timeline">
-        {events
-          .toSorted((a, b) => a.date.localeCompare(b.date))
-          .map((event) => {
-            const Icon = eventIcons[event.type] ?? Radio;
-            return (
-              <li key={event.id}>
-                <span className="timeline-icon">
-                  <Icon size={17} />
-                </span>
-                <div>
-                  <div className="timeline-head">
-                    <strong>{event.title}</strong>
-                    <span className="badge">{event.evidence}</span>
-                  </div>
-                  <p>{event.detail}</p>
-                  <time dateTime={event.date}>
-                    {date(event.date)} ·{" "}
-                    {new Date(event.date).toLocaleTimeString("pt-BR", {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                      timeZone: "America/Sao_Paulo",
-                    })}
-                  </time>
+        {events.toSorted(compareJourney).map((event) => {
+          const Icon = eventIcons[event.type] ?? Radio;
+          return (
+            <li key={event.id}>
+              <span className="timeline-icon">
+                <Icon size={17} />
+              </span>
+              <div>
+                <div className="timeline-head">
+                  <strong>{event.title}</strong>
+                  <span className="badge">{event.evidence}</span>
                 </div>
-              </li>
-            );
-          })}
+                <p>{event.detail}</p>
+                {event.items?.length ? (
+                  <details>
+                    <summary>
+                      {event.items.length} itens observados neste pedido
+                    </summary>
+                    <ul>
+                      {event.items.map((item) => (
+                        <li key={item.id}>
+                          {item.title}
+                          {item.productId ? ` · Produto ${item.productId}` : ""}
+                          {item.variantId
+                            ? ` · Variante ${item.variantId}`
+                            : ""}
+                          {item.detail ? ` · ${item.detail}` : ""}
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                ) : null}
+                <time dateTime={event.date}>
+                  {date(event.date)} ·{" "}
+                  {new Date(event.date).toLocaleTimeString("pt-BR", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    timeZone: "America/Sao_Paulo",
+                  })}
+                </time>
+              </div>
+            </li>
+          );
+        })}
       </ol>
     </>
   );

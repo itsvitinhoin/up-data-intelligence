@@ -1,4 +1,10 @@
 import { expect, type Page } from "@playwright/test";
+import {
+  brandSummariesFixture,
+  integrationHealthFixture,
+  connectionConfigurationFixture,
+  historyPlanFixture,
+} from "./brand-integrations";
 import { installationV2Fixture } from "./installation";
 // Offline network emulation only. No Google credentials, live sources or private APIs.
 const catalog = {
@@ -110,6 +116,32 @@ export async function mockedAuth(
     expect(r.request().headers()["x-up-csrf"]).toBe("a".repeat(64));
     await page.context().clearCookies();
     await r.fulfill({ json: { data: { authenticated: false } } });
+  });
+  await page.route("**/api/admin/brands", (r) =>
+    r.fulfill({ json: brandSummariesFixture() }),
+  );
+  await page.route("**/api/admin/integrations/health?**", (r) =>
+    r.fulfill({ json: integrationHealthFixture() }),
+  );
+  await page.route("**/api/admin/integrations/configuration?**", (r) => {
+    expect(r.request().method()).toBe("GET"); // Never rotate for browser acceptance.
+    return r.fulfill({ json: connectionConfigurationFixture() });
+  });
+  let historyRequested = false;
+  await page.route("**/api/admin/integrations/history?**", (r) => {
+    if (r.request().method() === "POST") {
+      expect(r.request().headers()["x-up-csrf"]).toBe("a".repeat(64));
+      expect(r.request().postDataJSON()).toEqual({
+        provider: "upzero",
+        from: "2026-08-01",
+        to: "2026-08-31",
+      });
+      historyRequested = true;
+      return r.fulfill({ status: 202, json: { data: historyPlanFixture() } });
+    }
+    return r.fulfill({
+      json: { data: historyRequested ? [historyPlanFixture()] : [] },
+    });
   });
   await page.route("**/api/dashboard/**", async (r) => {
     if (r.request().url().includes("/installation"))

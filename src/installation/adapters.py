@@ -96,12 +96,15 @@ class InstallationActions:
         finally:
             connector.close()
 
-    def meta(self, c: StoreConfig) -> tuple[MetaLiveEngine, Callable[[], None]]:
-        from src.connectors.meta.live import MetaFoundationLiveConnector
+    def meta(
+        self, c: StoreConfig, *, creative: bool = False
+    ) -> tuple[MetaLiveEngine, Callable[[], None]]:
+        from src.connectors.meta.live import MetaCreativeLiveConnector, MetaFoundationLiveConnector
         from src.intelligence.live.cli import validated_secret_reference
 
         account = self.actions.prerequisites.account(c)
-        connector = MetaFoundationLiveConnector(
+        connector_type = MetaCreativeLiveConnector if creative else MetaFoundationLiveConnector
+        connector = connector_type(
             account,
             project=self.actions.transport.config.project,
             live=True,
@@ -146,6 +149,20 @@ class InstallationActions:
             cfg, connector = self.upzero(c, active=True)
             try:
                 repo = self.actions.repository()
+                if row["resource"] == "catalog":
+                    from src.ingestion.catalog import CatalogSnapshot
+
+                    if row["unit_kind"] != "SYNC_SNAPSHOT" or set(row["filters"]) != {
+                        "catalog_as_of"
+                    }:
+                        raise SafeError("catalog_work_contract_invalid")
+                    # Do not reset any child run or checkpoint. A slice shares one
+                    # page/time ceiling across products, variants, attributes and stock.
+                    return CatalogSnapshot(Engine(cfg, repo, connector)).advance(
+                        row["filters"]["catalog_as_of"],
+                        page_budget=limits.page_budget,
+                        soft_time_budget_seconds=limits.soft_time_budget_seconds,
+                    )
                 expected = digest(
                     [
                         c.store_id,

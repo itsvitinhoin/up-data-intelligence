@@ -135,6 +135,36 @@
     "mode": "NULLABLE"
   },
   {
+    "name": "frequency",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "actions",
+    "type": "JSON",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "action_values",
+    "type": "JSON",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "purchase_action_type",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "meta_reported_purchases",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "meta_reported_purchase_value",
+    "type": "NUMERIC",
+    "mode": "NULLABLE"
+  },
+  {
     "name": "version_id",
     "type": "STRING",
     "mode": "NULLABLE"

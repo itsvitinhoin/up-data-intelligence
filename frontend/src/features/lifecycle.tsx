@@ -42,7 +42,7 @@ function DemoRetentionDashboard() {
         acompanhamento até a data de fim.
       </Notice>
       {q.isPending ? (
-        <Loading />
+        <Loading page />
       ) : q.isError ? (
         <Failure retry={() => void q.refetch()} />
       ) : !q.data.cohorts.length ? (
@@ -191,7 +191,7 @@ function DemoRetentionDashboard() {
 }
 export function ConversionVelocity() {
   const q = useResource("lifecycle");
-  if (q.isPending) return <Loading />;
+  if (q.isPending) return <Loading page />;
   if (q.isError) return <Failure retry={() => void q.refetch()} />;
   const c = q.data.conversion;
   const max = Math.max(1, ...c.buckets.map((b) => b.percent ?? 0));

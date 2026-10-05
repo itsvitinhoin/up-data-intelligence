@@ -135,9 +135,13 @@ class DashboardService:
         cursor_key: bytes,
         *,
         installation_v2: bool = False,
+        catalog_enabled: bool = False,
+        creatives_enabled: bool = False,
     ):
         self.project = project
         self.installation_v2 = installation_v2
+        self.catalog_enabled = catalog_enabled
+        self.creatives_enabled = creatives_enabled
         self.policies = dict(policies)
         self.reader_factory = reader_factory
         self.cursors = CursorCodec(cursor_key)
@@ -161,6 +165,9 @@ class DashboardService:
         self.principal = principal
         self.request_id = uuid4().hex
         self.reader = self.reader_factory()
+        from src.dashboard.catalog import CatalogReader
+
+        self.catalog_reader: CatalogReader | None = None
         policy = self.policies.get(grant.store_id)
         if self.installation_v2:
             from src.installation.publication import resolve_policy
@@ -174,6 +181,48 @@ class DashboardService:
         self.policy = policy
         rows = self._query("head", store=grant.store_id, policy=self.policy.policy_hash)
         self.publication = resolve_publication(rows, self.policy)
+
+    def _catalog(self, identifiers: list[str]) -> dict[str, dict[str, Any]]:
+        if not self.catalog_enabled:
+            return {}
+        from src.dashboard.catalog import CatalogReader
+
+        if self.catalog_reader is None:
+            self.catalog_reader = CatalogReader(
+                self.project, self.reader, self.grant.store_id, None, self.request_id
+            )
+        return self.catalog_reader.variants(identifiers)
+
+    def _catalog_family(self, product_id: str) -> dict[str, dict[str, Any]]:
+        if not self.catalog_enabled or self.catalog_reader is None:
+            return {}
+        return self.catalog_reader.family(product_id)
+
+    def creatives(
+        self,
+        principal: Principal | None,
+        grant: Grant,
+        *,
+        from_day: str | None = None,
+        to_day: str | None = None,
+    ) -> dict[str, Any]:
+        self._scope(principal, grant)
+        start, end = self._interval(from_day, to_day)
+        if not self.creatives_enabled:
+            raise ReadError(424, "creative_coverage_unavailable")
+        from src.dashboard.creatives import CreativeReader
+
+        rows = CreativeReader(
+            self.project, self.reader, grant.store_id, self.request_id, self.publication.snapshot_at
+        ).read(start, end)
+        return self._response(
+            rows,
+            limitations=[
+                "meta_reported_not_commercial_attribution",
+                "creative_preview_current_not_historical",
+                "reach_frequency_period_not_certified",
+            ],
+        )
 
     def installation(self, principal: Principal | None, grant: Grant) -> dict[str, Any]:
         from src.dashboard.installation import InstallationReader
@@ -666,14 +715,21 @@ class DashboardService:
                 "timezone": self.policy.reporting_timezone,
             },
         )
+        catalog = self._catalog(
+            sorted({row["variant_id"] for row in selected if row.get("variant_id")})
+        )
         return self._response(
             [
                 {
                     "store_id": self.grant.store_id,
                     "product_key": row["product_key"],
-                    "product_id": row.get("product_id"),
+                    "product_id": row.get("product_id")
+                    or catalog.get(row.get("variant_id") or "", {}).get("product_id"),
                     "sku": row.get("sku"),
-                    "name": row.get("name"),
+                    "name": row.get("name")
+                    or catalog.get(row.get("variant_id") or "", {}).get("name"),
+                    "reference": catalog.get(row.get("variant_id") or "", {}).get("reference"),
+                    "catalog": catalog.get(row.get("variant_id") or "", {}).get("catalog"),
                     "requested_revenue": decimal_string(row.get("requested")),
                     "fulfilled_revenue": decimal_string(row.get("fulfilled")),
                     "units_requested": decimal_string(row.get("units_requested")),

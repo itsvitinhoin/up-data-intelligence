@@ -26,6 +26,12 @@ CREATE TABLE IF NOT EXISTS `${project_id}.up_core.meta_live_insights_daily` (
   `ctr` NUMERIC,
   `breakdown_values` JSON,
   `reporting_configuration` JSON,
+  `frequency` NUMERIC,
+  `actions` JSON,
+  `action_values` JSON,
+  `purchase_action_type` STRING,
+  `meta_reported_purchases` NUMERIC,
+  `meta_reported_purchase_value` NUMERIC,
   `version_id` STRING,
   `payload_hash` STRING,
   `source_system` STRING

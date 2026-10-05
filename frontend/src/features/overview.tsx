@@ -27,7 +27,7 @@ export function OverviewPage() {
       />
       {!b2b && <FiltersBar />}
       {q.isPending ? (
-        <Loading />
+        <Loading page />
       ) : q.isError ? (
         <Failure
           retry={() => void q.refetch()}

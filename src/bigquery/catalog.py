@@ -2,8 +2,10 @@
 
 from dataclasses import dataclass
 
-from src.admin.schema import BINDINGS, OPERATIONS
+from src.admin.schema import BINDINGS, CONNECTION_OPERATIONS, OPERATIONS
+from src.connectors.meta.enrichment_schema import FIELDS as META_ENRICHMENT_FIELDS
 from src.connectors.meta.foundation_schema import SCHEMAS as META_FOUNDATION_SCHEMAS
+from src.connectors.upzero.catalog_schema import RESOURCES as CATALOG_RESOURCES
 from src.control_plane.model import REGISTRY, REGISTRY_FIELDS
 from src.ingestion.metrics import COUNTERS
 from src.installation.schema import PLANS as INSTALLATION_PLANS
@@ -93,7 +95,7 @@ TABLES["workspace_store_bindings"] = Table(
 TABLES["onboarding_operations"] = Table(
     "up_ops", OPERATIONS, None, ("admin_subject_hash", "idempotency_key", "store_id")
 )
-for name in ("customers", "orders", "analytics_facts"):
+for name in ("customers", "orders", "analytics_facts", *CATALOG_RESOURCES):
     TABLES["upzero_" + name] = Table(
         "up_raw", COMMON | RAW, "ingested_at", ("store_id", "resource")
     )
@@ -107,6 +109,28 @@ for name, fields, partition, key in [
     TABLES[name + "_versions"] = Table(
         "up_core", COMMON | META | fields, "observed_at", ("store_id", key)
     )
+for name, fields, key in CATALOG_RESOURCES.values():
+    TABLES[name] = Table("up_core", COMMON | META | fields, None, ("store_id", key))
+    TABLES[name + "_versions"] = Table(
+        "up_core", COMMON | META | fields, "observed_at", ("store_id", key)
+    )
+# Snapshot membership is separate from changed entity versions. An unchanged
+# product still has a fresh source observation, without manufacturing a version.
+TABLES["catalog_observations"] = Table(
+    "up_core",
+    COMMON
+    | {
+        "run_id": "STRING",
+        "resource": "STRING",
+        "entity_id": "STRING",
+        "entity_version_id": "STRING",
+        "raw_record_id": "STRING",
+        "payload_hash": "STRING",
+        "observed_at": "TIMESTAMP",
+    },
+    "observed_at",
+    ("store_id", "run_id", "resource"),
+)
 TABLES["touchpoints"] = Table(
     "up_core",
     COMMON | META | EVENT | {"touchpoint_id": "STRING", "source_fact_id": "STRING"},
@@ -268,11 +292,18 @@ META_TABLE_NAMES.add("meta_account_bindings")
 
 for legacy_name, foundation_fields in META_FOUNDATION_SCHEMAS.items():
     live_name = legacy_name.replace("meta_", "meta_live_", 1)
-    live_fields = foundation_fields | {
-        "version_id": "STRING",
-        "payload_hash": "STRING",
-        "source_system": "STRING",
-    }
+    resource = (
+        "insights" if legacy_name == "meta_insights_daily" else legacy_name.removeprefix("meta_")
+    )
+    live_fields = (
+        foundation_fields
+        | META_ENRICHMENT_FIELDS.get(resource, {})
+        | {
+            "version_id": "STRING",
+            "payload_hash": "STRING",
+            "source_system": "STRING",
+        }
+    )
     TABLES[live_name] = Table(
         "up_core",
         live_fields,
@@ -284,6 +315,19 @@ for legacy_name, foundation_fields in META_FOUNDATION_SCHEMAS.items():
     )
     META_TABLE_NAMES.update((live_name, live_name + "_versions"))
 
+# Ad/day metrics cannot share the campaign/day table or certify its coverage.
+for name, partition in (
+    ("meta_creative_insights_daily", "date_start"),
+    ("meta_creative_insights_daily_versions", "observed_at"),
+):
+    TABLES[name] = Table(
+        "up_core",
+        dict(TABLES["meta_live_insights_daily"].fields),
+        partition,
+        ("store_id", "account_id", "ad_id"),
+    )
+    META_TABLE_NAMES.add(name)
+
 TABLES[REGISTRY] = Table("up_ops", REGISTRY_FIELDS, None, ("status", "store_id"))
 
 # Installation ledger: operational metadata only; existing datasets/schemas unchanged.
@@ -291,4 +335,16 @@ TABLES[REGISTRY] = Table("up_ops", REGISTRY_FIELDS, None, ("status", "store_id")
 TABLES["installation_plans"] = Table("up_ops", INSTALLATION_PLANS, None, ("store_id", "status"))
 TABLES["installation_work_units"] = Table(
     "up_ops", INSTALLATION_UNITS, None, ("store_id", "status", "plan_id", "resource")
+)
+
+# Extension plans are a distinct V2 purpose ledger. Initial plans/units remain intact.
+for name, original in (
+    ("installation_extension_plans", "installation_plans"),
+    ("installation_extension_work_units", "installation_work_units"),
+):
+    spec = TABLES[original]
+    TABLES[name] = Table(spec.dataset, dict(spec.fields), spec.partition, spec.cluster)
+
+TABLES["integration_operations"] = Table(
+    "up_ops", CONNECTION_OPERATIONS, "created_at", ("store_id", "provider", "status")
 )

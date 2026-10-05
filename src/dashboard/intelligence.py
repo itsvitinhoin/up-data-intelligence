@@ -143,18 +143,21 @@ class IntelligenceDashboardService(DashboardService):
             ("influence_scope", scope),
         ):
             if value is not None:
-                if field not in SCHEMAS[name].fields:
+                if field not in SCHEMAS[name].fields and not (
+                    field == "customer_id" and name == "analytics_campaign_performance_daily"
+                ):
                     raise ReadError(400, "invalid_intelligence_filter")
                 key = field.removesuffix("_id")
                 params[key] = ("STRING", value)
-                where += f" AND {field}=@{key}"
+                if not (field == "customer_id" and name == "analytics_campaign_performance_daily"):
+                    where += f" AND {field}=@{key}"
         if influenced_only:
             where += " AND paid_media_influenced IS TRUE"
         if name == "analytics_campaign_performance_daily":
             from src.dashboard.intelligence_queries import campaigns
 
             params["campaign"] = ("STRING", campaign)
-            sql = campaigns(self.project)
+            sql = campaigns(self.project, customer_scoped=customer is not None)
         elif name == "analytics_campaign_customer_performance":
             from src.dashboard.intelligence_queries import campaign_customers_period
 
@@ -222,13 +225,18 @@ class IntelligenceDashboardService(DashboardService):
             "campaign",
             "campaignOrders",
             "campaignCustomers",
+            "customerCampaigns",
             "influencedOrders",
         }
         if resource not in period_resources and (
             start != self.publication.report_from or end != self.publication.report_to
         ):
             raise ReadError(424, "intelligence_period_not_materialized")
-        customer = entity if resource in {"customer360", "timeline", "customerProducts"} else None
+        customer = (
+            entity
+            if resource in {"customer360", "timeline", "customerProducts", "customerCampaigns"}
+            else None
+        )
         campaign = (
             entity if resource in {"campaign", "campaignCustomers", "campaignOrders"} else None
         )
@@ -366,6 +374,7 @@ class IntelligenceDashboardService(DashboardService):
             "influencedOrders": "analytics_customer_orders_summary",
             "influencedCustomers": "analytics_customer_paid_influence",
             "campaigns": "analytics_campaign_performance_daily",
+            "customerCampaigns": "analytics_campaign_performance_daily",
             "campaign": "analytics_campaign_performance_daily",
             "campaignCustomers": "analytics_campaign_customer_performance",
             "campaignOrders": "analytics_campaign_order_performance",
@@ -412,7 +421,7 @@ class IntelligenceDashboardService(DashboardService):
                 if k not in DENIED | {"row_key", "policy_hash", "generation"}
             )
         )
-        if resource in {"campaigns", "campaign"}:
+        if resource in {"campaigns", "campaign", "customerCampaigns"}:
             fields = "campaign_id campaign_name campaign_status spend observed_spend impressions clicks ctr cpc cpm influenced_customers influenced_orders requested_revenue_influenced fulfilled_revenue_influenced roas_requested roas_fulfilled"
         result = [{**safe(r, fields, name), "record_key": r["row_key"]} for r in rows]
         token = self.cursors.encode(context, rows[-1]["row_key"]) if more and rows else None

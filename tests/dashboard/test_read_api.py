@@ -966,3 +966,22 @@ def test_customer_period_unauthorized_store_fails_before_any_read(customer_perio
         )
     assert error.value.status == 403
     assert reader.calls == []
+
+
+def test_read_diagnostics_do_not_change_query_budget_or_cache_policy():
+    budget = ReadBudget(PROJECT, "southamerica-east1", 100, 200)
+    client = Mock()
+    client.query.return_value = Mock(total_bytes_processed=7, slot_millis=11, cache_hit=False)
+    client.query.return_value.result.return_value = []
+    session = BigQueryReadSession(client, budget)
+    for _ in range(2):
+        session.query(
+            build(PROJECT, "head"), request_id="synthetic", store_id="mx-fashion", generation=None
+        )
+    assert session.query_count == 2
+    assert session.bytes_processed == 14 and session.slot_ms == 22
+    assert session.cache_hits == 0 and session.query_duration_ms >= 0
+    assert session.reserved_bytes == 200
+    assert all(
+        call.kwargs["job_config"].use_query_cache is False for call in client.query.call_args_list
+    )

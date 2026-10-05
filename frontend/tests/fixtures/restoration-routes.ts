@@ -1,3 +1,4 @@
+import { creative } from "./creatives";
 import type { Page } from "@playwright/test";
 import * as data from "./restoration";
 import { installationFixture } from "./installation";
@@ -24,6 +25,7 @@ export async function restorationResources(page: Page, preview = false) {
       `customers/${customer}/intelligence`,
       `customers/${customer}/timeline`,
       `customers/${customer}/products`,
+      `customers/${customer}/campaigns`,
       "orders/influenced",
     ].includes(path);
     const responses: Record<string, unknown> = {
@@ -35,6 +37,7 @@ export async function restorationResources(page: Page, preview = false) {
       geography: data.geography,
       performance: data.performance,
       campaigns: [data.campaign],
+      creatives: [creative],
       acquisition: {
         buyers_observed: 1,
         first_purchase_customers_observed: 1,
@@ -50,6 +53,7 @@ export async function restorationResources(page: Page, preview = false) {
       [`customers/${customer}/intelligence`]: data.customer360,
       [`customers/${customer}/timeline`]: data.timeline,
       [`customers/${customer}/products`]: data.customerProducts,
+      [`customers/${customer}/campaigns`]: [data.campaign],
       [`campaigns/${campaign}`]: [data.campaign],
       [`campaigns/${campaign}/customers`]: data.campaignCustomers,
       [`campaigns/${campaign}/orders`]: data.campaignOrders,

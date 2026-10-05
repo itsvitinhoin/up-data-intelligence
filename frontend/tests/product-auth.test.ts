@@ -201,8 +201,15 @@ describe("authenticated product BFF", () => {
       ).toBe(status);
     },
   );
-  it("scope tampering cannot issue business request", async () => {
-    const call = vi.fn().mockResolvedValue(Response.json(catalog));
+  it("private API denial survives scope tampering without a redundant catalog request", async () => {
+    const call = vi
+      .fn()
+      .mockResolvedValue(
+        Response.json(
+          { error: { code: "workspace_forbidden" } },
+          { status: 403 },
+        ),
+      );
     expect(
       (
         await liveRead(
@@ -278,10 +285,7 @@ describe("authenticated product BFF", () => {
         limitations: ["history_incomplete"],
       },
     };
-    const call = vi
-      .fn()
-      .mockResolvedValueOnce(Response.json(catalog))
-      .mockResolvedValueOnce(Response.json(envelope));
+    const call = vi.fn().mockResolvedValueOnce(Response.json(envelope));
     const result = await liveRead(
       request("/api/dashboard/overview?" + scope + "&to=2026-10-02"),
       "overview",
@@ -290,9 +294,12 @@ describe("authenticated product BFF", () => {
     );
     expect(result.status).toBe(200);
     expect(await result.json()).toEqual(envelope);
-    expect(call.mock.calls[1][1]).toContain("to=2026-10-03");
-    expect(call.mock.calls[1][1]).not.toContain("store_id=");
+    expect(call.mock.calls[0][1]).toContain("to=2026-10-03");
+    expect(call.mock.calls[0][1]).not.toContain("store_id=");
     expect(result.headers.get("cache-control")).toBe("private, no-store");
+    expect(call).toHaveBeenCalledTimes(1);
+    expect(call.mock.calls[0][1]).not.toBe("/v1/session");
+    expect(result.headers.get("server-timing")).toMatch(/^bff;dur=\d+/);
   });
   it("B2C has no silent demo", async () => {
     const c = {
@@ -312,7 +319,7 @@ describe("authenticated product BFF", () => {
         )
       ).status,
     ).toBe(424);
-    expect(call).toHaveBeenCalledTimes(1);
+    expect(call).not.toHaveBeenCalled();
   });
   it("source architecture uses memory persistence and clears SDK, never token React state or browser storage", () => {
     const s = readFileSync("src/services/auth/client.ts", "utf8");

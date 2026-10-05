@@ -1,5 +1,8 @@
+import { parseCreatives, type LiveCreative } from "./creatives";
 import {
   parseOrderDetail,
+  parseCatalogEvidence,
+  type CatalogEvidence,
   parseProductDetail,
   parseGeography,
   type LiveOrderDetail,
@@ -111,6 +114,8 @@ export type LiveOverview = {
   }[];
 };
 export type LiveProduct = {
+  reference?: string | null;
+  catalog?: CatalogEvidence | null;
   store_id: string;
   product_key: string;
   product_id: string | null;
@@ -429,6 +434,7 @@ export type ReadResourceMap = IntelligenceResourceMap & {
   product: LiveProductDetail;
   funnel: LiveFunnel;
   geography: LiveGeography;
+  creatives: LiveCreative[];
 };
 export type ReadResource = keyof ReadResourceMap;
 export function decodeReadEnvelope<K extends ReadResource>(
@@ -491,6 +497,7 @@ export function decodeReadEnvelope<K extends ReadResource>(
       return parseProductDetail(v, scope, customerId, parseProduct);
     },
     geography: parseGeography,
+    creatives: (v) => parseCreatives(v, meta),
   };
   const data = parsers[resource as Exclude<ReadResource, IntelligenceResource>](
     payload.data,
@@ -533,6 +540,12 @@ function parseProduct(value: unknown, scope: LiveScope): LiveProduct {
   return {
     store_id: text(row.store_id),
     product_key: text(row.product_key),
+    ...(row.reference === undefined
+      ? {}
+      : { reference: nullableText(row.reference) }),
+    ...(row.catalog === undefined
+      ? {}
+      : { catalog: parseCatalogEvidence(row.catalog) }),
     product_id: nullableText(row.product_id),
     sku: nullableText(row.sku),
     name: nullableText(row.name),
@@ -750,6 +763,7 @@ export function createHttpApi(baseUrl: string, fetcher: typeof fetch = fetch) {
         customer360: `/v1/customers/${encodeURIComponent(entity ?? "")}/intelligence`,
         timeline: `/v1/customers/${encodeURIComponent(entity ?? "")}/timeline`,
         customerProducts: `/v1/customers/${encodeURIComponent(entity ?? "")}/products`,
+        customerCampaigns: `/v1/customers/${encodeURIComponent(entity ?? "")}/campaigns`,
         influencedOrders: "/v1/orders/influenced",
         influencedCustomers: "/v1/customers/influenced",
       };
@@ -782,6 +796,10 @@ export function createHttpApi(baseUrl: string, fetcher: typeof fetch = fetch) {
       ),
     acquisition: (scope: LiveScope, options?: ReadOptions) =>
       request("/v1/acquisition", scope, parseAcquisition, options),
+    creatives: (scope: LiveScope, options?: ReadOptions) =>
+      request("/v1/creatives", scope, (v) => v, options).then((r) =>
+        decodeReadEnvelope("creatives", r),
+      ),
     geography: (scope: LiveScope, options?: ReadOptions) =>
       request("/v1/geography", scope, parseGeography, options),
     overview: async (scope: LiveScope, options?: ReadOptions) => {

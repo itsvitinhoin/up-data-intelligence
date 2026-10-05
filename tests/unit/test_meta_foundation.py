@@ -513,8 +513,10 @@ def test_proposed_schemas_are_separate_and_bq_date_merge_supported():
     proposed = json.loads(Path("infra/terraform/meta_tables.proposed.json").read_text())
     from src.intelligence.live.schema import META_ACTIVE
 
-    assert set(proposed) == META_TABLE_NAMES - META_ACTIVE
-    assert set(active) & META_TABLE_NAMES == META_ACTIVE
+    creative_tables = {"meta_creative_insights_daily", "meta_creative_insights_daily_versions"}
+
+    assert set(proposed) == META_TABLE_NAMES - META_ACTIVE - creative_tables
+    assert set(active) & META_TABLE_NAMES == META_ACTIVE | creative_tables
     assert len(proposed) == 10  # Legacy current/version family only.
     for table in META_TABLE_NAMES:
         schema = json.loads(Path(f"infra/terraform/schemas/{table}.json").read_text())

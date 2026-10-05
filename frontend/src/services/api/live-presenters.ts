@@ -126,6 +126,8 @@ export function productView(r: LiveProduct | LiveProductDetail): Product {
   return {
     id: r.product_key,
     canonicalProductId: r.product_id,
+    reference: r.reference ?? null,
+    catalog: r.catalog ?? null,
     name: r.name,
     sku: r.sku,
     variantId: "variant_id" in r ? r.variant_id : null,
@@ -141,15 +143,47 @@ export function productView(r: LiveProduct | LiveProductDetail): Product {
     views: null,
     cart: null,
     checkout: null,
-    stock: null,
+    stock: "stock" in r ? decimalQuantity(r.stock) : null,
+    variants:
+      "variants" in r && r.variants
+        ? r.variants.map((v) => ({
+            color: v.color,
+            size: v.size,
+            sku: v.sku,
+            stock: decimalQuantity(v.stock),
+            hex: v.color_hex,
+          }))
+        : "size" in r && r.size && r.catalog
+          ? [
+              {
+                color: r.color ?? null,
+                size: r.size,
+                sku: r.sku,
+                stock: decimalQuantity(r.stock),
+                hex: r.color_hex ?? null,
+              },
+            ]
+          : undefined,
+    variantSales:
+      "variants" in r && r.variants
+        ? r.variants.map((v) => ({
+            color: v.color,
+            size: v.size,
+            units: decimalQuantity(v.units_fulfilled),
+          }))
+        : undefined,
+    variantSalesBasis:
+      "variants" in r && r.variants
+        ? "observed_line_gross_current_catalog"
+        : undefined,
     sellThrough: null,
     turnover: null,
     coverage: null,
-    color: null,
-    active: null,
-    salePrice: null,
+    color: "color" in r ? (r.color ?? null) : null,
+    active: "active" in r ? (r.active ?? null) : null,
+    salePrice: "sale_price" in r ? (r.sale_price ?? null) : null,
     category: null,
-    colorHex: null,
+    colorHex: "color_hex" in r ? (r.color_hex ?? null) : null,
   };
 }
 export function campaignView(r: IntelligenceRow): Campaign {
@@ -192,8 +226,43 @@ export function timelineView(
     store_id: m.store_id,
     type,
     date: requiredText(r, "occurred_at"),
-    title: type,
-    detail: [rowText(r, "channel"), rowText(r, "order_status")]
+    title:
+      (
+        {
+          register_submitted: "Cadastro enviado",
+          register_approved: "Cadastro aprovado",
+          session: "Sessão observada",
+          product_view: "Produto visualizado",
+          add_to_cart: "Produto adicionado ao carrinho",
+          cart_created: "Carrinho criado",
+          checkout_started: "Checkout iniciado",
+          order_created: "Pedido criado",
+          order_status_change: "Status do pedido atualizado",
+          purchase: "Compra observada",
+          repeat_purchase: "Recompra observada",
+          purchase_item: "Item de compra observado",
+          paid_touch: "Touchpoint de mídia observado",
+        } as Record<string, string>
+      )[type] ?? type,
+    orderId: rowText(r, "order_id"),
+    productId: rowText(r, "product_id"),
+    variantId: rowText(r, "variant_id"),
+    campaignId: rowText(r, "campaign_id"),
+    adsetId: rowText(r, "adset_id"),
+    adId: rowText(r, "ad_id"),
+    detail: [
+      rowText(r, "channel"),
+      rowText(r, "order_status"),
+      ...["campaign_id", "adset_id", "ad_id"].flatMap((key) => {
+        const value = rowText(r, key);
+        const label = {
+          campaign_id: "Campanha",
+          adset_id: "Conjunto",
+          ad_id: "Anúncio",
+        }[key];
+        return value ? [`${label}: ${value}`] : [];
+      }),
+    ]
       .filter((v) => v !== null)
       .join(" · "),
     evidence: r.confidence_type === "DIRECT" ? "DIRECT" : "SUPPORTED",

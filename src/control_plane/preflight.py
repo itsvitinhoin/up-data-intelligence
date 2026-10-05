@@ -130,7 +130,26 @@ class Prerequisites:
         if c.meta_enabled:
             self.account(c)
 
+    def extension_admission(self, c: StoreConfig) -> None:
+        """An installed-store extension exclusively owns its bounded checkpoints.
+
+        Dispatchers share store-dispatch-global with the extension selector. Read
+        this guard again inside the worker store lease, never silently resume a
+        checkpoint owned by another V2 graph. Feature is explicit server-side.
+        """
+        import os
+
+        if os.environ.get("UP_INSTALLATION_EXTENSIONS_ENABLED") != "1":
+            return
+        plans = self.rows(c.store_id, "up_ops.installation_extension_plans")
+        if any(p.get("status") != "COMPLETE" for p in plans):
+            raise SafeError("store_extension_in_progress")
+        units = self.rows(c.store_id, "up_ops.installation_extension_work_units")
+        if any(u.get("status") != "COMPLETE" for u in units):
+            raise SafeError("store_extension_in_progress")
+
     def check(self, c: StoreConfig, pipeline: str, window: Window) -> None:
+        self.extension_admission(c)
         if not c.eligible(pipeline):
             raise SafeError("store_not_eligible")
         c.ready()
@@ -221,7 +240,10 @@ class Prerequisites:
                 except (KeyError, ValueError):
                     continue
             covered = prefix(
-                c.history_from or "",
+                min(
+                    instant(c.history_from or ""),
+                    instant(c.facts_coverage_from or c.history_from or ""),
+                ).isoformat(),
                 window.as_of,
                 [(a.isoformat(), b.isoformat()) for a, b in intervals],
             )

@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PageLoader } from "@/components/page-loader";
 import {
   Select,
   SelectContent,
@@ -189,14 +190,15 @@ export function Notice({
     </div>
   );
 }
-export function Loading() {
-  return (
+export function Loading({ page = false }: { page?: boolean }) {
+  const skeleton = (
     <div className="metrics" role="status" aria-label="Carregando dados">
       {[0, 1, 2, 3].map((i) => (
         <Skeleton key={i} className="h-44 rounded-[20px] bg-white/5" />
       ))}
     </div>
   );
+  return page ? <PageLoader fallback={skeleton} /> : skeleton;
 }
 export function Empty({
   title = "Nenhum resultado neste recorte",

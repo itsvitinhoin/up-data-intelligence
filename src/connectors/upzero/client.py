@@ -17,12 +17,21 @@ PATHS = {
     "customers": "/external/v1/customers",
     "orders": "/external/v1/orders",
     "analytics_facts": "/external/v1/analytics/facts",
+    "products": "/external/v1/products",
+    "variants": "/external/v1/variants",
+    "attributes": "/external/v1/attributes",
+    "inventory": "/external/v1/inventory/availability",
 }
 FILTERS = {
     "customers": {"start_date", "end_date", "limit"},
     "orders": {"start_date", "end_date", "status", "limit"},
     "analytics_facts": {"from", "to", "limit"},
+    "products": {"limit", "include_inactive", "catalog_as_of"},
+    "variants": {"limit", "catalog_as_of"},
+    "attributes": {"catalog_as_of"},
+    "inventory": {"variant_id", "variant_ids", "catalog_as_of"},
 }
+CURSOR_RESOURCES = frozenset({"analytics_facts", "products", "variants"})
 
 
 class UpZeroConnector:
@@ -74,7 +83,21 @@ class UpZeroConnector:
                             response.content,
                             object_pairs_hook=unique,
                             parse_constant=lambda _: (_ for _ in ()).throw(ValueError()),
+                            # Catalog/stock decimal literals must never become floats.
+                            parse_float=(
+                                str if resource in {"products", "variants", "inventory"} else float
+                            ),
                         )
+                        if resource == "attributes":
+                            if not isinstance(data, list):
+                                raise ValueError
+                            data = {"data": data}
+                        elif resource == "inventory":
+                            if not isinstance(data, dict) or not data.get("variant_id"):
+                                raise ValueError
+                            if str(data["variant_id"]) != str(params.get("variant_id")):
+                                raise SafeError("inventory_variant_mismatch")
+                            data = {"data": [{**data, "id": data["variant_id"]}]}
                         if not isinstance(data, dict) or not isinstance(data.get("data"), list):
                             raise ValueError
                         return sanitize(data, (self._key,)), len(response.content)
@@ -111,24 +134,80 @@ class UpZeroConnector:
     ) -> Iterator[Page]:
         if resource not in PATHS or set(filters) - FILTERS[resource]:
             raise SafeError("unsupported_resource_or_filter")
+        if "catalog_as_of" in filters:
+            from src.utils.data import timestamp
+
+            try:
+                if not isinstance(filters["catalog_as_of"], str):
+                    raise ValueError
+                timestamp(filters["catalog_as_of"])
+            except (ValueError, TypeError):
+                raise SafeError("catalog_snapshot_required") from None
+        variant_ids = filters.get("variant_ids")
+        if variant_ids is not None:
+            if (
+                resource != "inventory"
+                or "variant_id" in filters
+                or (
+                    not isinstance(variant_ids, list)
+                    or len(variant_ids) > 10000
+                    or any(
+                        not isinstance(v, str) or not v.strip() or len(v) > 200 for v in variant_ids
+                    )
+                    or len(set(variant_ids)) != len(variant_ids)
+                    or variant_ids != sorted(variant_ids)
+                    or "catalog_as_of" not in filters
+                )
+            ):
+                raise SafeError("inventory_snapshot_invalid")
+            if not variant_ids:
+                return
+        elif resource == "inventory" and (
+            not isinstance(filters.get("variant_id"), str)
+            or not filters["variant_id"].strip()
+            or len(filters["variant_id"]) > 200
+        ):
+            raise SafeError("inventory_variant_required")
         limit = int(filters.get("limit", 1000 if resource == "analytics_facts" else 200))
         if not 1 <= limit <= (1000 if resource == "analytics_facts" else 200):
             raise SafeError("invalid_limit")
         if resource == "analytics_facts" and not all(filters.get(k) for k in ("from", "to")):
             raise SafeError("fixed_window_required")
-        pos = position or ({"page": 1} if resource == "orders" else {})
+        pos = position or (
+            {"index": 0} if variant_ids is not None else {"page": 1} if resource == "orders" else {}
+        )
+        if variant_ids is not None and (
+            set(pos) != {"index"}
+            or type(pos["index"]) is not int
+            or not 0 <= pos["index"] < len(variant_ids)
+        ):
+            raise SafeError("inventory_snapshot_position_invalid")
         seen: set[str] = set()
         for _ in range(self.max_pages):
             token = json.dumps(pos, sort_keys=True)
             if token in seen:
                 raise SafeError("cursor_repeated")
             seen.add(token)
-            payload, size = self._get(resource, {**filters, "limit": limit, **pos})
+            # catalog_as_of identifies a durable logical snapshot/checkpoint. It
+            # is internal metadata, never an undocumented provider query filter.
+            params = {k: v for k, v in filters.items() if k not in {"catalog_as_of", "variant_ids"}}
+            if variant_ids is not None:
+                params["variant_id"] = variant_ids[pos["index"]]
+            else:
+                params.update(pos)
+            if resource not in {"attributes", "inventory"}:
+                params["limit"] = limit
+            payload, size = self._get(resource, params)
             rows = payload["data"]
             error = None
             nxt: dict[str, Any] | None = None
             try:
-                if resource == "customers" and rows:
+                if variant_ids is not None:
+                    if len(rows) != 1:
+                        error = "inventory_snapshot_response_invalid"
+                    elif pos["index"] + 1 < len(variant_ids):
+                        nxt = {"index": pos["index"] + 1}
+                elif resource == "customers" and rows:
                     ids = [int(r["id"]) for r in rows]
                     if ids != sorted(ids, reverse=True):
                         error = "after_id_no_progress"
@@ -149,7 +228,7 @@ class UpZeroConnector:
                         error = "invalid_order_pagination"
                     elif page < total:
                         nxt = {"page": page + 1}
-                elif resource == "analytics_facts" and payload.get("next_cursor") is not None:
+                elif resource in CURSOR_RESOURCES and payload.get("next_cursor") is not None:
                     cursor = payload["next_cursor"]
                     if not isinstance(cursor, str) or not cursor:
                         error = "invalid_cursor"

@@ -34,7 +34,13 @@ def table(project: str, dataset: str, name: str) -> str:
 def build(project: str, name: str, **values: object) -> Query:
     """Only project/table identifiers are interpolated; caller values are parameters."""
 
-    if name in {"order_detail", "order_detail_items", "geography", "product_evidence"}:
+    if name in {
+        "order_detail",
+        "order_detail_items",
+        "geography",
+        "product_evidence",
+        "variant_sales",
+    }:
         from src.dashboard.product_queries import build_product_read
 
         return build_product_read(project, name, **values)
@@ -289,7 +295,8 @@ GROUP BY stage ORDER BY stage"""
 WITH evidence AS (
  SELECT {product_key_sql()} AS product_key,
  IF(COUNTIF(o.customer_id IS NULL)>0,NULL,COUNT(DISTINCT o.customer_id)) AS buyers_unique,
- IF(COUNT(DISTINCT i.asset_name)=1,MAX(i.asset_name),NULL) AS name
+ IF(COUNT(DISTINCT i.asset_name)=1,MAX(i.asset_name),NULL) AS name,
+ IF(COUNT(DISTINCT i.variant_id)=1,MAX(i.variant_id),NULL) AS variant_id
  FROM {c("order_items")} AS i {history}
  JOIN {c("orders")} AS o {history} ON o.store_id=i.store_id AND o.order_id=i.order_id
  AND o.source_system='upzero' AND o.version_id=i.parent_order_version_id
@@ -310,7 +317,7 @@ WITH evidence AS (
  WHERE {scope} AND order_date>=@from AND order_date<@to
  GROUP BY product_key,product_id,sku
 )
-SELECT g.*,e.buyers_unique,e.name FROM grouped g LEFT JOIN evidence e USING(product_key) WHERE g.cursor_key>@after AND (@product IS NULL OR g.product_key=@product) ORDER BY g.cursor_key LIMIT @limit"""
+SELECT g.*,e.buyers_unique,e.name,e.variant_id FROM grouped g LEFT JOIN evidence e USING(product_key) WHERE g.cursor_key>@after AND (@product IS NULL OR g.product_key=@product) ORDER BY g.cursor_key LIMIT @limit"""
     elif name == "funnel_daily":
         sql = f"""/* dashboard:funnel_daily */
 SELECT event_date,observation_complete,sessions,product_views,add_to_cart,

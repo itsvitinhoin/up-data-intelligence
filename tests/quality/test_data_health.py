@@ -212,6 +212,34 @@ def test_read_failure_is_not_fabricated_as_zero():
         checker.check(store(), AT)
 
 
+@pytest.mark.parametrize(
+    "error",
+    ["catalog_source_ambiguous", "catalog_snapshot_ambiguous", "catalog_snapshot_not_certified"],
+)
+def test_invalid_catalog_proof_is_recorded_as_blocking_health(monkeypatch, error):
+    from src.dashboard.contracts import ReadError
+
+    monkeypatch.setenv("UP_INSTALLATION_ENRICHMENT_ENABLED", "1")
+    monkeypatch.setattr(
+        "src.dashboard.catalog.CatalogReader.resolve", Mock(side_effect=ReadError(503, error))
+    )
+    checker, _ = healthy_checker(store())
+    _, findings = checker.check(store(), AT)
+    finding = next(f for f in findings if f.rule_id == "upzero_catalog_certified")
+    assert finding.failed_count == finding.checked_count == 1
+    assert finding.row("synthetic", "2026-10-04T03:00Z", "audit", AT)["record_id"] is None
+
+
+def test_catalog_health_transport_failure_remains_operational_failure(monkeypatch):
+    monkeypatch.setenv("UP_INSTALLATION_ENRICHMENT_ENABLED", "1")
+    monkeypatch.setattr(
+        "src.dashboard.catalog.CatalogReader.resolve", Mock(side_effect=TimeoutError())
+    )
+    checker, _ = healthy_checker(store())
+    with pytest.raises(TimeoutError):
+        checker.check(store(), AT)
+
+
 def test_writer_only_quality_results_and_rejects_record_payload():
     checker, transport = healthy_checker(store())
     row = Finding("no_pending_raw", 0).row("synthetic", "2026-10-04T03:00:00Z", "audit", AT)

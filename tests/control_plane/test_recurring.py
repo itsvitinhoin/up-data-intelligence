@@ -159,6 +159,36 @@ def test_meta_daily_union_gap_extra_and_deterministic_hash():
     assert meta_coverage(a, report, cp + extra, runs + er) == good
 
 
+def test_ad_daily_coverage_is_explicit_and_cannot_certify_campaigns():
+    a, checkpoints, runs = meta_days()
+    report = Insights("2026-09-01", "2026-09-04", "impression", ("7d_click",), None)
+    for cp, run in zip(checkpoints, runs, strict=True):
+        cp["resource"] = run["resource"] = "meta_creative_insights_daily"
+        cp["filters"]["insights"]["level"] = "ad"
+        cp["plan_key"] = run["plan_key"] = digest(["meta", "insights", cp["filters"], 100])
+    assert (
+        len(
+            meta_coverage(
+                a, report, checkpoints, runs, level="ad", resource="meta_creative_insights_daily"
+            )
+        )
+        == 4
+    )
+    with pytest.raises(SafeError, match="meta_complete_checkpoint_required"):
+        meta_coverage(a, report, checkpoints, runs)
+    with pytest.raises(SafeError, match="meta_complete_checkpoint_required"):
+        meta_coverage(
+            a,
+            report,
+            checkpoints[:2] + checkpoints[3:],
+            runs,
+            level="ad",
+            resource="meta_creative_insights_daily",
+        )
+    with pytest.raises(SafeError, match="meta_coverage_grain_invalid"):
+        meta_coverage(a, report, checkpoints, runs, level="ad", resource="meta_live_insights_daily")
+
+
 @pytest.mark.parametrize(
     "field,value",
     [

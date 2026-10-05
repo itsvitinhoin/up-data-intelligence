@@ -1,3 +1,4 @@
+import { creativeView } from "./creatives";
 /** Real DataApi for the approved original feature tree. No fixture imports. */
 import type {
   DataApi,
@@ -18,6 +19,7 @@ import type {
 import { decodeOverviewEnvelope } from "./http";
 import { readDashboard } from "./read-client";
 import { assertAccess, ApiError } from "./access";
+import { groupJourney } from "@/lib/journey";
 import { exclusiveToInclusive } from "@/lib/period";
 import { presentLiveOverview } from "./overview-presenter";
 import {
@@ -46,6 +48,7 @@ type ListResource =
   | "customerOrders"
   | "timeline"
   | "customerProducts"
+  | "customerCampaigns"
   | "influencedOrders"
   | "influencedCustomers"
   | "campaigns"
@@ -438,7 +441,15 @@ export function createLiveDataApi(
         case "marketing": {
           const p = (await request("performance", c, m)).data;
           if (!Array.isArray(p.series)) throw unavailable();
-          const campaignRows = (await collection("campaigns", c, m)).data;
+          const [campaignsResponse, creativesResponse] = await Promise.all([
+            collection("campaigns", c, m),
+            request("creatives", c, m).catch((error: unknown) => {
+              if (error instanceof ApiError && error.status === 424)
+                return null;
+              throw error;
+            }),
+          ]);
+          const campaignRows = campaignsResponse.data;
           const kpi = (
             label: string,
             value: string | number | null,
@@ -447,7 +458,7 @@ export function createLiveDataApi(
           ): Metric => ({ label, value: scalar(value), format, hint });
           result = {
             source: "real",
-            creatives: [],
+            creatives: creativesResponse?.data.map(creativeView) ?? [],
             summary: {
               spend: rowText(p, "meta_spend"),
               leads: null,
@@ -560,29 +571,22 @@ export function createLiveDataApi(
       const intelligence = (
         await request("customer360", full, m, { customerId: id })
       ).data;
-      const orders = (
-        await collection("customerOrders", full, m, { customerId: id })
-      ).data.map(orderView);
-      const products = (
-        await collection("customerProducts", full, m, { customerId: id })
-      ).data.map((r) => customerProductView(r, m));
-      const timeline = (
-        await collection("timeline", full, m, { customerId: id })
-      ).data
-        .map((r) => timelineView(r, id, m))
-        .sort(
-          (a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id),
-        );
-      const allCampaigns = (await collection("campaigns", full, m)).data;
-      const participating = [];
-      for (const campaign of allCampaigns) {
-        const cid = requiredText(campaign, "campaign_id");
-        const people = (
-          await collection("campaignCustomers", full, m, { customerId: cid })
-        ).data;
-        if (people.some((r) => r.customer_id === id))
-          participating.push(campaignView(campaign));
-      }
+      // customer360 pins Intelligence first; subsequent independent collections
+      // share that generation. Campaign participation is one bounded resource,
+      // never a scan of every campaign's customer list.
+      const [orderRows, productRows, timelineRows, campaignRows] =
+        await Promise.all([
+          collection("customerOrders", full, m, { customerId: id }),
+          collection("customerProducts", full, m, { customerId: id }),
+          collection("timeline", full, m, { customerId: id }),
+          collection("customerCampaigns", full, m, { customerId: id }),
+        ]);
+      const orders = orderRows.data.map(orderView);
+      const products = productRows.data.map((r) => customerProductView(r, m));
+      const timeline = groupJourney(
+        timelineRows.data.map((r) => timelineView(r, id, m)),
+      );
+      const participating = campaignRows.data.map(campaignView);
       const influence = intelligence.marketing.find(
         (r) => r.influence_scope === "LIFETIME",
       );

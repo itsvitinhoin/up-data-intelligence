@@ -4,6 +4,8 @@ import hashlib
 import os
 from typing import Any
 
+from src.admin.connections import ConnectionService
+from src.admin.history import HistoryService
 from src.dashboard.repository import BigQueryReadSession, ReadBudget
 from src.product_auth.http import WSGI, create_admin_app, create_read_app
 from src.product_auth.repository import BigQueryAccess
@@ -54,9 +56,17 @@ def compose(kind: str) -> WSGI:
                 lambda: BigQueryReadSession(client, budget),
                 cursor_key,
                 installation_v2=True,
+                catalog_enabled=os.environ.get("UP_PRODUCT_CATALOG_ENABLED") == "1",
+                creatives_enabled=os.environ.get("UP_PRODUCT_CREATIVES_ENABLED") == "1",
             )
 
-        return create_read_app(sessions, dashboard)
+        from src.admin.integration_reads import IntegrationReader
+
+        return create_read_app(
+            sessions,
+            dashboard,
+            lambda: IntegrationReader(project, BigQueryReadSession(client, budget)),
+        )
     if kind == "admin":
         from google.cloud import secretmanager
 
@@ -92,7 +102,119 @@ def compose(kind: str) -> WSGI:
                 subject_key,
             )
 
-        return create_admin_app(sessions, onboarding)
+        def history() -> HistoryService:
+            from src.installation.extension_repository import ExtensionLedger
+
+            if os.environ.get("UP_INSTALLATION_EXTENSIONS_ENABLED") != "1":
+                from src.dashboard.contracts import ReadError
+
+                raise ReadError(424, "history_management_unavailable")
+            transport = Transport(
+                client,
+                CloudConfig(
+                    project, location, 268435456, 60, False, maximum_total_bytes_billed=8589934592
+                ),
+            )
+            return HistoryService(
+                ExtensionLedger(transport),
+                lambda key: cloud_lease(os.environ["UP_PRODUCT_LEASE_BUCKET"], key),
+                bytes.fromhex(os.environ["UP_PRODUCT_SUBJECT_KEY"]),
+            )
+
+        def connections() -> ConnectionService:
+            from src.admin.connection_repository import BigQueryConnections
+            from src.admin.rotation import RotationStore
+            from src.connectors.meta.live import MetaFoundationLiveConnector
+            from src.connectors.upzero.client import UpZeroConnector
+            from src.control_plane.preflight import Prerequisites
+            from src.domain.models import SafeError
+            from src.intelligence.live.cli import validated_secret_reference
+            from src.security.secrets import resolve_secret
+
+            if os.environ.get("UP_INSTALLATION_EXTENSIONS_ENABLED") != "1":
+                from src.dashboard.contracts import ReadError
+
+                raise ReadError(424, "connection_management_unavailable")
+            transport = Transport(
+                client,
+                CloudConfig(
+                    project, location, 268435456, 60, False, maximum_total_bytes_billed=8589934592
+                ),
+            )
+
+            def probe(config: Any, provider: str, reference: str | None) -> None:
+                if provider == "upzero":
+                    if not reference:
+                        raise SafeError("approved_upzero_secret_version_required")
+                    connector = UpZeroConnector(resolve_secret(reference), attempts=1)
+                    try:
+                        page = next(connector.pages("customers", {"limit": 1}))
+                        if page.pagination_error:
+                            raise SafeError("source_verification_failed")
+                    finally:
+                        connector.close()
+                else:
+                    if provider == "meta-add":
+                        from src.connectors.meta.config import Account
+
+                        account = Account(
+                            config.store_id,
+                            config.meta_account_id,
+                            config.meta_connection_id,
+                            config.meta_api_version,
+                            config.timezone,
+                            config.currency,
+                        )
+                    else:
+                        account = Prerequisites(transport).account(config)
+                    connector_meta = MetaFoundationLiveConnector(
+                        account,
+                        project=project,
+                        live=True,
+                        confirm_store=config.store_id,
+                        confirm_account=account.account_id,
+                        token=resolve_secret(
+                            validated_secret_reference(
+                                os.environ.get("UP_META_SECRET_REFERENCE", "")
+                            )
+                        ),
+                        page_limit=1,
+                        attempts=1,
+                    )
+                    try:
+                        page = next(connector_meta.pages("accounts", None, {}))
+                        if page.pagination_error:
+                            raise SafeError("source_verification_failed")
+                        if provider == "meta-add":
+                            from src.admin.source_addition import verify_meta_account
+
+                            verify_meta_account(page, account)
+                    finally:
+                        connector_meta.close()
+
+            from src.admin.source_addition import SourceAddition
+
+            repository = BigQueryConnections(transport)
+
+            def lease(key: str) -> Any:
+                return cloud_lease(os.environ["UP_PRODUCT_LEASE_BUCKET"], key)
+
+            subject_key = bytes.fromhex(os.environ["UP_PRODUCT_SUBJECT_KEY"])
+            addition = SourceAddition(repository, history().publication, probe, lease, subject_key)
+            return ConnectionService(
+                repository,
+                RotationStore(
+                    secretmanager.SecretManagerServiceClient(),
+                    project,
+                    os.environ["UP_PRODUCT_PROJECT_NUMBER"],
+                ),
+                probe,
+                lease,
+                subject_key,
+                addition=addition.create,
+            )
+
+        return create_admin_app(sessions, onboarding, history, connections)
     raise ValueError("explicit_product_service_required")
 
 

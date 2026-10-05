@@ -127,6 +127,7 @@ def test_known_operation_reconciles_execution_no_post_retry():
         ("retry_after_deferred", "DEFERRED"),
         ("unclassified", "BLOCKED"),
         ("source_verification_outcome_unknown", "OUTCOME_UNKNOWN"),
+        ("registry_write_outcome_unknown", "OUTCOME_UNKNOWN"),
         ("bigquery_write_outcome_unknown", "RUNNING"),
     ],
 )

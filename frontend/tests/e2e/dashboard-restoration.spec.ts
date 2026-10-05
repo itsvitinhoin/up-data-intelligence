@@ -52,7 +52,9 @@ test("authenticated original tree: real adapter contracts, dialogs, tabs, filter
   await expect(
     page.getByRole("tab", { name: "Jornada", exact: true }),
   ).toBeVisible();
-  await expect(page.locator(".timeline")).toContainText("paid_touch");
+  await expect(page.locator(".timeline")).toContainText(
+    "Touchpoint de mídia observado",
+  );
   await page.getByRole("tab", { name: "Pedidos", exact: true }).click();
   await page.locator(".screen-table-body button").first().click();
   await expect(page.getByRole("dialog")).toContainText("SKU-sintético");
@@ -92,6 +94,18 @@ test("authenticated original tree: real adapter contracts, dialogs, tabs, filter
   await expect(
     page.locator(".marketing-rankings .creative-ranking"),
   ).toHaveCount(3);
+  await expect(page.locator(".creative-rank")).toHaveCount(3);
+  await page
+    .getByRole("button", { name: "Ver criativo Anúncio sintético — Maior CTR" })
+    .click();
+  await expect(page.getByRole("dialog")).toContainText(
+    "Métricas reportadas pelo Meta por anúncio",
+  );
+  await expect(page.getByRole("dialog")).not.toContainText(
+    "métricas sintéticas",
+  );
+  await expect(page.getByRole("dialog")).toContainText("Compras Meta");
+  await page.keyboard.press("Escape");
   await page.getByLabel("Buscar campanha").fill("inexistente");
   await expect(page.locator(".screen-table-body a")).toHaveCount(0);
   await page.getByLabel("Buscar campanha").fill("sintética");

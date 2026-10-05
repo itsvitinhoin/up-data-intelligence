@@ -118,7 +118,7 @@ function DemoAcquisitionPage() {
         confirmados permanecem indisponíveis.
       </Notice>
       {q.isPending ? (
-        <Loading />
+        <Loading page />
       ) : q.isError ? (
         <Failure retry={() => void q.refetch()} />
       ) : (

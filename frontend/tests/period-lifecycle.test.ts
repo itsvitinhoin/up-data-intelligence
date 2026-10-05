@@ -91,7 +91,7 @@ describe("Order detail and variants", () => {
       );
       expect(
         product.variants
-          ?.filter((v) => !product.sizes[v.size])
+          ?.filter((v) => v.size !== null && !product.sizes[v.size])
           .every((v) => v.stock === 0),
       ).toBe(true);
     }

@@ -45,6 +45,33 @@ WHERE o.store_id=@store AND o.source_system='upzero' AND o.order_id=@order
 FROM {items} AS i {history}
 WHERE i.store_id=@store AND i.source_system='upzero' AND i.order_id=@order
  AND i.present_in_latest_snapshot ORDER BY i.item_id LIMIT 1001"""
+    elif name == "variant_sales":
+        params.update(
+            {
+                "from": ("DATE", values.get("from_day")),
+                "to": ("DATE", values.get("to_day")),
+                "timezone": ("STRING", values.get("timezone")),
+                "as_of": ("TIMESTAMP", values.get("as_of")),
+                "variants": ("STRING", values.get("variants")),
+            }
+        )
+        sql = f"""SELECT i.variant_id,
+ COUNT(*)-COUNT(DISTINCT TO_JSON_STRING(STRUCT(i.order_id,i.item_id))) duplicate_items,
+ COUNT(DISTINCT i.order_id) orders,
+ IF(COUNTIF(o.customer_id IS NULL)>0,NULL,COUNT(DISTINCT o.customer_id)) buyers,
+ IF(COUNTIF(i.original_qty IS NULL)>0,NULL,SUM(i.original_qty)) units_requested,
+ IF(COUNTIF(i.status!='removed' AND i.qty IS NULL)>0,NULL,SUM(IF(i.status='removed',CAST(0 AS NUMERIC),i.qty))) units_fulfilled,
+ IF(COUNTIF(i.original_qty IS NULL OR i.unit_price IS NULL)>0,NULL,SUM(i.original_qty*i.unit_price)) requested,
+ IF(COUNTIF(i.status!='removed' AND (i.qty IS NULL OR i.unit_price IS NULL))>0,NULL,SUM(IF(i.status='removed',CAST(0 AS NUMERIC),i.qty*i.unit_price))) fulfilled
+ FROM {items} AS i {history}
+ JOIN {orders} AS o {history} ON o.store_id=i.store_id AND o.order_id=i.order_id
+ AND o.source_system='upzero' AND o.version_id=i.parent_order_version_id
+ WHERE i.store_id=@store AND i.source_system='upzero' AND i.present_in_latest_snapshot
+ AND i.status IN ('active','attended','removed') AND o.created_at<@as_of
+ AND DATE(o.created_at,@timezone)>=@from AND DATE(o.created_at,@timezone)<@to
+ AND DATE(i.order_created_at,@timezone)>=@from AND DATE(i.order_created_at,@timezone)<@to
+ AND i.variant_id IN (SELECT JSON_VALUE(v) FROM UNNEST(JSON_QUERY_ARRAY(PARSE_JSON(@variants))) v)
+ GROUP BY i.variant_id ORDER BY i.variant_id LIMIT 1001"""
     elif name == "geography":
         params.update(
             {

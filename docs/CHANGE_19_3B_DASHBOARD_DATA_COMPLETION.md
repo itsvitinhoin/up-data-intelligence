@@ -1,0 +1,188 @@
+# CHANGE #19.3B — Dashboard data completion
+
+## State and approved reference
+
+Implementation is local and under acceptance. It is **not a completed live preview**.
+No #19.3B infrastructure has been applied, no source connection has been changed,
+and no historical extraction has been requested for MX.
+
+The user-confirmed visual reference is the deployment
+`up-data-intelligence-p484pm1uv-victorcheunin-6445s-projects.vercel.app`.
+Its archived frontend matches the approved baseline commit
+`cc9fa59488e7c24b2baaa634ea09bd7d7d19be6d`. The separately named #19.3A branch and
+`b2b-standard.v2` template engine were not present in that source; this change
+preserves the actual reviewed components rather than claiming those missing assets.
+The field-level audit is in [the coverage audit](CHANGE_19_3B_DATA_COVERAGE_AUDIT.md).
+
+## Data contracts
+
+Catalog adds exact product/variant/attribute/inventory identities, current snapshots,
+version membership and explicit completed observations. Current names/colors are
+labeled as current catalog evidence, not historical order snapshots. Missing exact
+identity, price, stock or color remains null. Inventory counts never come from sales.
+Catalog extraction shares the canonical 20-page / 600-second slice ceilings.
+
+Ad/day creative reads use separate Meta creative tables and exact account/configuration
+coverage. Current creative metadata may supply sanitized thumbnail/video references.
+Reach/frequency across days remain unavailable without a compatible period observation.
+Purchases, value and CPA require an explicit purchase action definition; overlapping
+Meta action types are never summed. Campaign attribution is not paid influence.
+
+Products and order details resolve only exact canonical variant identifiers. Sales
+by color/size use version-scoped order items with requested and fulfilled values
+separate. Customer campaign drilldown is scoped by store and customer, avoiding
+per-order request fan-out. Journey rows preserve timestamps and deterministic ties,
+including unknown/unresolved evidence, without asserting causal attribution.
+Geography uses canonical shipping snapshot state/city for orders in the selected period.
+
+All reads retain publication HEAD/RECEIPT consistency, query budgets, authorization
+before business IO and transport money as decimal strings. No demo fallback is added.
+
+### Deliberately unresolved metrics
+
+Lead source events exist, but counts of events are not counts of people. Lead cohort
+and denominator semantics require the manager's explicit decision and identity proof.
+The corresponding metrics remain unavailable (`METRIC SEMANTICS DECISION REQUIRED`).
+Lifetime-sensitive metrics remain null with `history_complete=false`.
+
+The current Customer Intelligence policy prohibits full personal/company identifiers,
+email and phone in product responses. Those fields remain null pending an explicit
+policy exception; source availability alone does not authorize disclosure.
+
+## Admin Brand Control Plane
+
+The initial authenticated brand list is a lightweight summary, with creation date
+unknown for legacy MX. Configuration, operational health and extraction detail load
+only when their respective dialogs open. Source health and initial Installation
+completion are separate concepts. Next sync is not fabricated.
+
+Existing UP Zero credentials are write-only, never prefilled, stored in browser state,
+returned, hashed into operation metadata or automatically resent. Rotation persists
+intent before one Secret Manager version write, verifies the pinned candidate and
+atomically updates the reference. Old versions are preserved. Unknown writes/probes
+retain leases and require reconciliation. Meta always uses the server-owned global
+pinned token; no per-brand token is collected.
+
+Explicit disablement preserves historical data and disables dependent pipelines.
+Reactivation does not automatically claim fresh Analytics/Intelligence evidence.
+
+### Adding Meta to an installed B2B brand
+
+The dedicated connection-management `add` operation accepts an account ID and API
+version, not a token, store ID or tenant ownership change. ADMIN_UP authorization
+and canonical workspace binding precede IO. Under normal-dispatch, Installation-global
+and store leases, it requires a complete initial installation, no pending checkpoint/
+RAW/extension, absent Meta connection and absent/conflict-free Meta account binding.
+
+A one-page server-only account probe verifies account/timezone/currency. Atomic CAS
+persists the source, account binding, Registry revision and one purpose-specific
+`META_SOURCE_ADDITION` extension plan: four ordered catalog units and campaign/ad
+Insights units for each closed day in the currently certified window. Only Meta work
+is created. No second initial plan, unrelated source reinstall, onboarding operation,
+new secret or publication is created. Intelligence is not enabled by intention alone.
+An ambiguous probe is never repeated automatically.
+
+An absent UP Zero source on a brand without an existing certified commercial contract
+still needs a dedicated commercial adoption contract. The UI does not collect a key
+or claim successful configuration for that unsupported transition. Existing UP Zero
+connections can be rotated, disabled and reactivated. Other commerce/media/ERP providers
+are visible as unavailable and cannot collect credentials or pretend to ingest data.
+
+### Historical extraction
+
+Authenticated requests specify provider and inclusive local start/end dates. The server
+uses exclusive ends and rejects future periods, invalid ownership and oversized ranges.
+The purpose-specific V2 ledger keeps the initial installation graph immutable.
+Deterministic identities include source/configuration/policy/window evidence. Certified
+intervals are subtracted without crossing gaps; pending/ambiguous evidence blocks admission.
+No manual RAW/CORE/checkpoint edits, resets or giant synchronous source fetch exist.
+
+The current certified dashboard remains readable while extension work is pending.
+Normal recurring workers are held back for that store when the extensions opt-in is
+active, preventing those workers from claiming a backfill-owned checkpoint. This can
+increase recurring lag until the bounded extension completes; it is not a data cache.
+Historical publication runs only after contiguous source coverage is proven, retains
+current certified end/as-of and may move the start backward. Subsequent full refreshes
+read the earlier certified source bound too, without editing original `history_from`
+or manufacturing lifetime proof. There is no fake cancellation button.
+
+No real MX historical extraction is authorized merely by acceptance. The user must
+choose and approve its provider, date range and intended scope.
+
+## Loader and timing
+
+The original user asset `Sample 5.mp4` is copied intact to `/media/up-loader.mp4`.
+It runs muted/inline/looped at playback rate 1.5 on cold critical content loads,
+without locking sidebar/navigation or flashing on background refresh. Reduced motion
+and media failure use the existing accessible fallback; loading errors expose retry.
+
+Safe numeric Server-Timing separates BFF identity/upstream and private API auth/query
+cost. Request authorization is not cached. Independent product/customer/marketing calls
+are parallel; customer campaign detail avoids N+1 reads. **No live before/after latency
+improvement is claimed yet.** The required six-page measured comparison is pending.
+
+## Live evidence gathered so far (read-only / bounded probes)
+
+The latest metadata-only audit on 2026-10-05 used a 64-MiB query ceiling and billed
+31,457,280 bytes. MX remained ACTIVE/sync enabled, Registry revision 12,
+`history_complete=false`, `facts_complete=true`, coverage through 2026-10-05T03:00Z.
+Analytics generation 6 has matching completed HEAD/RECEIPT identity, report
+2026-09-01 → 2026-10-05 exclusive and as-of 2026-10-05T03:00Z.
+The latest Data Health run at 2026-10-05T07:00:10.073507Z contains 16 rules and zero
+blocking findings. This is evidence at that read, not a promise about future runs.
+
+Bounded UP Zero/Meta source shape probes are documented in the coverage audit.
+They did not persist business payloads and do not constitute full catalog/ad coverage.
+
+## Deployment stages and review boundaries
+
+All new behavior is fail-closed by default. Stage 1 adds 18 tables, additive nullable
+Meta fields, scoped table grants and reviewed runtime image/feature updates. Its offline
+guard is `scripts/dashboard_completion_plan_guard.py`. It rejects scheduler changes,
+project IAM, destruction, source/secret identity changes and capacity changes.
+
+Admin access to the existing global Meta secret is a separate false-by-default switch
+`dashboard_completion_admin_meta_probe`. Stage 2 creates exactly two private DEV preview
+APIs, their scoped Vercel invokers and that single scoped secret-access grant.
+`scripts/dashboard_completion_preview_guard.py` checks the five-resource stage, immutable
+image, server identity, pinned configuration, private invocation and min=0/max=3 capacity.
+Passing a guard is not user IAM approval. Saved-plan JSON, binary SHA and exact grant
+inventory must be reviewed before apply. Preview federation is separately scoped and
+cannot be admitted implicitly by either guard.
+
+The existing production private API services and Vercel production deployment remain
+pinned. A future #19.3B Vercel Preview uses only the new private DEV API URLs. No `--prod`
+deploy, production promotion, scheduler change or automatic historical extraction is
+part of preview acceptance. No min-instance increase or shared PII cache is proposed.
+
+## Outstanding acceptance
+
+- Complete source-addition coverage for absent commerce sources requires its explicit
+  commercial adoption contract; it must not be disguised as brand creation.
+- Approved lead semantics/identity, personal-data policy decision and Meta purchase
+  action definition where not certified.
+- Clean commit review and immutable runtime build.
+- Exact saved live plans, IAM review, scoped apply and post-plan checks.
+- Bounded current catalog/ad enrichment and certified read coverage.
+- Authenticated real Preview browser checks (six B2B pages, Admin, drilldowns, loader,
+  isolation), screenshots without personal data and measured before/after costs.
+- Fresh Data Health acceptance after materialization and unchanged production proof.
+
+Do not declare `MX DATA COMPLETION PREVIEW READY` until these gates are satisfied.
+
+## Offline validation checkpoint
+
+Before immutable build: full Python suite **2,405 passed** (122.20 seconds); Ruff
+check/format passed (336 files); mypy passed (183 sources); frontend **319 tests / 29
+files** passed; lint, typecheck and format check passed. Next.js 16.3.7 production
+build with `--webpack` passed, including 50 static pages and all new BFF routes.
+Local Turbopack has an OS process/socket restriction; remote Vercel build remains an
+independent acceptance gate. Offline HTTPS Playwright: **6 passed** (16.1 seconds),
+using isolated installed Chrome because the packaged headless executable was absent.
+No real credentials were rotated or historical work admitted by these tests.
+
+Terraform fmt check and validate passed with Terraform 1.16.0 and locked Google
+provider 8.4.0, backend disabled for local validation. No local state was read.
+Worktree path/credential-signature scan found no .env, credentials, private keys,
+Terraform state/plans, caches or test artifacts among the intended source files.
+This scan is an additional check, not a claim of a comprehensive security audit.

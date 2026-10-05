@@ -1,5 +1,6 @@
 """Product-facing read projections, with explicit coverage and decimal semantics."""
 
+import json
 import re
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
@@ -45,8 +46,12 @@ def order(
         raise ReadError(503, "order_detail_item_limit")
     if len({i.get("item_id") for i in items}) != len(items):
         raise ReadError(503, "duplicate_order_item")
+    catalog = service._catalog(
+        sorted({item["variant_id"] for item in items if item.get("variant_id")})
+    )
     projected = []
     for item in items:
+        current = catalog.get(item.get("variant_id") or "", {})
         if (
             item.get("order_id") != order_id
             or not item.get("item_id")
@@ -64,14 +69,16 @@ def order(
             {
                 "item_id": item["item_id"],
                 "product_key": item["product_key"],
-                "product_id": None,
+                "product_id": current.get("product_id"),
                 "asset_id": item.get("asset_id"),
                 "variant_id": item.get("variant_id"),
-                "name": item.get("asset_name"),
+                "name": item.get("asset_name") or current.get("name"),
+                "catalog": current.get("catalog"),
+                "reference": current.get("reference"),
                 "sku": item.get("sku"),
                 "image": item.get("asset_image_url") or item.get("image_url"),
-                "color": None,
-                "size": None,
+                "color": current.get("color"),
+                "size": current.get("size"),
                 "status": item["status"],
                 "requested_quantity": requested,
                 "fulfilled_quantity": fulfilled,
@@ -137,7 +144,7 @@ def order(
             "core_orders_not_source_generation_pinned",
             "fulfilled_is_not_paid",
             "contact_projection_not_permitted",
-            "color_size_not_certified",
+            "catalog_labels_are_current_not_historical" if catalog else "color_size_not_certified",
             "item_gross_differs_from_order_net",
         ],
     )
@@ -180,14 +187,61 @@ def product(
     if len(evidence) != 1 or evidence[0].get("duplicate_items") != 0:
         raise ReadError(503, "product_evidence_missing_or_duplicate")
     profile = evidence[0]
+    current = (
+        service._catalog([profile["variant_id"]]).get(profile["variant_id"], {})
+        if profile.get("variant_id")
+        else {}
+    )
+    family = service._catalog_family(current["product_id"]) if current.get("product_id") else {}
+    variants = None
+    if family:
+        commercial = service._rows(
+            "variant_sales",
+            variants=json.dumps(sorted(family)),
+            from_day=start,
+            to_day=end,
+            timezone=service.policy.reporting_timezone,
+            as_of=service.publication.as_of,
+        )
+        if (
+            len(commercial) > 1000
+            or len({r.get("variant_id") for r in commercial}) != len(commercial)
+            or any(
+                r.get("variant_id") not in family or r.get("duplicate_items") != 0
+                for r in commercial
+            )
+        ):
+            raise ReadError(503, "variant_commercial_identity_invalid")
+        by_id = {r["variant_id"]: r for r in commercial}
+        variants = []
+        for variant_id, catalog in sorted(family.items()):
+            metrics = by_id.get(variant_id, {})
+            variants.append(
+                {
+                    **catalog,
+                    "units_requested": decimal_string(metrics.get("units_requested")),
+                    "units_fulfilled": decimal_string(metrics.get("units_fulfilled")),
+                    "requested_revenue": decimal_string(metrics.get("requested")),
+                    "fulfilled_revenue": decimal_string(metrics.get("fulfilled")),
+                    "orders_observed": integer(metrics.get("orders")),
+                    "buyers_observed": integer(metrics.get("buyers")),
+                }
+            )
     return service._response(
         {
             "store_id": grant.store_id,
             "product_key": product_key,
-            "product_id": row.get("product_id"),
+            "product_id": row.get("product_id") or current.get("product_id"),
             "variant_id": profile.get("variant_id"),
             "sku": row.get("sku"),
-            "name": profile.get("name"),
+            "name": profile.get("name") or current.get("name"),
+            "reference": current.get("reference"),
+            "catalog": current.get("catalog"),
+            "color": current.get("color"),
+            "size": current.get("size"),
+            "color_hex": current.get("color_hex"),
+            "active": current.get("active"),
+            "sale_price": current.get("sale_price"),
             "image": profile.get("image"),
             "requested_revenue": decimal_string(row.get("requested")),
             "fulfilled_revenue": decimal_string(row.get("fulfilled")),
@@ -195,7 +249,9 @@ def product(
             "units_fulfilled": decimal_string(row.get("units_fulfilled")),
             "orders_observed": integer(row.get("orders")),
             "buyers_unique": integer(profile.get("buyers_unique")),
-            "stock": None,
+            "stock": current.get("stock"),
+            "variants": variants,
+            "variant_sales_basis": "observed_line_gross_current_catalog" if variants else None,
             "sizes": None,
             "colors": None,
             "abc": None,
@@ -204,8 +260,8 @@ def product(
         },
         limitations=[
             "core_product_profile_not_source_generation_pinned",
-            "inventory_not_certified",
-            "color_size_not_certified",
+            "catalog_labels_are_current_not_historical",
+            "stock_is_selected_variant_snapshot" if current else "inventory_not_certified",
         ],
     )
 

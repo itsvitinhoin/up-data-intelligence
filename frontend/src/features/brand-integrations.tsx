@@ -1,4 +1,5 @@
 "use client";
+import { LiveBrandInventory } from "./live-brand-inventory";
 import { readOnboarding } from "@/services/api/onboarding";
 import { installationPollingInterval } from "@/services/api/installation";
 import { useInstallation } from "@/hooks/use-installation";
@@ -99,24 +100,18 @@ function OnboardedInstallationCard({ item }: { item: OnboardingResult }) {
       title={item.name}
       subtitle="Instalação solicitada · sincronização contínua desligada"
     >
-      {state ? (
-        <InstallationStatus data={state} details />
-      ) : (
-        <>
-          <span className="badge badge--up">
-            {value.status === "BLOCKED" ? "Bloqueado" : "Instalando"}
-          </span>
-          <p className="muted">Calculando progresso...</p>
-          <ul className="integration-statuses">
-            {value.sources.map((source) => (
-              <li key={source.source}>
-                {source.source === "upzero" ? "UP Zero" : "Meta Ads"} ·{" "}
-                <span>Pendente</span>
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
+      <span className="badge badge--up">
+        {state?.overall_state ?? value.status}
+      </span>
+      <p className="muted">
+        {state?.progress.total
+          ? `${state.progress.processed ?? 0}/${state.progress.total} unidades`
+          : "Calculando progresso…"}
+      </p>
+      <details>
+        <summary>Saúde das Integrações</summary>
+        {state && <InstallationStatus data={state} details />}
+      </details>
       {q.isError && (
         <p role="status">Não foi possível atualizar o estado da instalação.</p>
       )}
@@ -399,6 +394,7 @@ export function BrandIntegrationsPage({
   const client = useQueryClient();
   const q = useQuery({
     queryKey: ["up-admin", "brands", dataMode, tenants],
+    enabled: !live,
     queryFn: () =>
       live ? catalogCompanies(tenants) : adminApi.brands(session!),
   });
@@ -455,6 +451,14 @@ export function BrandIntegrationsPage({
           item.tenant_id === brand.tenant_id && item.brand_id === brand.id,
       ),
   );
+  if (live)
+    return (
+      <LiveBrandInventory createAction={createAction}>
+        {onboarded.map((item) => (
+          <OnboardedInstallationCard key={item.operation_id} item={item} />
+        ))}
+      </LiveBrandInventory>
+    );
   return (
     <>
       <PageHead

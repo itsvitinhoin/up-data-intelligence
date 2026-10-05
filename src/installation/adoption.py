@@ -29,6 +29,36 @@ def inspect(config: StoreConfig, checkpoints: list[Row], runs: list[Row], target
         if cp.get("status") == "needs_review":
             raise SafeError("installation_checkpoint_needs_review")
         resource, filters, mode = cp["resource"], cp["filters"], cp["mode"]
+        if resource in {"products", "variants", "attributes", "inventory"}:
+            # Catalog checkpoints are current snapshots, never historical orders/facts
+            # coverage or customer freshness. Still validate their ownership/identity.
+            expected = digest(
+                [config.store_id, config.upzero_connection_id, resource, filters, mode]
+            )
+            matching = [
+                r
+                for r in runs
+                if r.get("run_id") == cp.get("run_id")
+                and r.get("store_id") == config.store_id
+                and r.get("resource") == resource
+                and r.get("source") == "upzero"
+                and r.get("plan_key") == expected
+            ]
+            if (
+                mode != "incremental"
+                or not isinstance(filters, dict)
+                or not filters.get("catalog_as_of")
+                or cp.get("plan_key") != expected
+                or len(matching) != 1
+            ):
+                raise SafeError("work_checkpoint_mismatch")
+            if cp.get("status") == "complete" and (
+                cp.get("pending_raw_id") is not None
+                or matching[0].get("status") != "completed"
+                or matching[0].get("core_records_failed") != 0
+            ):
+                raise SafeError("installation_checkpoint_not_certified")
+            continue
         if resource not in {"orders", "customers", "analytics_facts"} or mode not in {
             "backfill",
             "incremental",

@@ -30,6 +30,9 @@ class SourcePlanner(Protocol):
 
 
 class UpZeroPlanner:
+    def __init__(self, *, catalog_snapshots: bool = False):
+        self.catalog_snapshots = catalog_snapshots
+
     def build(
         self, config: StoreConfig, plan: Row, days: list[tuple[str, str]], adopted: Row
     ) -> list[Row]:
@@ -37,6 +40,20 @@ class UpZeroPlanner:
         cid = config.upzero_connection_id or ""
         verify = unit(plan, "upzero", cid, "verification", "VERIFY_SOURCE", {}, [], 0)
         rows.append(verify)
+        if self.catalog_snapshots:
+            rows.append(
+                unit(
+                    plan,
+                    "upzero",
+                    cid,
+                    "catalog",
+                    "SYNC_SNAPSHOT",
+                    {"catalog_as_of": plan["target_as_of"]},
+                    [verify["work_unit_id"]],
+                    2,
+                    mode="incremental",
+                )
+            )
         for cp in adopted["pending"]:
             row = unit(
                 plan,
@@ -99,7 +116,10 @@ class UpZeroPlanner:
                     )
                 )
         for row in rows:
-            if row["unit_kind"] in {"SYNC_WINDOW", "SYNC_SNAPSHOT"}:
+            if row["resource"] == "catalog":
+                # This logical unit owns four separately certified checkpoints.
+                row["checkpoint_plan_key"] = None
+            elif row["unit_kind"] in {"SYNC_WINDOW", "SYNC_SNAPSHOT"}:
                 row["checkpoint_plan_key"] = digest(
                     [config.store_id, cid, row["resource"], row["filters"], row["mode"]]
                 )
@@ -151,10 +171,22 @@ class MetaPlanner:
 
 class Planner:
     def __init__(
-        self, limits: Limits = DEFAULT_LIMITS, adapters: dict[str, SourcePlanner] | None = None
+        self,
+        limits: Limits = DEFAULT_LIMITS,
+        adapters: dict[str, SourcePlanner] | None = None,
+        *,
+        catalog_snapshots: bool = False,
     ):
-        self.limits = limits
-        self.adapters = adapters or {"upzero": UpZeroPlanner(), "meta": MetaPlanner()}
+        self.limits, self.catalog_snapshots = limits, catalog_snapshots
+        self.adapters = adapters or {
+            "upzero": UpZeroPlanner(catalog_snapshots=catalog_snapshots),
+            "meta": MetaPlanner(),
+        }
+        if (
+            bool(getattr(self.adapters.get("upzero"), "catalog_snapshots", False))
+            != catalog_snapshots
+        ):
+            raise SafeError("installation_catalog_strategy_mismatch")
 
     def calculate(
         self,
@@ -206,15 +238,18 @@ class Planner:
                 boundary, target, config.timezone or ""
             )
 
-        identity = digest(
-            [
-                config.store_id,
-                operation.get("operation_id") if operation else None,
-                config.history_from,
-                target,
-                VERSION,
-            ]
-        )
+        identity_parts = [
+            config.store_id,
+            operation.get("operation_id") if operation else None,
+            config.history_from,
+            target,
+            VERSION,
+        ]
+        if self.catalog_snapshots:
+            # Explicit graph strategy prevents an enriched new plan from sharing
+            # the identity of an already approved legacy graph. Defaults preserve it.
+            identity_parts.append("upzero-catalog.v1")
+        identity = digest(identity_parts)
         plan: Row = {
             "row_key": identity,
             "plan_id": identity,

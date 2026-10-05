@@ -1,7 +1,7 @@
 """Durable-evidence detector. Never ingests, repairs, activates or publishes data."""
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime
 from typing import Any
 
@@ -32,6 +32,7 @@ RULES = (
     "dashboard_publication_resolves",
     "history_semantics_valid",
 )
+ENRICHMENT_RULES = ("upzero_catalog_certified", "meta_creative_daily_covered")
 Row = dict[str, Any]
 
 
@@ -82,7 +83,25 @@ def publication_history(config: StoreConfig, rows: list[Row], at: str) -> None:
             raise SafeError("health_store_scope_mismatch")
         current = Window(str(r["report_from"]), str(r["report_to"]), str(r["as_of"]), at, at)
         if previous is not None:
-            monotonic(previous, current)
+            if current.report_from < previous.report_from:
+                # A deliberate historical extension may move only the start back.
+                # Registry range is CASed only after COMPLETE source evidence;
+                # covered() independently proves that earlier prefix below.
+                from datetime import UTC, date, datetime, time
+                from zoneinfo import ZoneInfo
+
+                boundary = datetime.combine(
+                    date.fromisoformat(current.report_from), time(), ZoneInfo(config.timezone or "")
+                ).astimezone(UTC)
+                if (
+                    not config.facts_complete
+                    or not config.facts_coverage_from
+                    or instant(config.facts_coverage_from) > boundary
+                ):
+                    raise SafeError("health_history_extension_not_certified")
+                monotonic(previous, replace(current, report_from=previous.report_from))
+            else:
+                monotonic(previous, current)
         previous = current
 
 
@@ -190,7 +209,15 @@ class DataHealth:
 
             def covered(resource: str = resource) -> bool:
                 return instant(
-                    prefix(config.history_from or "", daily.as_of, evidence()["coverage"][resource])
+                    prefix(
+                        min(
+                            config.history_from or "",
+                            config.facts_coverage_from or config.history_from or "",
+                            key=instant,
+                        ),
+                        daily.as_of,
+                        evidence()["coverage"][resource],
+                    )
                 ) >= instant(daily.as_of)
 
             guard(
@@ -274,6 +301,57 @@ class DataHealth:
             return len(rows) == 1 and rows[0]["checked"] > 0 and rows[0]["failed"] == 0
 
         guard("history_semantics_valid", history_semantics)
+        import os
+
+        if os.environ.get("UP_INSTALLATION_ENRICHMENT_ENABLED") == "1":
+            from src.control_plane.recurring import meta_coverage
+            from src.dashboard.catalog import CatalogReader
+            from src.dashboard.queries import Query
+            from src.intelligence.live.runtime import reporting
+
+            class Reader:
+                def query(inner_self, query: Query, **kwargs: Any) -> list[Row]:
+                    rows, _ = self.transport.query(
+                        query.sql, [scalar(k, t, v) for k, (t, v) in query.parameters.items()]
+                    )
+                    return rows
+
+            def catalog() -> bool:
+                from src.dashboard.contracts import ReadError
+
+                try:
+                    proof = CatalogReader(
+                        self.transport.config.project,
+                        Reader(),
+                        config.store_id,
+                        None,
+                        "catalog-health",
+                    ).resolve()
+                except ReadError as exc:
+                    if exc.code not in {
+                        "catalog_source_ambiguous",
+                        "catalog_snapshot_ambiguous",
+                        "catalog_snapshot_not_certified",
+                    }:
+                        raise
+                    # Invalid durable proof is a blocking finding. A transport
+                    # failure still propagates; it never becomes false coverage.
+                    raise SafeError(exc.code) from None
+                return bool(proof and instant(proof["snapshot_as_of"]) >= instant(window.as_of))
+
+            guard("upzero_catalog_certified", catalog, enabled=config.upzero_enabled)
+            guard(
+                "meta_creative_daily_covered",
+                lambda: meta_coverage(
+                    self.pre.account(config),
+                    reporting(self.pre.account(config), config.policy(window)),
+                    checkpoints,
+                    runs,
+                    level="ad",
+                    resource="meta_creative_insights_daily",
+                ),
+                enabled=config.meta_enabled,
+            )
         return daily, findings
 
     def persist(self, rows: list[Row]) -> None:

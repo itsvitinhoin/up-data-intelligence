@@ -15,9 +15,14 @@ export function ProductSales({ product }: { product: Product }) {
     <>
       {(["color", "size"] as const).map((key) => {
         const grouped = new Map<string, number>();
-        sales?.forEach((row) =>
-          grouped.set(row[key], (grouped.get(row[key]) ?? 0) + row.units),
-        );
+        const unknown = new Set<string>();
+        sales?.forEach((row) => {
+          const label = row[key];
+          if (label === null) return;
+          if (row.units === null) unknown.add(label);
+          else grouped.set(label, (grouped.get(label) ?? 0) + row.units);
+        });
+        unknown.forEach((label) => grouped.delete(label));
         const rows = [...grouped].map(([label, value]) => ({ label, value }));
         const title = key === "color" ? "Vendas por cor" : "Vendas por tamanho";
         return (
@@ -27,13 +32,15 @@ export function ProductSales({ product }: { product: Product }) {
             subtitle={
               dataMode === "demo"
                 ? "Peças vendidas · distribuição demonstrativa, independente do estoque"
-                : "Vendas por variante · cobertura ainda não certificada"
+                : product.variantSalesBasis
+                  ? "Peças atendidas observadas no período · atributos do catálogo atual"
+                  : "Vendas por variante · cobertura ainda não certificada"
             }
             action={
               <ListExport rows={rows} name={`vendas-${product.sku}-${key}`} />
             }
           >
-            {sales?.length ? (
+            {rows.length ? (
               <div role="group" aria-label={title}>
                 <Bars data={rows} currency={false} />
               </div>

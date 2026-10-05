@@ -228,7 +228,12 @@ export type Acquisition = Omit<
   fulfilled: string;
 };
 
-export type Marketing = Omit<View.Marketing, "campaigns" | "series"> & {
+export type MarketingCreative = Known<View.MarketingCreative>;
+export type Marketing = Omit<
+  View.Marketing,
+  "campaigns" | "series" | "creatives"
+> & {
+  creatives: MarketingCreative[];
   campaigns: (Campaign & {
     impressions: number;
     clicks: number;

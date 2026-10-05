@@ -314,7 +314,7 @@ export function RetailProductsPage({
         </Notice>
       )}
       {q.isPending ? (
-        <Loading />
+        <Loading page />
       ) : q.isError ? (
         <Failure retry={() => void q.refetch()} />
       ) : (

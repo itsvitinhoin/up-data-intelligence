@@ -125,14 +125,25 @@ export interface OrderDetail {
   };
 }
 export interface Product {
+  reference?: string | null;
+  catalog?: {
+    basis: "current_source_snapshot";
+    snapshot_as_of: string;
+    evidence_hash: string;
+  } | null;
   category?: string | null;
   active?: boolean | null;
   salePrice?: string | null;
   colorHex?: string | null;
-  variantSales?: { color: string; size: string; units: number }[];
+  variantSales?: {
+    color: string | null;
+    size: string | null;
+    units: number | null;
+  }[];
+  variantSalesBasis?: "observed_line_gross_current_catalog";
   variants?: {
     color: string | null;
-    size: string;
+    size: string | null;
     sku: string | null;
     stock: number | null;
     hex?: string | null;
@@ -174,6 +185,13 @@ export interface Campaign {
   cac: string | null;
 }
 export interface TimelineEvent {
+  orderId?: string | null;
+  productId?: string | null;
+  variantId?: string | null;
+  campaignId?: string | null;
+  adsetId?: string | null;
+  adId?: string | null;
+  items?: TimelineEvent[];
   customer_id: string;
   store_id: string;
   id: string;
@@ -300,21 +318,24 @@ export interface User {
   role: Role;
 }
 export interface MarketingCreative {
+  source?: "real" | "demo";
+  previewObservedAt?: string | null;
+  evidenceHash?: string;
   id: string;
   campaign_id: string;
   campaign_name: string;
   name: string;
   platform: "Meta Ads";
   placement: string;
-  status: "ACTIVE" | "PAUSED";
-  preview: string;
+  status: string | null;
+  preview: string | null;
   format: string;
-  spend: number;
-  impressions: number;
-  clicks: number;
-  leads: number;
-  approved: number;
-  purchases: number;
+  spend: number | null;
+  impressions: number | null;
+  clicks: number | null;
+  leads: number | null;
+  approved: number | null;
+  purchases: number | null;
 }
 export interface Marketing {
   metrics?: Metric[];

@@ -165,11 +165,14 @@ class Orchestrator:
             # A GET failure leaves the known operation intact; no new POST is possible.
             return
 
+    def dispatch_plans(self) -> list[Row]:
+        return self.ledger.plans()
+
     def dispatch(self, store: str | None = None) -> int:
         with self.lease("installation-orchestrator-global"):
             if self.prepare:
                 self.prepare(store)
-            plans = self.ledger.plans()
+            plans = self.dispatch_plans()
             selected = sorted(
                 (p for p in plans if store is None or p["store_id"] == store),
                 key=lambda p: (p["priority"], p["created_at"], p["plan_id"]),

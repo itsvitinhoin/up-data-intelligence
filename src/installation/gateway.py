@@ -23,8 +23,10 @@ class InstallationGateway:
         maximum_bytes_billed: int = 1073741824,
         maximum_total_bytes_billed: int = 137438953472,
         limits: Limits = DEFAULT_LIMITS,
+        extension: bool = False,
     ):
         self.client, self.project, self.region, self.bucket = client, project, region, bucket
+        self.extension = extension
         self.prefix = f"projects/{project}/locations/{region}/"
         self.prefixes = {self.prefix}
         if project_number:
@@ -82,6 +84,8 @@ class InstallationGateway:
             "--maximum-total-bytes-billed",
             str(self.total),
         ]
+        if self.extension:
+            args.append("--extension")
         try:
             response = self.client.post(
                 "https://run.googleapis.com/v2/"

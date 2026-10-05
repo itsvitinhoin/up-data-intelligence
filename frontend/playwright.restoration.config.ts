@@ -1,7 +1,11 @@
 import { defineConfig } from "@playwright/test";
 export default defineConfig({
   testDir: "tests/e2e",
-  testMatch: ["dashboard-restoration.spec.ts", "product-auth.spec.ts"],
+  testMatch: [
+    "dashboard-restoration.spec.ts",
+    "product-auth.spec.ts",
+    "page-loader.spec.ts",
+  ],
   workers: 1,
   fullyParallel: false,
   timeout: 90000,

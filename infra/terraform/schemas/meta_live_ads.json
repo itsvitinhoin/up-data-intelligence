@@ -70,6 +70,31 @@
     "mode": "NULLABLE"
   },
   {
+    "name": "creative_name",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "creative_image_url",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "creative_thumbnail_url",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "creative_video_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "creative_story_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
     "name": "version_id",
     "type": "STRING",
     "mode": "NULLABLE"

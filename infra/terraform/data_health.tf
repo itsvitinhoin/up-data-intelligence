@@ -75,6 +75,13 @@ resource "google_cloud_run_v2_job" "data_health" {
         image   = var.data_health_image
         command = ["python", "-m", "src.quality.data_health_cli"]
         args    = local.data_health_args
+        dynamic "env" {
+          for_each = var.dashboard_completion_enabled && var.dashboard_completion_health_enrichment ? [1] : []
+          content {
+            name  = "UP_INSTALLATION_ENRICHMENT_ENABLED"
+            value = "1"
+          }
+        }
         resources { limits = { cpu = "1", memory = "512Mi" } }
       }
     }

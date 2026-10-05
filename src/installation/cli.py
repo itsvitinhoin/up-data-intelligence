@@ -53,6 +53,7 @@ def main(argv: list[str] | None = None) -> int:
         mode.add_argument("--" + name, action="store_true")
     parser.add_argument("--fixture", type=Path)
     parser.add_argument("--adopt", action="store_true")
+    parser.add_argument("--extension", action="store_true")
     parser.add_argument("--target-as-of")
     parser.add_argument("--store-id")
     parser.add_argument("--all-stores", action="store_true")
@@ -94,6 +95,10 @@ def main(argv: list[str] | None = None) -> int:
             max_stores=args.max_stores,
             max_dispatches=args.max_dispatches,
         )
+        if args.extension and (
+            not (args.dispatch or args.worker) or args.adopt or args.auto_activate or args.fixture
+        ):
+            raise SafeError("extension_cli_scope_invalid")
         if args.fixture:
             if args.live or not args.plan_only or not args.target_as_of:
                 raise SafeError("offline_plan_only_required")
@@ -120,7 +125,11 @@ def main(argv: list[str] | None = None) -> int:
         from src.security.lease import cloud_lease
 
         transport, _ = clients(args)
-        ledger = BigQueryLedger(transport)
+        from src.installation.extension_repository import ExtensionLedger
+
+        ledger: BigQueryLedger | ExtensionLedger = BigQueryLedger(transport)
+        if args.extension:
+            ledger = ExtensionLedger(transport)
         c = ledger.config(args.store_id) if args.store_id else None
 
         def lease(key: str) -> AbstractContextManager[None]:
@@ -222,6 +231,26 @@ def main(argv: list[str] | None = None) -> int:
                 return 0
 
         def publications(plan: Row, units: list[Row]) -> tuple[bool, bool]:
+            if args.extension:
+                from src.admin.history import HistoryService
+
+                assert isinstance(ledger, ExtensionLedger)
+
+                current = HistoryService(ledger, lease, b"unused-read-only-key" * 2).publication(
+                    ledger.config(plan["store_id"])
+                )
+                original = plan["adopted_coverage"]["extension"]["publication"]
+                if (
+                    current["report_from"] > original["report_from"]
+                    or current["report_to"] < original["report_to"]
+                    or instant(current["as_of"]) < instant(original["as_of"])
+                ):
+                    raise SafeError("extension_publication_regression")
+                done = all(r["status"] == "COMPLETE" for r in units)
+                for r in units:
+                    if r["unit_kind"] == "PUBLISH_ANALYTICS" and r["status"] == "COMPLETE":
+                        done &= current["report_from"] <= r["filters"]["report_from"]
+                return True, done
             config = ledger.config(plan["store_id"])
             policy, publication = available(
                 ReadTransport(), args.project, config, units, now(), "installation"
@@ -253,7 +282,18 @@ def main(argv: list[str] | None = None) -> int:
                 }:
                     raise SafeError("installation_dependencies")
 
-            actions = InstallationActions(
+            action_type = InstallationActions
+            worker_type: Any = Worker
+            worker_options: dict[str, Any] = {}
+            if args.extension:
+                from src.installation.extension_actions import ExtensionActions
+                from src.installation.extension_runtime import ExtensionWorker
+
+                action_type = ExtensionActions
+                worker_type = ExtensionWorker
+                assert isinstance(ledger, ExtensionLedger)
+                worker_options["source"] = ledger.source
+            actions = action_type(
                 Actions(
                     transport,
                     Prerequisites(transport),
@@ -263,7 +303,9 @@ def main(argv: list[str] | None = None) -> int:
                 source,
                 certify,
             )
-            Worker(ledger, actions, lease, limits=limits, verification_source=source).execute(
+            worker_type(
+                ledger, actions, lease, limits=limits, verification_source=source, **worker_options
+            ).execute(
                 args.store_id,
                 args.work_unit_id,
                 args.expected_revision,
@@ -274,7 +316,7 @@ def main(argv: list[str] | None = None) -> int:
 
         from src.installation.automation import AutoPrepare
 
-        prepare = AutoPrepare(ledger, source, lease, limits)
+        prepare = None if args.extension else AutoPrepare(ledger, source, lease, limits)
 
         import google.auth
         import httpx
@@ -299,8 +341,17 @@ def main(argv: list[str] | None = None) -> int:
                 maximum_bytes_billed=args.maximum_bytes_billed,
                 maximum_total_bytes_billed=args.maximum_total_bytes_billed,
                 limits=limits,
+                extension=args.extension,
             )
-            dispatched = Orchestrator(
+            orchestrator_type: Any = Orchestrator
+            orchestrator_options: dict[str, Any] = {}
+            if args.extension:
+                from src.installation.extension_runtime import ExtensionOrchestrator
+
+                orchestrator_type = ExtensionOrchestrator
+                assert isinstance(ledger, ExtensionLedger)
+                orchestrator_options["source"] = ledger.source
+            dispatched = orchestrator_type(
                 ledger,
                 gateway,
                 lease,
@@ -308,11 +359,73 @@ def main(argv: list[str] | None = None) -> int:
                 limits=limits,
                 prepare=prepare,
                 auto_activate=args.auto_activate,
-                activation=Prerequisites(transport).activation,
+                activation=None if args.extension else Prerequisites(transport).activation,
+                **orchestrator_options,
             ).dispatch(args.store_id)
+            extension_dispatches = 0
+            if (
+                not args.extension
+                and args.all_stores
+                and os.environ.get("UP_INSTALLATION_EXTENSIONS_ENABLED") == "1"
+                and dispatched == 0
+            ):
+                from src.admin.history import HistoryService
+                from src.installation.enrichment import EnrichmentPrepare
+                from src.installation.extension_runtime import ExtensionOrchestrator
+
+                extension_ledger = ExtensionLedger(transport)
+                extension_service = HistoryService(
+                    extension_ledger, lease, b"system-enrichment-key-not-user" * 2
+                )
+                if os.environ.get("UP_INSTALLATION_ENRICHMENT_ENABLED") == "1":
+                    EnrichmentPrepare(extension_service, limits)(None)
+
+                def extension_publications(plan: Row, units: list[Row]) -> tuple[bool, bool]:
+                    current = extension_service.publication(
+                        extension_ledger.config(plan["store_id"])
+                    )
+                    original = plan["adopted_coverage"]["extension"]["publication"]
+                    if (
+                        current["report_from"] > original["report_from"]
+                        or current["report_to"] < original["report_to"]
+                        or instant(current["as_of"]) < instant(original["as_of"])
+                    ):
+                        raise SafeError("extension_publication_regression")
+                    done = all(u["status"] == "COMPLETE" for u in units)
+                    done &= all(
+                        current["report_from"] <= u["filters"]["report_from"]
+                        for u in units
+                        if u["unit_kind"] == "PUBLISH_ANALYTICS" and u["status"] == "COMPLETE"
+                    )
+                    return True, done
+
+                extension_gateway = InstallationGateway(
+                    http,
+                    args.project,
+                    args.location,
+                    args.lease_bucket,
+                    project_number=args.project_number,
+                    maximum_bytes_billed=args.maximum_bytes_billed,
+                    maximum_total_bytes_billed=args.maximum_total_bytes_billed,
+                    limits=limits,
+                    extension=True,
+                )
+                extension_dispatches = ExtensionOrchestrator(
+                    extension_ledger,
+                    extension_gateway,
+                    lease,
+                    extension_publications,
+                    limits=limits,
+                    source=extension_ledger.source,
+                ).dispatch()
             print(
                 json.dumps(
-                    {"status": "completed", "dispatches": dispatched, "all_stores": args.all_stores}
+                    {
+                        "status": "completed",
+                        "dispatches": dispatched,
+                        "extension_dispatches": extension_dispatches,
+                        "all_stores": args.all_stores,
+                    }
                 )
             )
         return 0

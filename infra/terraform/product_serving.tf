@@ -52,7 +52,7 @@ locals {
   product_enabled = var.product_api_image != null
   product_read_tables = toset([
     "store_runtime_config", "workspace_store_bindings", "installation_plans", "installation_work_units",
-    "sync_checkpoints", "sync_runs", "source_connections", "customers", "orders", "order_items",
+    "sync_checkpoints", "sync_runs", "quality_results", "source_connections", "customers", "orders", "order_items",
     "analytics_publications", "analytics_store_daily", "analytics_customer_metrics",
     "analytics_customer_purchase_sequence", "analytics_cohorts", "analytics_purchase_distribution",
     "analytics_products_daily", "analytics_funnel_daily", "analytics_intelligence_publications",

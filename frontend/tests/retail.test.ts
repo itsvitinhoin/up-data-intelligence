@@ -55,7 +55,9 @@ describe("retail and brand integration boundaries", () => {
       Number(d.performance.find((m) => m.label === "Sessões")?.value),
     );
     selected.forEach((p, i) => {
-      expect(p.variantSales?.reduce((s, v) => s + v.units, 0)).toBe(p.units);
+      expect(p.variantSales?.reduce((s, v) => s + (v.units ?? NaN), 0)).toBe(
+        p.units,
+      );
       expect(p.units).toBeLessThan(products[i].units);
       expect(p.stock).toBe(products[i].stock);
     });

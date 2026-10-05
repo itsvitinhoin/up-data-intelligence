@@ -71,7 +71,7 @@ locals {
   }
   control_plane_writes = {
     # This is a constant table inventory, never a store inventory.
-    upzero       = setunion(toset(["store_runtime_config"]), toset([for name, spec in local.tables : name if spec.dataset != "up_analytics" && !contains(["store_runtime_config", "source_connections", "workspace_store_bindings", "onboarding_operations", "installation_plans", "installation_work_units"], name) && !startswith(name, "meta_")]))
+    upzero       = setunion(toset(["store_runtime_config"]), toset([for name, spec in local.tables : name if spec.dataset != "up_analytics" && !contains(["store_runtime_config", "source_connections", "workspace_store_bindings", "onboarding_operations", "installation_plans", "installation_work_units", "installation_extension_plans", "installation_extension_work_units", "integration_operations"], name) && !startswith(name, "meta_")]))
     meta         = setunion(setsubtract(local.change16_meta_tables, toset(["meta_account_bindings"])), toset(["sync_runs", "sync_checkpoints", "quality_results"]))
     analytics    = local.analytics_write_tables
     intelligence = local.change16_intelligence_tables
@@ -193,6 +193,13 @@ resource "google_cloud_run_v2_job" "control_plane_worker" {
             value = "projects/${var.project_id}/secrets/${var.change16_meta_secret_id}/versions/${var.control_plane_meta_secret_version}"
           }
         }
+        dynamic "env" {
+          for_each = var.dashboard_completion_enabled ? [1] : []
+          content {
+            name  = "UP_INSTALLATION_EXTENSIONS_ENABLED"
+            value = "1"
+          }
+        }
         resources { limits = { cpu = "2", memory = "4Gi" } }
       }
     }
@@ -216,6 +223,13 @@ resource "google_cloud_run_v2_job" "control_plane_dispatcher" {
         image   = var.control_plane_image
         command = ["python", "-m", "src.control_plane.dispatcher_cli"]
         args    = local.control_plane_dispatch_args
+        dynamic "env" {
+          for_each = var.dashboard_completion_enabled ? [1] : []
+          content {
+            name  = "UP_INSTALLATION_EXTENSIONS_ENABLED"
+            value = "1"
+          }
+        }
         resources { limits = { cpu = "1", memory = "512Mi" } }
       }
     }

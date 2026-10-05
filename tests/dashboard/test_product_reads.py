@@ -302,3 +302,64 @@ def test_geography_cities_use_preaggregated_join_without_correlated_subquery():
     assert "ARRAY(SELECT" not in q.sql
     assert "COUNT(DISTINCT customer_id)" in q.sql
     assert "shipping_address" in q.sql
+
+
+def test_variant_family_commercial_identity_and_null_unobserved_sales(setup, monkeypatch):
+    service, reader = setup
+    reader.override["products"] = [
+        {
+            "product_key": "d" * 64,
+            "sku": "SKU",
+            "requested": Decimal("9.99"),
+            "fulfilled": Decimal("6.66"),
+            "units_requested": Decimal("3"),
+            "units_fulfilled": Decimal("2"),
+            "orders": 1,
+        }
+    ]
+    reader.override["product_evidence"] = [
+        {"product_key": "d" * 64, "duplicate_items": 0, "variant_id": "v1", "buyers_unique": 1}
+    ]
+    proof = {
+        "basis": "current_source_snapshot",
+        "snapshot_as_of": "2026-10-05T03:00:00Z",
+        "evidence_hash": "e" * 64,
+    }
+    family = {
+        v: {
+            "variant_id": v,
+            "product_id": "parent",
+            "name": "Fonte",
+            "stock": "5",
+            "catalog": proof,
+        }
+        for v in ("v1", "v2")
+    }
+    monkeypatch.setattr(service, "_catalog", lambda ids: family)
+    monkeypatch.setattr(
+        service, "_catalog_family", lambda parent: family if parent == "parent" else {}
+    )
+    reader.override["variant_sales"] = [
+        {
+            "variant_id": "v1",
+            "duplicate_items": 0,
+            "units_requested": Decimal("3"),
+            "units_fulfilled": Decimal("2"),
+            "requested": Decimal("9.99"),
+            "fulfilled": Decimal("6.66"),
+            "orders": 1,
+            "buyers": 1,
+        }
+    ]
+    data = service.product(PRINCIPAL, GRANT, "d" * 64)["data"]
+    assert data["product_id"] == "parent" and len(data["variants"]) == 2
+    assert data["variants"][0]["fulfilled_revenue"] == "6.66"
+    assert data["variants"][1]["units_fulfilled"] is None
+    assert data["sizes"] is None and data["sell_through"] is None
+    query = reader.calls[-1]
+    assert query.parameters["variants"] == ("STRING", '["v1", "v2"]')
+    assert "o.version_id=i.parent_order_version_id" in query.sql
+    assert "v1" not in query.sql
+    reader.override["variant_sales"][0]["variant_id"] = "foreign"
+    with pytest.raises(ReadError, match="variant_commercial_identity_invalid"):
+        service.product(PRINCIPAL, GRANT, "d" * 64)

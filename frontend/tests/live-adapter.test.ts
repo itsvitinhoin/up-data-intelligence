@@ -1,3 +1,4 @@
+import { creative } from "./fixtures/creatives";
 import { describe, it, expect, vi } from "vitest";
 import { createLiveDataApi } from "@/services/api/live";
 import {
@@ -10,6 +11,11 @@ import { ticket } from "@/services/api/overview-presenter";
 import type { RequestContext } from "@/types/domain";
 import {
   customer,
+  customerDetail,
+  customer360,
+  order,
+  timeline,
+  customerProducts,
   metadata,
   performance,
   orderDetail,
@@ -71,6 +77,37 @@ describe("original component real adapter", () => {
       "workspace-synthetic",
     );
   });
+  it("loads exact customer campaigns without per-campaign customer scans", async () => {
+    const fetcher = vi.fn<typeof fetch>().mockImplementation(async (input) => {
+      const path = new URL(String(input), "https://web.example.test").pathname;
+      if (path.endsWith("/intelligence"))
+        return Response.json(envelope(customer360, true));
+      if (path.endsWith("/orders")) return Response.json(envelope([order]));
+      if (path.endsWith("/products"))
+        return Response.json(envelope(customerProducts, true));
+      if (path.endsWith("/timeline"))
+        return Response.json(envelope(timeline, true));
+      if (path.endsWith("/campaigns"))
+        return Response.json(envelope([campaign], true));
+      return Response.json(envelope(customerDetail));
+    });
+    const result = await createLiveDataApi(metadata, fetcher).customer(
+      customer.customer_id,
+      context,
+    );
+    expect(result.campaigns.map((r) => r.id)).toEqual([campaign.campaign_id]);
+    expect(result.orders).toHaveLength(1);
+    expect(fetcher).toHaveBeenCalledTimes(6);
+    const paths = fetcher.mock.calls.map(
+      ([url]) => new URL(String(url), "https://web.example.test").pathname,
+    );
+    expect(paths).toContain(
+      `/api/dashboard/customers/${customer.customer_id}/campaigns`,
+    );
+    expect(
+      paths.some((path) => path.startsWith("/api/dashboard/campaigns")),
+    ).toBe(false);
+  });
   it("fails closed for changing generation, duplicate identity and looping cursors", async () => {
     for (const next of [
       envelope([customer]),
@@ -95,7 +132,13 @@ describe("original component real adapter", () => {
     const f = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(Response.json(envelope(performance, true)))
-      .mockResolvedValueOnce(Response.json(envelope([campaign], true)));
+      .mockResolvedValueOnce(Response.json(envelope([campaign], true)))
+      .mockResolvedValueOnce(
+        Response.json(
+          { error: { code: "creative_coverage_unavailable" } },
+          { status: 424 },
+        ),
+      );
     const result = await createLiveDataApi(metadata, f).read(
       "marketing",
       context,
@@ -107,6 +150,28 @@ describe("original component real adapter", () => {
     expect(result.series[0].revenue).toBeNull();
     expect(result.series[0].spend).toBe("100.01");
   });
+  it("loads ad rankings independently and never substitutes campaign values", async () => {
+    const fetcher = vi.fn<typeof fetch>().mockImplementation(async (input) => {
+      const path = new URL(String(input), "https://web.example.test").pathname;
+      if (path.endsWith("/performance"))
+        return Response.json(envelope(performance, true));
+      if (path.endsWith("/campaigns"))
+        return Response.json(envelope([campaign], true));
+      if (path.endsWith("/creatives"))
+        return Response.json(envelope([creative]));
+      throw new Error("unexpected resource");
+    });
+    const result = await createLiveDataApi(metadata, fetcher).read(
+      "marketing",
+      context,
+    );
+    expect(result.creatives).toHaveLength(1);
+    expect(result.creatives[0].id).toBe("000401");
+    expect(result.creatives[0].source).toBe("real");
+    expect(result.creatives[0].purchases).toBe(2);
+    expect(result.creatives[0].approved).toBeNull();
+    expect(fetcher).toHaveBeenCalledTimes(3);
+  });
   it("pins Intelligence across separate projections", async () => {
     const f = vi
       .fn<typeof fetch>()
@@ -116,6 +181,12 @@ describe("original component real adapter", () => {
           ...envelope([campaign], true),
           metadata: { ...envelope(null, true).metadata, generation: 5 },
         }),
+      )
+      .mockResolvedValueOnce(
+        Response.json(
+          { error: { code: "creative_coverage_unavailable" } },
+          { status: 424 },
+        ),
       );
     await expect(
       createLiveDataApi(metadata, f).read("marketing", context),

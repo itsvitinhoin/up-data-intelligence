@@ -10,6 +10,10 @@ import {
 } from "@/services/api/http";
 import { parseInstallation } from "@/services/api/installation";
 import { parseOnboarding } from "@/services/api/onboarding";
+import {
+  parseIntegrationHealth,
+  parseBrandSummaries,
+} from "@/services/api/brand-integrations";
 
 export const secureHeaders = {
   "Cache-Control": "private, no-store",
@@ -103,7 +107,9 @@ export const privateCall: PrivateCaller = async (
     url.password
   )
     throw new Error("invalid_private_service");
+  const started = performance.now();
   const authorization = await serviceAuthorization(url.origin);
+  const identityReady = performance.now();
   // A fresh header set overwrites browser attempts to supply any service/user identity.
   const headers = new Headers({
     Authorization: authorization,
@@ -112,13 +118,30 @@ export const privateCall: PrivateCaller = async (
   });
   const key = request.headers.get("idempotency-key");
   if (key) headers.set("Idempotency-Key", key);
-  return fetch(url.origin + path, {
+  const response = await fetch(url.origin + path, {
     method: body !== undefined ? "POST" : "GET",
     body,
     headers,
     cache: "no-store",
     redirect: "error",
     signal: AbortSignal.timeout(90000),
+  });
+  const headersOut = new Headers(response.headers);
+  // Durations only. Never attach scope, credentials or upstream result data.
+  headersOut.set(
+    "Server-Timing",
+    [
+      ...(response.headers.get("Server-Timing") ?? "")
+        .split(",")
+        .map((v) => v.trim())
+        .filter((v) => /^(auth|bq);dur=\d+(\.\d+)?$/.test(v)),
+      `wif;dur=${(identityReady - started).toFixed(1)}`,
+      `upstream;dur=${(performance.now() - identityReady).toFixed(1)}`,
+    ].join(", "),
+  );
+  return new Response(response.body, {
+    status: response.status,
+    headers: headersOut,
   });
 };
 class InputError extends Error {
@@ -253,6 +276,7 @@ const resources: Record<string, string> = {
   customer360: "customers",
   timeline: "customers",
   customerProducts: "customers",
+  customerCampaigns: "customers",
   campaign: "campaigns",
   campaignCustomers: "campaigns",
   campaignOrders: "campaigns",
@@ -264,6 +288,7 @@ const suffixes: Record<string, string> = {
   customer360: "/intelligence",
   timeline: "/timeline",
   customerProducts: "/products",
+  customerCampaigns: "/campaigns",
   campaignCustomers: "/customers",
   campaignOrders: "/orders",
 };
@@ -273,6 +298,7 @@ export async function liveRead(
   entity?: string,
   call: PrivateCaller = privateCall,
 ) {
+  const started = performance.now();
   if (request.method !== "GET") return authError(405, "method_not_allowed");
   if (!cookie(request, "__Host-up_session"))
     return authError(401, "unauthenticated");
@@ -298,19 +324,16 @@ export async function liveRead(
     const scope = ["tenant_id", "workspace_operation_id", "operation"].map(
       (k) => params.get(k),
     );
-    const catalogRes = await call("read", "/v1/session", request);
-    const failed = await safeResult(catalogRes);
-    if (failed) return failed;
-    const catalog = parseCatalog(await catalogRes.json());
     if (
-      !catalog.data.workspaces.some(
-        (w) =>
-          w.tenant_id === scope[0] &&
-          w.workspace_operation_id === scope[1] &&
-          w.operation === scope[2],
-      )
+      !scope
+        .slice(0, 2)
+        .every((v) => v && /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$/.test(v)) ||
+      !["B2B", "B2C"].includes(scope[2] ?? "")
     )
-      return authError(403, "workspace_forbidden");
+      return authError(400, "invalid_read_scope");
+    // The private API verifies the session and canonical tenant/workspace grant
+    // before constructing any business reader. A second /v1/session roundtrip
+    // adds no authorization evidence. Forward scope as a claim, never a grant.
     if (scope[2] !== "B2B") return authError(424, "coverage_not_certified");
     if (
       entity &&
@@ -331,7 +354,16 @@ export async function liveRead(
     if (resource === "installation") parseInstallation(value);
     else if (resource === "overview") decodeOverviewEnvelope(value);
     else decodeReadEnvelope(resource, value, entity);
-    return Response.json(value, { headers: secureHeaders });
+    const upstreamTiming = res.headers.get("Server-Timing") ?? "";
+    // Only our numeric diagnostic categories may reach the browser.
+    const timing = upstreamTiming
+      .split(",")
+      .map((part) => part.trim())
+      .filter((part) => /^(auth|bq|wif|upstream);dur=\d+(\.\d+)?$/.test(part));
+    timing.push(`bff;dur=${(performance.now() - started).toFixed(1)}`);
+    return Response.json(value, {
+      headers: { ...secureHeaders, "Server-Timing": timing.join(", ") },
+    });
   } catch {
     return authError(503, "product_read_unavailable");
   }
@@ -391,5 +423,229 @@ export async function liveOnboarding(
   } catch (error) {
     if (error instanceof InputError) return authError(error.status, error.code);
     return authError(503, "onboarding_unavailable");
+  }
+}
+
+export async function liveBrandSummaries(
+  request: Request,
+  call: PrivateCaller = privateCall,
+) {
+  if (request.method !== "GET") return authError(405, "method_not_allowed");
+  if (!cookie(request, "__Host-up_session"))
+    return authError(401, "unauthenticated");
+  if (new URL(request.url).search) return authError(400, "unsupported_filter");
+  try {
+    // Private Read independently requires ADMIN_UP and uses only canonical grants.
+    const res = await call("read", "/v1/admin/brands", request);
+    const failure = await safeResult(res);
+    if (failure) return failure;
+    return Response.json(parseBrandSummaries(await res.json()), {
+      headers: secureHeaders,
+    });
+  } catch {
+    return authError(503, "brand_metadata_unavailable");
+  }
+}
+
+export async function liveIntegrationHealth(
+  request: Request,
+  call: PrivateCaller = privateCall,
+) {
+  if (request.method !== "GET") return authError(405, "method_not_allowed");
+  if (!cookie(request, "__Host-up_session"))
+    return authError(401, "unauthenticated");
+  const params = new URL(request.url).searchParams;
+  if (
+    [...params.keys()].some(
+      (key) =>
+        !["tenant_id", "workspace_operation_id", "operation"].includes(key) ||
+        params.getAll(key).length !== 1,
+    ) ||
+    ["tenant_id", "workspace_operation_id"].some(
+      (key) => !/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$/.test(params.get(key) ?? ""),
+    ) ||
+    !["B2B", "B2C"].includes(params.get("operation") ?? "")
+  )
+    return authError(400, "invalid_admin_scope");
+  try {
+    const res = await call(
+      "read",
+      `/v1/admin/integrations/health?${params}`,
+      request,
+    );
+    const failure = await safeResult(res);
+    if (failure) return failure;
+    const value = parseIntegrationHealth(await res.json());
+    if (
+      value.data.tenant_id !== params.get("tenant_id") ||
+      value.data.workspace_operation_id !== params.get("workspace_operation_id")
+    )
+      return authError(503, "integration_metadata_scope_mismatch");
+    return Response.json(value, { headers: secureHeaders });
+  } catch {
+    return authError(503, "integration_health_unavailable");
+  }
+}
+
+export async function liveHistory(
+  request: Request,
+  call: PrivateCaller = privateCall,
+) {
+  if (!["GET", "POST"].includes(request.method))
+    return authError(405, "method_not_allowed");
+  if (request.method === "POST") {
+    try {
+      assertCsrf(request);
+    } catch {
+      return authError(403, "csrf_required");
+    }
+  }
+  if (!cookie(request, "__Host-up_session"))
+    return authError(401, "unauthenticated");
+  const params = new URL(request.url).searchParams;
+  if (
+    [...params.keys()].some(
+      (k) =>
+        !["tenant_id", "workspace_operation_id", "operation"].includes(k) ||
+        params.getAll(k).length !== 1,
+    ) ||
+    ["tenant_id", "workspace_operation_id"].some(
+      (k) => !/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$/.test(params.get(k) ?? ""),
+    ) ||
+    params.get("operation") !== "B2B"
+  )
+    return authError(400, "invalid_admin_scope");
+  try {
+    const { parseHistory } = await import("@/services/api/history");
+    let body: string | undefined;
+    if (request.method === "POST") {
+      const parsed = await jsonBody(request, 4096);
+      const value = parsed.value;
+      if (
+        !value ||
+        typeof value !== "object" ||
+        Object.keys(value).sort().join(",") !== "from,provider,to" ||
+        !("provider" in value) ||
+        !["upzero", "meta"].includes(String(value.provider)) ||
+        !("from" in value) ||
+        !("to" in value) ||
+        ![value.from, value.to].every(
+          (v) => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v),
+        )
+      )
+        return authError(400, "invalid_history_request");
+      body = parsed.raw;
+    }
+    const res = await call(
+      "admin",
+      `/v1/admin/integrations/history?${params}`,
+      request,
+      body,
+    );
+    const failed = await safeResult(res);
+    if (failed) return failed;
+    const raw: unknown = await res.json();
+    parseHistory(raw, request.method === "POST");
+    return Response.json(raw, { status: res.status, headers: secureHeaders });
+  } catch (error) {
+    if (error instanceof InputError) return authError(error.status, error.code);
+    return authError(503, "history_request_unconfirmed");
+  }
+}
+
+export async function liveConnectionConfiguration(
+  request: Request,
+  call: PrivateCaller = privateCall,
+) {
+  if (!["GET", "POST"].includes(request.method))
+    return authError(405, "method_not_allowed");
+  if (request.method === "POST") {
+    try {
+      assertCsrf(request);
+    } catch {
+      return authError(403, "csrf_required");
+    }
+  }
+  if (!cookie(request, "__Host-up_session"))
+    return authError(401, "unauthenticated");
+  const params = new URL(request.url).searchParams;
+  if (
+    [...params.keys()].some(
+      (k) =>
+        !["tenant_id", "workspace_operation_id", "operation"].includes(k) ||
+        params.getAll(k).length !== 1,
+    ) ||
+    ["tenant_id", "workspace_operation_id"].some(
+      (k) => !/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$/.test(params.get(k) ?? ""),
+    ) ||
+    params.get("operation") !== "B2B"
+  )
+    return authError(400, "invalid_admin_scope");
+  try {
+    let body: string | undefined;
+    if (request.method === "POST") {
+      const key = request.headers.get("Idempotency-Key");
+      if (
+        !key ||
+        !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(
+          key,
+        )
+      )
+        return authError(400, "invalid_idempotency_key");
+      const parsed = await jsonBody(request, 16384),
+        value = parsed.value;
+      const addition =
+        value &&
+        typeof value === "object" &&
+        "action" in value &&
+        value.action === "add" &&
+        Object.keys(value).sort().join(",") ===
+          "account_id,action,api_version,provider" &&
+        "provider" in value &&
+        value.provider === "meta" &&
+        "account_id" in value &&
+        typeof value.account_id === "string" &&
+        /^[0-9]+$/.test(value.account_id) &&
+        "api_version" in value &&
+        typeof value.api_version === "string" &&
+        /^v[0-9]+\.0$/.test(value.api_version);
+      if (
+        !addition &&
+        (!value ||
+          typeof value !== "object" ||
+          Object.keys(value).sort().join(",") !==
+            "action,credential,provider" ||
+          !("provider" in value) ||
+          !["upzero", "meta"].includes(String(value.provider)) ||
+          !("action" in value) ||
+          !["rotate", "disable", "enable"].includes(String(value.action)))
+      )
+        return authError(400, "invalid_integration_request");
+      body = parsed.raw;
+    }
+    const res = await call(
+      "admin",
+      `/v1/admin/integrations/configuration?${params}`,
+      request,
+      body,
+    );
+    const failed = await safeResult(res);
+    if (failed) return failed;
+    const { parseConnections, parseConnectionResult } =
+      await import("@/services/api/connections");
+    const value: unknown = await res.json();
+    if (request.method === "GET") {
+      const parsed = parseConnections(value);
+      if (
+        parsed.data.tenant_id !== params.get("tenant_id") ||
+        parsed.data.workspace_operation_id !==
+          params.get("workspace_operation_id")
+      )
+        return authError(503, "integration_scope_mismatch");
+    } else parseConnectionResult(value);
+    return Response.json(value, { headers: secureHeaders });
+  } catch (error) {
+    if (error instanceof InputError) return authError(error.status, error.code);
+    return authError(503, "integration_change_unconfirmed");
   }
 }

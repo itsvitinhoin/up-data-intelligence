@@ -58,6 +58,7 @@ export async function readDashboard<K extends ReadResource>(
     customer360: `customers/${encodeURIComponent(options.customerId ?? "")}/intelligence`,
     timeline: `customers/${encodeURIComponent(options.customerId ?? "")}/timeline`,
     customerProducts: `customers/${encodeURIComponent(options.customerId ?? "")}/products`,
+    customerCampaigns: `customers/${encodeURIComponent(options.customerId ?? "")}/campaigns`,
     influencedOrders: "orders/influenced",
     influencedCustomers: "customers/influenced",
     overview: "overview",
@@ -72,6 +73,7 @@ export async function readDashboard<K extends ReadResource>(
     products: "products",
     funnel: "funnel",
     geography: "geography",
+    creatives: "creatives",
   };
   const response = await fetcher(
     `/api/dashboard/${paths[resource]}?${params}`,

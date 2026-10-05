@@ -38,6 +38,7 @@ export function groupedSales(
   key: "category" | "size" | "color",
 ) {
   const grouped = new Map<string, number>();
+  const unknown = new Set<string>();
   for (const product of rows) {
     const cells =
       key === "category"
@@ -47,10 +48,15 @@ export function groupedSales(
             units: v.units,
           })) ?? []);
     for (const cell of cells) {
-      if (cell.units === null) continue;
+      if (cell.name === null) continue;
+      if (cell.units === null) {
+        unknown.add(cell.name);
+        continue;
+      }
       grouped.set(cell.name, (grouped.get(cell.name) ?? 0) + cell.units);
     }
   }
+  unknown.forEach((label) => grouped.delete(label));
   return [...grouped]
     .map(([label, value]) => ({ label, value }))
     .toSorted((a, b) => b.value - a.value || a.label.localeCompare(b.label));

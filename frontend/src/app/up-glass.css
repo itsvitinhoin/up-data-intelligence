@@ -1422,3 +1422,34 @@ h1 {
     animation: none !important;
   }
 }
+
+/* Main-content loader keeps workspace navigation and logout accessible. */
+.page-loader {
+  display: grid;
+  place-items: center;
+  min-height: 22rem;
+  overflow: hidden;
+}
+.page-loader video {
+  width: min(100%, 14rem);
+  max-height: 25rem;
+  object-fit: contain;
+  border-radius: 20px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .page-loader video {
+    display: none;
+  }
+}
+@media print {
+  .page-loader {
+    display: none;
+  }
+}
+
+.brand-admin-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.5rem;
+}

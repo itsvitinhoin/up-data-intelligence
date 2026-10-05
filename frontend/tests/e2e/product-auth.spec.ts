@@ -3,6 +3,15 @@ import { claims, mockedAuth } from "../fixtures/product-auth";
 test("live admin preserves the approved shell, search and brand cards using only server catalog", async ({
   page,
 }) => {
+  const operationalRequests: string[] = [];
+  page.on("request", (request) => {
+    if (
+      /\/api\/(dashboard\/installation|admin\/integrations\/health)/.test(
+        request.url(),
+      )
+    )
+      operationalRequests.push(request.url());
+  });
   await mockedAuth(page, "ADMIN_UP");
   await page.goto("/");
   await expect(
@@ -37,11 +46,65 @@ test("live admin preserves the approved shell, search and brand cards using only
   await expect(
     page.getByText("DEV · Acesso interno", { exact: true }),
   ).toBeVisible();
-  await expect(page.getByRole("combobox", { name: /ERP de/ })).toBeDisabled();
-  await page.getByRole("button", { name: /Ver integração de/ }).click();
+  await expect(
+    page.locator(".workspace-grid.brand-integrations"),
+  ).not.toContainText("43/43");
+  expect(operationalRequests).toEqual([]);
+  await page
+    .getByRole("button", { name: "Configurar Integrações", exact: true })
+    .click();
   await expect(page.getByRole("dialog")).toContainText(
-    "Edição de credenciais e integrações ainda indisponível",
+    "Credencial: Configurada",
   );
+  await expect(
+    page.getByRole("dialog").locator('input[type="password"]'),
+  ).toHaveCount(0);
+  await expect(page.getByRole("dialog")).toContainText("Disponível em breve");
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Substituir credencial" })
+    .click();
+  await expect(
+    page.getByRole("dialog").locator('input[type="password"]'),
+  ).toHaveValue("");
+  await expect(
+    page
+      .getByRole("dialog")
+      .getByRole("button", { name: "Verificar e salvar" }),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
+  await page
+    .getByRole("button", { name: "Saúde das Integrações", exact: true })
+    .click();
+  await expect(page.getByRole("dialog")).toContainText(
+    "Sem falhas bloqueantes",
+  );
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "UP Zero", exact: true })
+    .click();
+  await expect(page.getByRole("dialog").getByRole("table")).toContainText(
+    "Clientes",
+  );
+  await page.keyboard.press("Escape");
+  await page
+    .getByRole("button", { name: "Extrair Histórico", exact: true })
+    .click();
+  await expect(page.getByRole("dialog")).toContainText("Cobertura atual");
+  await page
+    .getByRole("dialog")
+    .getByLabel("Período inicial")
+    .fill("2026-08-01");
+  await page
+    .getByRole("dialog")
+    .getByLabel("Período final (inclusivo)")
+    .fill("2026-08-31");
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Solicitar extração" })
+    .click();
+  await expect(page.getByRole("dialog")).toContainText("Plano persistido");
+  await expect(page.getByRole("dialog")).toContainText("0/63 unidades");
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Criar marca", exact: true }).click();
   await expect(

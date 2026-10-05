@@ -3,11 +3,13 @@
 import re
 import time
 from collections.abc import Callable
+from typing import Any
 
 import httpx
 
 from src.connectors.meta.config import Account
-from src.connectors.meta.foundation import MetaFoundationConnector
+from src.connectors.meta.enrichment_schema import CREATIVE_FIELDS
+from src.connectors.meta.foundation import FOUNDATION_FIELDS, MetaFoundationConnector
 from src.domain.models import SafeError
 
 
@@ -25,6 +27,11 @@ def gate(
 
 class MetaFoundationLiveConnector(MetaFoundationConnector):
     """Inherits bounded retries/cursor reconstruction/sanitization, never paging.next."""
+
+    fields = {
+        **FOUNDATION_FIELDS,
+        "ads": FOUNDATION_FIELDS["ads"].replace("creative{id}", CREATIVE_FIELDS),
+    }
 
     def __init__(
         self,
@@ -142,3 +149,11 @@ class MetaAccountLister(MetaFoundationLiveConnector):
         self.client = httpx.Client(
             transport=transport, trust_env=False, follow_redirects=False, timeout=30
         )
+
+
+class MetaCreativeLiveConnector(MetaFoundationLiveConnector):
+    """Explicit ad/day source for the separate creative contract."""
+
+    def __init__(self, *args: Any, **kwargs: Any):
+        super().__init__(*args, **kwargs)
+        self.insights_level = "ad"

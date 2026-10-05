@@ -35,6 +35,15 @@ const MarketingChart = dynamic(
   () => import("@/components/marketing-charts").then((m) => m.MarketingChart),
   { ssr: false },
 );
+const sumCreatives = (
+  rows: MarketingCreative[],
+  key: "spend" | "leads" | "approved" | "purchases" | "clicks" | "impressions",
+) =>
+  rows.some((row) => row[key] === null)
+    ? null
+    : rows.reduce((sum, row) => sum + row[key]!, 0);
+const times = (value: number | null, factor: number) =>
+  value === null ? null : value * factor;
 const cost = (r: MarketingCreative, b2c: boolean) =>
   ratio(r.spend, b2c ? r.purchases : r.leads);
 const pct = (value: number | null) =>
@@ -57,16 +66,24 @@ function CreativePreview({
   creative: MarketingCreative;
   large?: boolean;
 }) {
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
   return (
     <div className={large ? "creative-preview large" : "creative-preview"}>
-      <Image
-        src={creative.preview}
-        alt={`Prévia ilustrativa: ${creative.name}`}
-        width={480}
-        height={600}
-        unoptimized
-      />
-      <span>{creative.format} · demo</span>
+      {creative.preview && failedUrl !== creative.preview ? (
+        <Image
+          src={creative.preview}
+          alt={`${creative.source === "real" ? "Prévia Meta" : "Prévia ilustrativa"}: ${creative.name}`}
+          width={480}
+          height={600}
+          unoptimized
+          onError={() => setFailedUrl(creative.preview)}
+        />
+      ) : (
+        <p className="muted text-sm">Prévia indisponível</p>
+      )}
+      <span>
+        {creative.format} · {creative.source === "real" ? "Meta" : "demo"}
+      </span>
     </div>
   );
 }
@@ -115,7 +132,7 @@ function CreativeRank({
                 <span>{ad.campaign_name}</span>
                 <div className="creative-result num">
                   {kind === "ctr"
-                    ? pct(ratio(ad.clicks * 100, ad.impressions))
+                    ? pct(ratio(times(ad.clicks, 100), ad.impressions))
                     : kind === "cost"
                       ? money(cost(ad, b2c))
                       : number(b2c ? ad.purchases : ad.leads)}
@@ -142,7 +159,7 @@ export function marketingMetrics(data: Marketing): Metric[] {
   const sum = (
     key:
       "spend" | "leads" | "approved" | "purchases" | "clicks" | "impressions",
-  ) => data.creatives.reduce((s, ad) => s + ad[key], 0);
+  ) => sumCreatives(data.creatives, key);
   const spend = sum("spend"),
     purchases = sum("purchases");
   // The series contains deduplicated order revenue; campaign revenue is not additive.
@@ -179,13 +196,13 @@ export function marketingMetrics(data: Marketing): Metric[] {
     ),
     kpi(
       "CTR médio",
-      ratio(sum("clicks") * 100, sum("impressions")),
+      ratio(times(sum("clicks"), 100), sum("impressions")),
       "percent",
       "Cliques / impressões × 100, ponderado pelo volume.",
     ),
     kpi(
       "CPM",
-      ratio(spend * 1000, sum("impressions")),
+      ratio(times(spend, 1000), sum("impressions")),
       "currency",
       "Investimento / impressões × 1.000.",
     ),
@@ -225,7 +242,7 @@ function MarketingContent({
   const [status, setStatus] = useState("all");
   const metrics = compare(marketingMetrics);
   const sum = (key: "spend" | "leads" | "clicks" | "impressions") =>
-    data.creatives.reduce((sum, ad) => sum + ad[key], 0);
+    sumCreatives(data.creatives, key);
   const spend = data.summary ? data.summary.spend : sum("spend"),
     leads = data.summary ? data.summary.leads : sum("leads");
   type Row = Marketing["campaigns"][number];
@@ -331,7 +348,9 @@ function MarketingContent({
           </div>
           <span className="pill">
             {data.source === "real"
-              ? "Meta Ads · criativos indisponíveis"
+              ? data.creatives.length
+                ? "Meta Ads · métricas por anúncio"
+                : "Meta Ads · cobertura de criativos indisponível"
               : "Meta Ads · demonstração"}
           </span>
         </div>
@@ -413,7 +432,7 @@ function MarketingContent({
               <dd>
                 {data.summary
                   ? metric(data.summary.ctr, "percent")
-                  : pct(ratio(sum("clicks") * 100, sum("impressions")))}
+                  : pct(ratio(times(sum("clicks"), 100), sum("impressions")))}
               </dd>
             </div>
           </dl>
@@ -472,10 +491,18 @@ function MarketingContent({
             <>
               <SheetTitle>{selected.name}</SheetTitle>
               <SheetDescription>
-                Prévia ilustrativa · métricas sintéticas · nenhum anúncio real
-                conectado.
+                {selected.source === "real"
+                  ? "Métricas reportadas pelo Meta por anúncio. A prévia e o status são do catálogo atual; não representam atribuição comercial."
+                  : "Prévia ilustrativa · métricas sintéticas · nenhum anúncio real conectado."}
               </SheetDescription>
               <CreativePreview creative={selected} large />
+              {selected.source === "real" && selected.previewObservedAt && (
+                <p className="muted text-sm">
+                  Prévia/status observados em{" "}
+                  {new Date(selected.previewObservedAt).toLocaleString("pt-BR")}{" "}
+                  · links de mídia podem expirar.
+                </p>
+              )}
               <p className="muted text-sm">
                 {selected.placement} · {selected.format} ·{" "}
                 {statusLabel(selected.status)}
@@ -487,15 +514,25 @@ function MarketingContent({
                   ["Cliques", number(selected.clicks)],
                   [
                     "CTR",
-                    pct(ratio(selected.clicks * 100, selected.impressions)),
+                    pct(
+                      ratio(times(selected.clicks, 100), selected.impressions),
+                    ),
                   ],
                   [
-                    b2c ? "Compras Meta" : "Leads",
-                    number(b2c ? selected.purchases : selected.leads),
+                    b2c || selected.source === "real"
+                      ? "Compras Meta"
+                      : "Leads",
+                    number(
+                      b2c || selected.source === "real"
+                        ? selected.purchases
+                        : selected.leads,
+                    ),
                   ],
                   [
-                    b2c ? "Custo por compra" : "CPL",
-                    money(cost(selected, b2c)),
+                    b2c || selected.source === "real"
+                      ? "Custo por compra"
+                      : "CPL",
+                    money(cost(selected, b2c || selected.source === "real")),
                   ],
                 ].map(([label, value]) => (
                   <div key={label}>

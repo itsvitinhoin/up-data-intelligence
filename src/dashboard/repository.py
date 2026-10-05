@@ -43,6 +43,11 @@ class BigQueryReadSession:
         self.client = client
         self.budget = budget
         self.reserved_bytes = 0
+        self.query_duration_ms = 0
+        self.query_count = 0
+        self.bytes_processed = 0
+        self.slot_ms = 0
+        self.cache_hits = 0
 
     def query(
         self, query: Query, *, request_id: str, store_id: str, generation: int | None
@@ -97,13 +102,27 @@ class BigQueryReadSession:
                 status="failed",
             )
             raise ReadError(503, "bigquery_read_failed") from None
+        duration = int((time.monotonic() - start) * 1000)
+        self.query_duration_ms += duration
+        self.query_count += 1
+        # SDK fields can be missing; never coerce an unknown into a measured zero.
+        processed = getattr(job, "total_bytes_processed", None)
+        slots = getattr(job, "slot_millis", None)
+        cached = getattr(job, "cache_hit", None)
+        if type(processed) is int and processed >= 0:
+            self.bytes_processed += processed
+        if type(slots) is int and slots >= 0:
+            self.slot_ms += slots
+        self.cache_hits += int(cached is True)
         event(
             "dashboard_query_finished",
             request_id=request_id,
             store_id=store_id,
             resource=query.name,
             generation=generation,
-            query_duration_ms=int((time.monotonic() - start) * 1000),
+            query_duration_ms=duration,
+            slot_ms=slots if type(slots) is int else None,
+            cache_hit=cached if type(cached) is bool else None,
             bytes_processed=getattr(job, "total_bytes_processed", None),
             row_count=len(rows),
             status="completed",

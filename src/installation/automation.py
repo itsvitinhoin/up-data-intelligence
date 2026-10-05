@@ -44,7 +44,13 @@ class AutoPrepare:
                             self.source(c, system)
                     target = Window.previous_closed_day(c.timezone or "", self.clock()).as_of
                     cp, runs = self.ledger.evidence(current_store)
-                    configured, plan, units = Planner(self.limits).calculate(
+                    import os
+
+                    configured, plan, units = Planner(
+                        self.limits,
+                        catalog_snapshots=os.environ.get("UP_INSTALLATION_ENRICHMENT_ENABLED")
+                        == "1",
+                    ).calculate(
                         c, target, self.clock(), operation=operation, checkpoints=cp, runs=runs
                     )
                     require_creatable_plan(plan)

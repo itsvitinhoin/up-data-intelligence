@@ -8,6 +8,8 @@ from typing import Any
 from src import __version__
 from src.bigquery.repository import Repository
 from src.config.settings import Settings
+from src.connectors.upzero.catalog_schema import RESOURCES as CATALOG_RESOURCES
+from src.connectors.upzero.catalog_schema import VERSION as CATALOG_VERSION
 from src.connectors.upzero.client import UpZeroConnector
 from src.domain.models import Batch, SafeError
 from src.ingestion import metrics
@@ -18,6 +20,7 @@ from src.ingestion.checkpoints import (
     CHECKPOINT_RECOVERED,
     CHECKPOINT_RUNNING,
 )
+from src.normalization.catalog import normalize_catalog
 from src.normalization.entities import VERSION, normalize
 from src.normalization.identity import identity_evidence
 from src.observability.logging import event
@@ -27,6 +30,8 @@ from src.utils.data import digest, now, timestamp
 
 TABLE_FOR = {"customers": "customers", "orders": "orders", "analytics_facts": "analytics_events"}
 KEY_FOR = {"customers": "customer_id", "orders": "order_id", "analytics_events": "fact_id"}
+TABLE_FOR.update({name: spec[0] for name, spec in CATALOG_RESOURCES.items()})
+KEY_FOR.update({spec[0]: spec[2] for spec in CATALOG_RESOURCES.values()})
 
 
 def row_key(store: str, *parts: Any) -> str:
@@ -91,6 +96,7 @@ class Engine:
 
     def transform(self, raw: dict[str, Any]) -> Batch:
         store, run, resource = raw["store_id"], raw["run_id"], raw["resource"]
+        transform_version = CATALOG_VERSION if resource in CATALOG_RESOURCES else VERSION
         batch = Batch()
 
         def quality(rule: str, severity: str, record: str = "") -> None:
@@ -120,7 +126,11 @@ class Engine:
             try:
                 if not isinstance(source, dict):
                     raise ValueError("invalid_record")
-                _, entity, items = normalize(resource, source)
+                _, entity, items = (
+                    normalize_catalog(resource, source)
+                    if resource in CATALOG_RESOURCES
+                    else normalize(resource, source)
+                )
                 key = row_key(store, entity[keyfield])
                 if key in seen:
                     quality(
@@ -135,11 +145,27 @@ class Engine:
                     batch.failed += 1
                     continue
                 seen.add(key)
-                if (
-                    old
+                unchanged = (
+                    old is not None
                     and old["payload_hash"] == payload_hash
-                    and old.get("transform_version") == VERSION
-                ):
+                    and old.get("transform_version") == transform_version
+                )
+                if unchanged and old is not None:
+                    if resource in CATALOG_RESOURCES:
+                        batch.add(
+                            "catalog_observations",
+                            {
+                                "row_key": digest([store, run, resource, entity[keyfield]]),
+                                "store_id": store,
+                                "run_id": run,
+                                "resource": resource,
+                                "entity_id": entity[keyfield],
+                                "entity_version_id": old["version_id"],
+                                "raw_record_id": raw["raw_record_id"],
+                                "payload_hash": payload_hash,
+                                "observed_at": raw["ingested_at"],
+                            },
+                        )
                     continue
                 if old and datetime.fromisoformat(
                     timestamp(old["observed_at"])
@@ -157,7 +183,7 @@ class Engine:
                         quality("conflicting_source_version", "alert", key)
                         batch.failed += 1
                         continue
-                version = digest([key, raw["raw_record_id"], payload_hash, VERSION])
+                version = digest([key, raw["raw_record_id"], payload_hash, transform_version])
                 meta = {
                     "store_id": store,
                     "source_system": "upzero",
@@ -167,9 +193,24 @@ class Engine:
                     "source_updated_at": source_updated,
                     "payload_hash": payload_hash,
                     "version_id": version,
-                    "transform_version": VERSION,
+                    "transform_version": transform_version,
                 }
                 row = {**entity, **meta, "row_key": key}
+                if resource in CATALOG_RESOURCES:
+                    batch.add(
+                        "catalog_observations",
+                        {
+                            "row_key": digest([store, run, resource, entity[keyfield]]),
+                            "store_id": store,
+                            "run_id": run,
+                            "resource": resource,
+                            "entity_id": entity[keyfield],
+                            "entity_version_id": version,
+                            "raw_record_id": raw["raw_record_id"],
+                            "payload_hash": payload_hash,
+                            "observed_at": raw["ingested_at"],
+                        },
+                    )
                 batch.add(table, row)
                 batch.add(table + "_versions", {**row, "row_key": version})
                 current[key] = row
@@ -343,7 +384,7 @@ class Engine:
     ) -> dict[str, Any]:
         if resource not in TABLE_FOR:
             raise SafeError("unsupported_resource")
-        if self.cfg.page_limit is not None:
+        if self.cfg.page_limit is not None and resource not in {"attributes", "inventory"}:
             filters = {
                 **filters,
                 "limit": min(self.cfg.page_limit, 1000 if resource == "analytics_facts" else 200),

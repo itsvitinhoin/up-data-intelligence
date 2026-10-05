@@ -176,7 +176,7 @@ def test_http_date_retry_after():
 @pytest.mark.parametrize(
     "resource,filters",
     [
-        ("products", {}),
+        ("unsupported_catalog", {}),
         ("orders", {"authorization": "SECRET"}),
         ("analytics_facts", {"from": "a"}),
         ("customers", {"limit": 201}),

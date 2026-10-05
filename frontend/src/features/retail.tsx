@@ -61,7 +61,7 @@ export function RetailPerformance() {
       />
       <FiltersBar />
       {q.isPending ? (
-        <Loading />
+        <Loading page />
       ) : q.isError ? (
         <Failure retry={() => void q.refetch()} />
       ) : (

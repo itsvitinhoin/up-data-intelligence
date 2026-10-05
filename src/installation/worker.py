@@ -23,6 +23,7 @@ RETRYABLE = frozenset(
 UNKNOWN = frozenset(
     {
         "bigquery_write_outcome_unknown",
+        "registry_write_outcome_unknown",
         "source_verification_outcome_unknown",
         "work_execution_outcome_unknown",
     }
@@ -61,6 +62,15 @@ class Worker:
             raise SafeError("work_execution_outcome_unknown")
         return matches[0]
 
+    def configuration_valid(self, plan: Row, config: StoreConfig) -> bool:
+        return (
+            plan["status"] in {"RUNNING", "PARTIAL"}
+            and plan["planner_version"] == VERSION
+            and config.revision == plan["registry_revision"]
+            and config_hash(config) == plan["config_hash"]
+            and not config.sync_enabled
+        )
+
     def execute(self, store: str, work_id: str, revision: int, token: str, pipeline: str) -> Row:
         with self.lease("installation-work:" + store), self.lease(store):
             plans = self.ledger.plans(store)
@@ -83,13 +93,7 @@ class Worker:
                 raise SafeError("installation_work_conflict")
             plan = next(p for p in plans if p["plan_id"] == row["plan_id"])
             c = self.ledger.config(store)
-            if (
-                plan["status"] not in {"RUNNING", "PARTIAL"}
-                or plan["planner_version"] != VERSION
-                or c.revision != plan["registry_revision"]
-                or config_hash(c) != plan["config_hash"]
-                or c.sync_enabled
-            ):
+            if not self.configuration_valid(plan, c):
                 self.ledger.transition(
                     row,
                     status="BLOCKED",

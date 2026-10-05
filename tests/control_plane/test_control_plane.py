@@ -530,17 +530,46 @@ def test_shared_schema_is_only_addition_and_old_terraform_preserved():
     root = Path("infra/terraform")
     old = json.loads(Path("tests/fixtures/change161/base_tables.json").read_text())
     active = json.loads((root / "tables.json").read_text())
-    assert set(active) - set(old) == {
+    from src.connectors.upzero.catalog_schema import TABLE_NAMES as CATALOG_TABLE_NAMES
+
+    creative_tables = {"meta_creative_insights_daily", "meta_creative_insights_daily_versions"}
+
+    assert set(active) - set(old) == CATALOG_TABLE_NAMES | creative_tables | {
         REGISTRY,
         "workspace_store_bindings",
         "onboarding_operations",
         "installation_plans",
         "installation_work_units",
+        "installation_extension_plans",
+        "installation_extension_work_units",
+        "integration_operations",
     }
     assert all(active[name] == spec for name, spec in old.items())
     hashes = json.loads(Path("tests/fixtures/change161/base_schema_hashes.json").read_text())
+    from src.connectors.meta.enrichment_schema import FIELDS as META_ENRICHMENT_FIELDS
+
+    enriched = {
+        "meta_live_" + ("insights_daily" if resource == "insights" else resource) + suffix: fields
+        for resource, fields in META_ENRICHMENT_FIELDS.items()
+        for suffix in ("", "_versions")
+    }
     for name, sha in hashes.items():
-        assert hashlib.sha256((root / "schemas" / (name + ".json")).read_bytes()).hexdigest() == sha
+        original = (root / "schemas" / (name + ".json")).read_bytes()
+        if name in enriched:
+            schema = json.loads(original)
+            additions = [field for field in schema if field["name"] in enriched[name]]
+            assert additions == [
+                {"name": field, "type": typ, "mode": "NULLABLE"}
+                for field, typ in enriched[name].items()
+            ]
+            # Golden hashes still protect every pre-existing field/type/mode/order.
+            original = (
+                json.dumps(
+                    [field for field in schema if field["name"] not in enriched[name]], indent=2
+                )
+                + "\n"
+            ).encode()
+        assert hashlib.sha256(original).hexdigest() == sha
     schema = json.loads((root / "schemas" / (REGISTRY + ".json")).read_text())
     assert {f["name"] for f in schema if f["mode"] == "REQUIRED"} == {
         "row_key",

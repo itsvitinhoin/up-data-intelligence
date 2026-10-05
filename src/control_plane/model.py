@@ -204,6 +204,7 @@ class StoreConfig:
         if not self.operation_b2b or not self.policy_version or not self.qualifying_order_statuses:
             raise SafeError("analytics_policy_required")
         zone = ZoneInfo(self.timezone or "")
+        observed_from = self.history_from or ""
         if self.facts_complete:
             start = datetime.combine(
                 date.fromisoformat(window.report_from), time(), zone
@@ -216,6 +217,12 @@ class StoreConfig:
                 or instant(self.facts_coverage_to or "") < end
             ):
                 raise SafeError("facts_window_not_certified")
+            # A certified historical extension can precede the original onboarding
+            # request. Read its observed orders on subsequent full refreshes too.
+            # This is a source-read bound, never lifetime proof or a Registry edit.
+            if not self.history_complete:
+                if instant(self.facts_coverage_from or "") < instant(observed_from):
+                    observed_from = self.facts_coverage_from or ""
         return AnalyticsPolicy(
             self.store_id,
             self.policy_version,
@@ -227,7 +234,7 @@ class StoreConfig:
             window.as_of,
             window.report_from,
             window.report_to,
-            self.history_from or "",
+            observed_from,
             HistoryCoverage(**self.history_coverage) if self.history_coverage else None,
         )
 

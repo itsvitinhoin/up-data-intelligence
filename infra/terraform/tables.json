@@ -41,6 +41,38 @@
       "resource"
     ]
   },
+  "upzero_products": {
+    "dataset": "up_raw",
+    "partition": "ingested_at",
+    "cluster": [
+      "store_id",
+      "resource"
+    ]
+  },
+  "upzero_variants": {
+    "dataset": "up_raw",
+    "partition": "ingested_at",
+    "cluster": [
+      "store_id",
+      "resource"
+    ]
+  },
+  "upzero_attributes": {
+    "dataset": "up_raw",
+    "partition": "ingested_at",
+    "cluster": [
+      "store_id",
+      "resource"
+    ]
+  },
+  "upzero_inventory": {
+    "dataset": "up_raw",
+    "partition": "ingested_at",
+    "cluster": [
+      "store_id",
+      "resource"
+    ]
+  },
   "customers": {
     "dataset": "up_core",
     "partition": null,
@@ -103,6 +135,79 @@
     "cluster": [
       "store_id",
       "fact_id"
+    ]
+  },
+  "catalog_products": {
+    "dataset": "up_core",
+    "partition": null,
+    "cluster": [
+      "store_id",
+      "product_id"
+    ]
+  },
+  "catalog_products_versions": {
+    "dataset": "up_core",
+    "partition": "observed_at",
+    "cluster": [
+      "store_id",
+      "product_id"
+    ]
+  },
+  "catalog_variants": {
+    "dataset": "up_core",
+    "partition": null,
+    "cluster": [
+      "store_id",
+      "variant_id"
+    ]
+  },
+  "catalog_variants_versions": {
+    "dataset": "up_core",
+    "partition": "observed_at",
+    "cluster": [
+      "store_id",
+      "variant_id"
+    ]
+  },
+  "catalog_attributes": {
+    "dataset": "up_core",
+    "partition": null,
+    "cluster": [
+      "store_id",
+      "attribute_id"
+    ]
+  },
+  "catalog_attributes_versions": {
+    "dataset": "up_core",
+    "partition": "observed_at",
+    "cluster": [
+      "store_id",
+      "attribute_id"
+    ]
+  },
+  "catalog_inventory": {
+    "dataset": "up_core",
+    "partition": null,
+    "cluster": [
+      "store_id",
+      "variant_id"
+    ]
+  },
+  "catalog_inventory_versions": {
+    "dataset": "up_core",
+    "partition": "observed_at",
+    "cluster": [
+      "store_id",
+      "variant_id"
+    ]
+  },
+  "catalog_observations": {
+    "dataset": "up_core",
+    "partition": "observed_at",
+    "cluster": [
+      "store_id",
+      "run_id",
+      "resource"
     ]
   },
   "touchpoints": {
@@ -253,6 +358,24 @@
       "account_id"
     ]
   },
+  "meta_creative_insights_daily": {
+    "dataset": "up_core",
+    "partition": "date_start",
+    "cluster": [
+      "store_id",
+      "account_id",
+      "ad_id"
+    ]
+  },
+  "meta_creative_insights_daily_versions": {
+    "dataset": "up_core",
+    "partition": "observed_at",
+    "cluster": [
+      "store_id",
+      "account_id",
+      "ad_id"
+    ]
+  },
   "store_runtime_config": {
     "dataset": "up_ops",
     "partition": null,
@@ -277,6 +400,33 @@
       "status",
       "plan_id",
       "resource"
+    ]
+  },
+  "installation_extension_plans": {
+    "dataset": "up_ops",
+    "partition": null,
+    "cluster": [
+      "store_id",
+      "status"
+    ]
+  },
+  "installation_extension_work_units": {
+    "dataset": "up_ops",
+    "partition": null,
+    "cluster": [
+      "store_id",
+      "status",
+      "plan_id",
+      "resource"
+    ]
+  },
+  "integration_operations": {
+    "dataset": "up_ops",
+    "partition": "created_at",
+    "cluster": [
+      "store_id",
+      "provider",
+      "status"
     ]
   },
   "analytics_store_daily": {

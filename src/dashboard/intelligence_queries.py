@@ -1,9 +1,18 @@
 """Bounded campaign aggregates over one immutable intelligence generation."""
 
 
-def campaigns(project: str) -> str:
+def campaigns(project: str, *, customer_scoped: bool = False) -> str:
     daily = f"`{project}.up_analytics.analytics_campaign_performance_daily`"
     scoped = "store_id=@store AND policy_hash=@policy AND generation=@generation AND influence_scope='LIFETIME'"
+    # Participation is an exact campaign/customer/order relation in this period.
+    # EXISTS preserves the campaign grain, including campaigns with many orders.
+    participation = (
+        f" AND EXISTS (SELECT 1 FROM ({period_order_relations(project)}) AS p "
+        "WHERE p.campaign_id=d.campaign_id AND p.customer_id=@customer)"
+        if customer_scoped
+        else ""
+    )
+    customer_projection = ",@customer customer_id" if customer_scoped else ""
     return f"""WITH daily AS (
       SELECT store_id,policy_hash,generation,campaign_id,ANY_VALUE(campaign_name) campaign_name,
         ANY_VALUE(campaign_status) campaign_status,
@@ -22,7 +31,7 @@ def campaigns(project: str) -> str:
     ), customers AS (
       SELECT campaign_id,COUNT(DISTINCT customer_id) influenced_customers
       FROM ({period_order_relations(project)}) GROUP BY campaign_id
-    ) SELECT d.*,d.campaign_id row_key,
+    ) SELECT d.*{customer_projection},d.campaign_id row_key,
       COALESCE(o.influenced_orders,0) influenced_orders,COALESCE(c.influenced_customers,0) influenced_customers,
       IF(o.campaign_id IS NULL,0,o.requested_revenue_influenced) requested_revenue_influenced,
       IF(o.campaign_id IS NULL,0,o.fulfilled_revenue_influenced) fulfilled_revenue_influenced,
@@ -31,7 +40,7 @@ def campaigns(project: str) -> str:
       IF(d.influence_complete,SAFE_DIVIDE(IF(o.campaign_id IS NULL,0,o.requested_revenue_influenced),d.spend),NULL) roas_requested,
       IF(d.influence_complete,SAFE_DIVIDE(IF(o.campaign_id IS NULL,0,o.fulfilled_revenue_influenced),d.spend),NULL) roas_fulfilled
     FROM daily d LEFT JOIN orders o USING(campaign_id) LEFT JOIN customers c USING(campaign_id)
-    WHERE d.campaign_id>@after AND (@campaign IS NULL OR d.campaign_id=@campaign)
+    WHERE d.campaign_id>@after AND (@campaign IS NULL OR d.campaign_id=@campaign){participation}
     ORDER BY d.campaign_id LIMIT @limit"""
 
 

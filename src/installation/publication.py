@@ -1,7 +1,9 @@
 """A completed HEAD/RECEIPT is the authority; work status alone grants no visibility."""
 
 from dataclasses import replace
+from datetime import UTC, date, datetime, time
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from src.analytics.config import AnalyticsPolicy
 from src.control_plane.model import StoreConfig, Window, instant
@@ -15,10 +17,13 @@ from src.installation.model import Row
 
 def policy_for(config: StoreConfig, row: Row, snapshot: str) -> AnalyticsPolicy:
     f = row["filters"]
+    boundary = datetime.combine(
+        date.fromisoformat(f["report_from"]), time(), ZoneInfo(config.timezone or "")
+    ).astimezone(UTC)
     return replace(
         config,
         facts_complete=f["facts_complete"],
-        facts_coverage_from=config.history_from,
+        facts_coverage_from=min(instant(config.history_from or ""), boundary).isoformat(),
         facts_coverage_to=f["as_of"],
     ).policy(Window(f["report_from"], f["report_to"], f["as_of"], snapshot, snapshot))
 

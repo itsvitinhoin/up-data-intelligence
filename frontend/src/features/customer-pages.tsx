@@ -286,7 +286,7 @@ function DemoCustomerDetailPage({ id }: { id: string }) {
   const b2c = scope?.operation === "B2C";
   const q = useCustomer(id);
   const [tab, setTab] = useState("journey");
-  if (q.isPending) return <Loading />;
+  if (q.isPending) return <Loading page />;
   if (q.isError) return <Failure retry={() => void q.refetch()} />;
   const d = q.data;
   if (b2c) return <RetailCustomerDetail data={d} />;

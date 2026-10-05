@@ -29,7 +29,7 @@ def generate() -> None:
                 "current_step",
                 "revision",
             }
-        if name == "installation_plans":
+        if name in {"installation_plans", "installation_extension_plans"}:
             required |= {
                 "plan_id",
                 "status",
@@ -40,7 +40,24 @@ def generate() -> None:
                 "config_hash",
                 "registry_revision",
             }
-        if name == "installation_work_units":
+        if name == "integration_operations":
+            required |= {
+                "operation_id",
+                "tenant_id",
+                "workspace_operation_id",
+                "provider",
+                "action",
+                "admin_subject_hash",
+                "request_hash",
+                "status",
+                "current_step",
+                "revision",
+                "registry_revision",
+                "source_snapshot",
+                "created_at",
+                "updated_at",
+            }
+        if name in {"installation_work_units", "installation_extension_work_units"}:
             required |= {
                 "work_unit_id",
                 "plan_id",
@@ -69,7 +86,7 @@ def generate() -> None:
         ]
         (folder / (name + ".json")).write_text(json.dumps(fields, indent=2) + "\n")
         target_manifest = meta_manifest if name in META_TABLE_NAMES else manifest
-        if name.startswith("meta_live_"):
+        if name.startswith(("meta_live_", "meta_creative_")):
             target_manifest = manifest
         target_manifest[name] = {
             "dataset": spec.dataset,
