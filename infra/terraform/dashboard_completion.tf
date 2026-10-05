@@ -92,7 +92,7 @@ variable "dashboard_completion_preview_image" {
   default  = null
   nullable = true
   validation {
-    condition     = var.dashboard_completion_preview_image == null ? true : can(regex("^southamerica-east1-docker.pkg.dev/up-data-intelligence-dev/up-data-intelligence/foundation@sha256:[a-f0-9]{64}$", var.dashboard_completion_preview_image))
+    condition     = var.dashboard_completion_preview_image == null ? true : can(regex("^southamerica-east1-docker.pkg.dev/up-data-intelligence-dev/up-data-intelligence/product-api@sha256:[a-f0-9]{64}$", var.dashboard_completion_preview_image))
     error_message = "An immutable approved DEV product image digest is required."
   }
 }

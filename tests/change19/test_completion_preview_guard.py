@@ -4,8 +4,9 @@ from copy import deepcopy
 import pytest
 
 from scripts.dashboard_completion_plan_guard import PROJECT, REGION, member
-from scripts.dashboard_completion_preview_guard import check
-from tests.change19.test_completion_plan_guard import IMAGE
+from scripts.dashboard_completion_preview_guard import PREFIX, check
+
+IMAGE = PREFIX + "a" * 64
 
 SUBJECT = "a" * 64  # synthetic, never a live key
 SHA = hashlib.sha256(SUBJECT.encode()).hexdigest()
@@ -139,7 +140,7 @@ def test_preview_rejects_every_unapproved_resource_or_service_expansion(change):
     if change == "capacity":
         t["max_instance_request_concurrency"] = 80
     if change == "image":
-        c["image"] = IMAGE.replace("foundation@", "other@")
+        c["image"] = IMAGE.replace("product-api@", "other@")
     if change == "secret-pin":
         next(e for e in admin["env"] if e["name"] == "UP_META_SECRET_REFERENCE")["value"] = (
             META.replace("/1", "/latest")
@@ -178,3 +179,13 @@ def test_preview_rejects_every_unapproved_resource_or_service_expansion(change):
 def test_image_host_regex_is_literal():
     with pytest.raises(ValueError):
         check(plan(), IMAGE.replace("pkg.dev", "pkgXdev"), SHA, META)
+
+
+def test_worker_image_without_http_dependencies_is_rejected():
+    p = plan()
+    foundation = IMAGE.replace("product-api@", "foundation@")
+    for row in p["resource_changes"]:
+        if row["type"] == "google_cloud_run_v2_service":
+            row["change"]["after"]["template"][0]["containers"][0]["image"] = foundation
+    with pytest.raises(ValueError, match="IMMUTABLE_IMAGE_REQUIRED"):
+        check(p, foundation, SHA, META)

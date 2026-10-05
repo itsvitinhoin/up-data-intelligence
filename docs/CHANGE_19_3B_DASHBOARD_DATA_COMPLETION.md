@@ -186,3 +186,11 @@ provider 8.4.0, backend disabled for local validation. No local state was read.
 Worktree path/credential-signature scan found no .env, credentials, private keys,
 Terraform state/plans, caches or test artifacts among the intended source files.
 This scan is an additional check, not a claim of a comprehensive security audit.
+
+### Release composition correction
+
+Release review caught that the worker `foundation` image does not install Gunicorn
+or Firebase Admin. Stage 2 now requires a separate immutable `product-api` image
+from the same runtime source, using the existing hash-locked product dependencies.
+The preview guard explicitly rejects a worker image for HTTP serving. Stage 1 Jobs
+retain their worker entrypoints; existing production services remain pinned.

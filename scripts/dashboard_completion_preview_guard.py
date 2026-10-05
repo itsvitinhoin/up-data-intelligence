@@ -14,7 +14,7 @@ from typing import Any
 from scripts.dashboard_completion_plan_guard import PROJECT, REGION, member
 from scripts.terraform_drift_guard import review_drift
 
-PREFIX = f"{REGION}-docker.pkg.dev/{PROJECT}/up-data-intelligence/foundation@sha256:"
+PREFIX = f"{REGION}-docker.pkg.dev/{PROJECT}/up-data-intelligence/product-api@sha256:"
 
 
 def check(plan: dict[str, Any], image: str, subject_sha256: str, meta_reference: str) -> dict:
