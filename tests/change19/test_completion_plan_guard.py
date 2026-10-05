@@ -1,5 +1,6 @@
 """A future plan cannot enable cron, widen IAM, alter source identity or capacity."""
 
+import json
 from copy import deepcopy
 from pathlib import Path
 
@@ -151,3 +152,64 @@ def test_automatic_enrichment_and_preview_capacity_default_fail_closed():
     assert "invoker_iam_disabled = false" in text
     assert "google_project_iam_member" not in text
     assert "google_cloud_scheduler_job" not in text
+
+
+def test_provider_integer_alias_remains_additive_only():
+    name = "meta_live_insights_daily"
+    fields = json.loads(Path("infra/terraform/schemas/" + name + ".json").read_text())
+    added = {
+        "frequency",
+        "actions",
+        "action_values",
+        "purchase_action_type",
+        "purchases",
+        "purchase_value",
+    }
+    old = [
+        dict(f, type="INTEGER" if f["type"] == "INT64" else f["type"])
+        for f in fields
+        if f["name"] not in added
+    ]
+    before = dict(
+        project=PROJECT,
+        table_id=name,
+        dataset_id="up_core",
+        deletion_protection=True,
+        schema=json.dumps(old),
+    )
+    after = dict(before, schema=json.dumps(fields))
+    p = plan("google_bigquery_table", before, after, ["update"])
+    p["resource_changes"][0]["address"] = 'google_bigquery_table.tables["' + name + '"]'
+    assert check(p, IMAGE)["update"] == 1
+    for mutation in ("required", "type", "removed"):
+        bad = deepcopy(p)
+        previous = json.loads(bad["resource_changes"][0]["change"]["before"]["schema"])
+        if mutation == "required":
+            previous[2]["mode"] = "REQUIRED"
+        if mutation == "type":
+            previous[2]["type"] = "FLOAT64"
+        if mutation == "removed":
+            previous.append(dict(name="protected_field", type="STRING", mode="NULLABLE"))
+        bad["resource_changes"][0]["change"]["before"]["schema"] = json.dumps(previous)
+        with pytest.raises(ValueError, match="NON_ADDITIVE_SCHEMA"):
+            check(bad, IMAGE)
+
+
+def test_existing_production_federation_etag_only_is_not_access_change():
+    before = dict(
+        etag="old", member="synthetic-current-subject", role="roles/iam.workloadIdentityUser"
+    )
+    drift = dict(
+        type="google_service_account_iam_member",
+        address='google_service_account_iam_member.product_vercel_federation["production"]',
+        change=dict(actions=["update"], before=before, after=dict(before, etag="new")),
+    )
+    assert check(dict(resource_drift=[drift]), IMAGE)["benign_drift"] == 1
+    for mutation in ("member", "role", "address"):
+        bad = deepcopy(drift)
+        if mutation == "address":
+            bad["address"] = "google_service_account_iam_member.unreviewed"
+        else:
+            bad["change"]["after"][mutation] = "unreviewed"
+        with pytest.raises(ValueError, match="EXISTING_INFRASTRUCTURE_DRIFT"):
+            check(dict(resource_drift=[bad]), IMAGE)

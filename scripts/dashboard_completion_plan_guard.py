@@ -11,7 +11,7 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
-from scripts.terraform_drift_guard import changed_paths, review_drift
+from scripts.terraform_drift_guard import changed_paths, has_unknown, review_drift
 from src.bigquery.catalog import TABLES
 from src.connectors.upzero.catalog_schema import TABLE_NAMES
 
@@ -131,6 +131,41 @@ def job_change(before: dict, after: dict, image: str) -> None:
         raise ValueError("JOB_CHANGE_NOT_IMAGE_OR_FEATURE_FLAG")
 
 
+def schema_fields(fields: list[dict]) -> list[dict]:
+    """BigQuery returns INTEGER for the canonical INT64 spelling, with equal semantics."""
+    if len({field["name"] for field in fields}) != len(fields):
+        raise ValueError("DUPLICATE_SCHEMA_FIELD")
+    return [
+        {**field, "type": "INT64" if field.get("type") == "INTEGER" else field.get("type")}
+        for field in fields
+    ]
+
+
+def completion_drift(resources: list[dict]) -> dict[str, int]:
+    """Only the existing production federation's opaque etag may differ here."""
+    ordinary = []
+    federation_etags = 0
+    for resource in resources:
+        change = resource.get("change", {})
+        if (
+            resource.get("type") == "google_service_account_iam_member"
+            and resource.get("address")
+            == 'google_service_account_iam_member.product_vercel_federation["production"]'
+            and resource.get("mode", "managed") == "managed"
+            and change.get("actions") == ["update"]
+            and isinstance(change.get("before"), dict)
+            and isinstance(change.get("after"), dict)
+            and not has_unknown(change.get("after_unknown"))
+            and changed_paths(change["before"], change["after"]) == [("etag",)]
+        ):
+            federation_etags += 1
+        else:
+            ordinary.append(resource)
+    result = review_drift(ordinary)
+    result["benign_drift"] += federation_etags
+    return result
+
+
 def check(plan: dict[str, Any], image: str) -> dict[str, Any]:
     if not re.fullmatch(
         re.escape(f"{REGION}-docker.pkg.dev/{PROJECT}/up-data-intelligence/foundation@sha256:")
@@ -180,7 +215,10 @@ def check(plan: dict[str, Any], image: str) -> dict[str, Any]:
                     {k: v for k, v in after.items() if k != "schema"},
                 ):
                     raise ValueError("UNAPPROVED_TABLE_UPDATE")
-                old, new = json.loads(before["schema"]), json.loads(after["schema"])
+                old, new = (
+                    schema_fields(json.loads(before["schema"])),
+                    schema_fields(json.loads(after["schema"])),
+                )
                 if not all(field in new for field in old) or any(
                     f.get("mode") != "NULLABLE" for f in new if f not in old
                 ):
@@ -203,7 +241,7 @@ def check(plan: dict[str, Any], image: str) -> dict[str, Any]:
         **counts,
         "delete": 0,
         "iam": sorted(iam, key=lambda r: (r["member"], r["table_id"])),
-        **review_drift(plan.get("resource_drift", [])),
+        **completion_drift(plan.get("resource_drift", [])),
     }
 
 
