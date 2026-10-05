@@ -194,3 +194,59 @@ or Firebase Admin. Stage 2 now requires a separate immutable `product-api` image
 from the same runtime source, using the existing hash-locked product dependencies.
 The preview guard explicitly rejects a worker image for HTTP serving. Stage 1 Jobs
 retain their worker entrypoints; existing production services remain pinned.
+
+## Stage 1 saved-plan review — not applied
+
+Cloud Shell file: `/tmp/dashboard19b-live/stage1.plan`.
+SHA256: `8d10d1db404cac27c950e646a5497fff40ebbd9a9c5f5b6190a5840b2d2671d3`.
+The existing saved binary was not regenerated during guard corrections.
+Guard result: **70 creates, 14 updates, zero deletes/replacements, zero material drift**.
+Nine benign drift records are operational table/job metadata and one unchanged
+production federation binding's opaque etag, never a new federation permission.
+
+Scope: 18 new tables, 52 table-scoped IAM grants, four additive nullable Meta schema
+updates and ten runtime image/feature updates. No scheduler, production API,
+Foundation resource, source identity, credential, Secret Manager or capacity change.
+Automatic enrichment and enriched Health enforcement remain disabled at this stage.
+
+| Existing service identity | Read additions | Write additions | Grants |
+| --- | --- | --- | --- |
+| up-cp-analytics-dev | extension plans | extension units; Registry coverage CAS | 3 |
+| up-cp-dispatcher-dev | extension plans and units | none | 2 |
+| up-cp-intelligence-dev | extension plans and units | none | 2 |
+| up-cp-meta-dev | extension plans | extension units; creative daily/current versions | 4 |
+| up-cp-upzero-dev | extension plans | extension units; 13 catalog RAW/CORE/version/observation tables | 15 |
+| up-data-health-dev | catalog observations and four version tables | none | 5 |
+| up-install-orchestrator-dev | included in existing scoped writer contract | extension plans and units | 2 |
+| up-product-admin-dev | initial plans/units, checkpoints/runs and three Analytics evidence tables | extension plans/units; integration operations | 10 |
+| up-product-read-dev | five catalog evidence tables; Meta binding/ads/creative daily; quality results | none | 9 |
+
+Read grants use `roles/bigquery.dataViewer`; write grants use the existing custom
+`upControlPlaneDataWriter_dev` role at table scope. No project/dataset-wide write
+permission is added. Exact per-table inventory is in the private Cloud Shell file
+`/tmp/dashboard19b-live/stage1-review.json`.
+
+The live plan exposed BigQuery's `INTEGER` spelling for existing `INT64` fields.
+The guard compares only that equivalent spelling; required modes, removal, type
+changes and extra grants remain rejected. It also resolves the distinct Analytics
+schema catalog and publication metadata. **44 focused release-guard tests passed**;
+ruff, format, mypy and diff checks passed after these changes.
+
+### Immutable builds
+
+Worker source commit: `d455758628f59b0318301cffac62097677e2c677`.
+Cloud Build: `f7c2dad7-951e-4432-8aa8-acf964c7aab2`, SUCCESS.
+Worker digest: `sha256:1f99d1e0aa6b994c7e7b7ed4528f235dee0b0549a86ef78417ca05b890e050b0`.
+
+Product API source commit: `df1b7d997d707c36ff8e9f8e13cd0ad0e0cef767`.
+Cloud Build: `68476218-629b-472b-8e82-d3c51451472b`, SUCCESS.
+Product digest: `sha256:ac0acc7e620cec6f17b171a4ddcd470c33f32d7a67735dbb04da941238c6c365`.
+Runtime source is identical between these two commits; the second commit corrects
+only preview deployment composition/guard/docs/tests. Both Artifact Registry
+digests equal the corresponding build digest. Upload allowlist: 291 files,
+zero forbidden paths. No credentials, customer data or Terraform state uploaded.
+
+Stage 1 awaits action-time confirmation because applying the saved plan creates
+52 security-sensitive data access grants. Stage 2 private preview APIs and the
+Admin global Meta probe grant are separately reviewed and **not** authorized by
+this Stage 1 plan. No live preview acceptance or latency improvement is claimed.
