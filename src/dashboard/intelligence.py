@@ -5,7 +5,7 @@ from typing import Any
 
 from src.dashboard.contracts import Grant, Principal, ReadError, metadata, page_size
 from src.dashboard.queries import Query
-from src.dashboard.service import DashboardService, _timestamp
+from src.dashboard.service import DashboardService, _date, _timestamp
 from src.intelligence.api import JOURNEY, PRODUCT, PROFILE, TIMELINE
 from src.intelligence.live.schema import PUBLICATION, SCHEMAS
 from src.utils.data import timestamp
@@ -28,6 +28,8 @@ def safe(row: dict[str, Any], fields: str, schema: str) -> dict[str, Any]:
             value = format(Decimal(str(value)), "f")
         elif typ == "TIMESTAMP" and value is not None:
             value = _timestamp(value)
+        elif typ == "DATE" and value is not None:
+            value = _date(value)
         result[key] = value
     return result
 
@@ -128,6 +130,9 @@ class IntelligenceDashboardService(DashboardService):
             "snapshot": ("TIMESTAMP", self.publication.snapshot_at),
             "after": ("STRING", after),
             "limit": ("INT64", limit),
+            "from": ("DATE", self.intelligence_period[0]),
+            "to": ("DATE", self.intelligence_period[1]),
+            "timezone": ("STRING", self.policy.reporting_timezone),
         }
         where = (
             "store_id=@store AND policy_hash=@policy AND generation=@generation AND row_key>@after"
@@ -150,7 +155,17 @@ class IntelligenceDashboardService(DashboardService):
 
             params["campaign"] = ("STRING", campaign)
             sql = campaigns(self.project)
+        elif name == "analytics_campaign_customer_performance":
+            from src.dashboard.intelligence_queries import campaign_customers_period
+
+            sql = f"SELECT * FROM ({campaign_customers_period(self.project)}) WHERE {where} ORDER BY row_key LIMIT @limit"
+        elif name == "analytics_campaign_order_performance":
+            from src.dashboard.intelligence_queries import period_order_relations
+
+            sql = f"SELECT * FROM ({period_order_relations(self.project)}) WHERE {where} ORDER BY row_key LIMIT @limit"
         else:
+            if name == "analytics_customer_orders_summary":
+                where += " AND DATE(created_at,@timezone)>=@from AND DATE(created_at,@timezone)<@to"
             fields = [k for k in SCHEMAS[name].fields if k not in DENIED]
             sql = f"SELECT {','.join('`' + k + '`' for k in fields)} FROM `{self.project}.up_analytics.{name}` FOR SYSTEM_TIME AS OF @snapshot WHERE {where} ORDER BY row_key LIMIT @limit"
         rows = self._iq(name, sql, params)
@@ -199,10 +214,20 @@ class IntelligenceDashboardService(DashboardService):
         to_day: str | None = None,
     ) -> dict[str, Any]:
         self._intelligence_scope(principal, grant)
-        if from_day is not None or to_day is not None:
-            start, end = self._interval(from_day, to_day)
-            if start != self.publication.report_from or end != self.publication.report_to:
-                raise ReadError(424, "intelligence_period_not_materialized")
+        start, end = self._interval(from_day, to_day)
+        self.intelligence_period = (start, end)
+        period_resources = {
+            "performance",
+            "campaigns",
+            "campaign",
+            "campaignOrders",
+            "campaignCustomers",
+            "influencedOrders",
+        }
+        if resource not in period_resources and (
+            start != self.publication.report_from or end != self.publication.report_to
+        ):
+            raise ReadError(424, "intelligence_period_not_materialized")
         customer = entity if resource in {"customer360", "timeline", "customerProducts"} else None
         campaign = (
             entity if resource in {"campaign", "campaignCustomers", "campaignOrders"} else None
@@ -224,12 +249,36 @@ class IntelligenceDashboardService(DashboardService):
                 raise ReadError(404, "campaign_not_found")
         if resource == "customer360":
             profile = safe(profiles[0], PROFILE, "analytics_customer_360_profile")
-            journey = self._model("analytics_customer_journey_summary", customer=customer, limit=2)
-            if len(journey) != 1:
-                raise ReadError(503, "customer_journey_missing_or_duplicate")
-            influences = self._model(
-                "analytics_customer_paid_influence", customer=customer, limit=4
+            from src.dashboard.intelligence_queries import customer_context
+
+            h = self.intelligence_head
+            context_rows = self._iq(
+                "customer_context",
+                customer_context(self.project),
+                {
+                    "store": ("STRING", grant.store_id),
+                    "policy": ("STRING", h["policy_hash"]),
+                    "generation": ("INT64", h["generation"]),
+                    "snapshot": ("TIMESTAMP", self.publication.snapshot_at),
+                    "customer": ("STRING", customer),
+                },
             )
+            if len(context_rows) != 1:
+                raise ReadError(503, "customer_context_missing_or_duplicate")
+            journey = context_rows[0].get("journey")
+            influences = context_rows[0].get("marketing")
+            if not isinstance(journey, list) or len(journey) != 1:
+                raise ReadError(503, "customer_journey_missing_or_duplicate")
+            if not isinstance(influences, list):
+                raise ReadError(503, "influence_scopes_incomplete")
+            if any(
+                r.get("store_id") != grant.store_id
+                or r.get("policy_hash") != h["policy_hash"]
+                or r.get("generation") != h["generation"]
+                or r.get("customer_id") != customer
+                for r in journey + influences
+            ):
+                raise ReadError(503, "intelligence_scope_mismatch")
             if {r["influence_scope"] for r in influences} != {
                 "LIFETIME",
                 "ACQUISITION",
@@ -255,11 +304,62 @@ class IntelligenceDashboardService(DashboardService):
                 }
             )
         if resource == "performance":
-            rows = self._model("analytics_performance_summary", scope="LIFETIME", limit=2)
+            from src.dashboard.intelligence_queries import performance_period
+
+            h = self.intelligence_head
+            rows = self._iq(
+                "performance_period",
+                performance_period(self.project),
+                {
+                    "store": ("STRING", grant.store_id),
+                    "policy": ("STRING", h["policy_hash"]),
+                    "generation": ("INT64", h["generation"]),
+                    "snapshot": ("TIMESTAMP", self.publication.snapshot_at),
+                    "from": ("DATE", start),
+                    "to": ("DATE", end),
+                    "timezone": ("STRING", self.policy.reporting_timezone),
+                    "influence_complete": ("BOOL", h["influence_complete"]),
+                    "meta_complete": ("BOOL", h["meta_complete"]),
+                    "history_complete": ("BOOL", self.policy.history_complete),
+                },
+            )
             if len(rows) != 1:
                 raise ReadError(503, "performance_summary_missing_or_duplicate")
+            row = rows[0]
+            if (
+                row.get("store_id") != grant.store_id
+                or row.get("policy_hash") != h["policy_hash"]
+                or row.get("generation") != h["generation"]
+            ):
+                raise ReadError(503, "intelligence_scope_mismatch")
+            if (
+                not isinstance(row.get("summary"), dict)
+                or not isinstance(row.get("series"), list)
+                or len(row["series"]) > 366
+            ):
+                raise ReadError(503, "performance_period_invalid")
             fields = "meta_spend observed_meta_spend influenced_customers influenced_orders new_customers_influenced requested_revenue_influenced fulfilled_revenue_influenced requested_quantity_influenced fulfilled_quantity_influenced fulfillment_rate roas_requested roas_fulfilled cac_new_customer"
-            return self._envelope(safe(rows[0], fields, "analytics_performance_summary"))
+            data = safe(row["summary"], fields, "analytics_performance_summary")
+            daily_fields = "date spend impressions clicks influenced_orders requested_revenue_influenced fulfilled_revenue_influenced"
+            data.update(
+                {
+                    "ctr": row["summary"].get("ctr"),
+                    "cpc": row["summary"].get("cpc"),
+                    "cpm": row["summary"].get("cpm"),
+                    "impressions": row["summary"].get("impressions"),
+                    "clicks": row["summary"].get("clicks"),
+                    "series": [
+                        safe(r, daily_fields, "analytics_campaign_performance_daily")
+                        for r in row["series"]
+                    ],
+                }
+            )
+            for field in ("ctr", "cpc", "cpm"):
+                if data[field] is not None:
+                    if isinstance(data[field], float):
+                        raise ReadError(503, "invalid_numeric_value")
+                    data[field] = format(Decimal(str(data[field])), "f")
+            return self._envelope(data)
         models = {
             "timeline": "analytics_customer_timeline",
             "customerProducts": "analytics_customer_products_summary",
@@ -325,6 +425,7 @@ class IntelligenceDashboardService(DashboardService):
         try:
             # Reuse the same authorized reader/request/base publication and its budget.
             self._resolve_intelligence()
+            self.intelligence_period = (self.publication.report_from, self.publication.report_to)
             profile = self._model("analytics_customer_360_profile", customer=customer_id, limit=2)
             if len(profile) != 1:
                 raise ReadError(503, "customer_profile_missing_or_duplicate")

@@ -1,4 +1,8 @@
-import type { OrderDetail, Product, RequestContext } from "@/types/domain";
+import type {
+  OrderDetail,
+  Product,
+  RequestContext,
+} from "@/services/demo/types";
 import * as fixtures from "./fixtures";
 import { ordersFor, allOrdersFor, customersFor } from "./business";
 export function variantsFor(product: Product) {

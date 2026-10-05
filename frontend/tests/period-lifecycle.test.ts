@@ -4,7 +4,8 @@ import { demoApi } from "@/services/demo/adapter";
 import { sessionFor } from "@/services/demo/admin";
 import { defaultFilters } from "@/config/tenants";
 import { summarizeLifecycle } from "@/services/demo/lifecycle";
-import type { Order, RequestContext } from "@/types/domain";
+import type { Order } from "@/services/demo/types";
+import type { RequestContext } from "@/types/domain";
 const context = (): RequestContext => ({
   scope: { tenant_id: "demo-up", store_id: "mx-fashion-b2b", operation: "B2B" },
   session: sessionFor("maria-demo"),

@@ -24,9 +24,8 @@ import {
   isB2BReadPage,
 } from "@/lib/dashboard-source";
 import { useWorkspace } from "@/features/providers";
-import { useResource } from "@/hooks/use-resource";
+import { useDataApi, useRequestContext, queryKey } from "@/hooks/use-resource";
 import { useQuery } from "@tanstack/react-query";
-import { decodeReadEnvelope } from "@/services/api/http";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -268,44 +267,48 @@ function Navigation({ close }: { close?: () => void }) {
 function SearchDialog() {
   const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
-  const data = useResource("customers");
-  const { dataMode, scope } = useWorkspace();
-  const real = useQuery({
+  const api = useDataApi(),
+    context = useRequestContext();
+  const { dataMode } = useWorkspace();
+  const data = useQuery({
     queryKey: [
-      "live-customer-search",
-      scope?.tenant_id,
-      scope?.workspace_operation_id,
-      scope?.operation,
+      dataMode,
+      ...queryKey("customer-search-complete", {
+        ...context,
+        filters: {
+          ...context.filters,
+          from: undefined,
+          to: undefined,
+          search: "",
+          state: "all",
+          segment: "all",
+          media: "all",
+        },
+      }),
     ],
-    enabled: dataMode === "live" && open && scope?.operation === "B2B",
+    enabled: open,
     retry: false,
-    queryFn: async ({ signal }) => {
-      const params = new URLSearchParams({
-        tenant_id: scope!.tenant_id,
-        workspace_operation_id: scope!.workspace_operation_id!,
-        operation: scope!.operation,
-        page_size: "25",
-      });
-      const response = await fetch(`/api/dashboard/customers?${params}`, {
-        cache: "no-store",
+    queryFn: ({ signal }) =>
+      api.read("customers", {
+        ...context,
         signal,
-      });
-      if (!response.ok) throw new Error("customer_search_unavailable");
-      return decodeReadEnvelope("customers", await response.json());
-    },
+        filters: {
+          ...context.filters,
+          from: undefined,
+          to: undefined,
+          search: "",
+          state: "all",
+          segment: "all",
+          media: "all",
+        },
+      }),
   });
-  const records =
-    dataMode === "live"
-      ? real.data?.data.map((c) => ({
-          id: c.customer_id,
-          name: c.name ?? "Nome não disponível",
-          city: c.city,
-          state: c.state,
-        }))
-      : data.data;
   const matches =
-    records?.filter((c) => c.name.toLowerCase().includes(text.toLowerCase())) ??
-    [];
+    data.data?.filter((c) =>
+      [c.name, c.city].some((v) =>
+        v?.toLocaleLowerCase("pt-BR").includes(text.toLocaleLowerCase("pt-BR")),
+      ),
+    ) ?? [];
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -318,9 +321,9 @@ function SearchDialog() {
       <DialogContent className="glass">
         <DialogTitle>Encontre um cliente</DialogTitle>
         <DialogDescription>
-          {dataMode === "live"
-            ? "Busca na página atual de até 25 clientes autorizados. A lista completa está em Clientes."
-            : "Busca na operação selecionada."}
+          {
+            "Busca na coleção completa autorizada desta operação, dentro da cobertura publicada."
+          }
         </DialogDescription>
         <Input
           aria-label="Buscar cliente pelo nome"
@@ -329,6 +332,12 @@ function SearchDialog() {
           onChange={(e) => setText(e.target.value)}
         />
         <div className="search-results">
+          {data.isPending && <p className="muted">Carregando clientes…</p>}
+          {data.isError && (
+            <p role="alert">
+              Busca indisponível. Nenhum dado demonstrativo foi usado.
+            </p>
+          )}
           {matches.map((c) => (
             <Link
               onClick={() => setOpen(false)}
@@ -344,7 +353,7 @@ function SearchDialog() {
               <ArrowUpRight size={16} />
             </Link>
           ))}
-          {dataMode === "live" && real.isError ? (
+          {data.isError ? (
             <p>Cobertura ainda não certificada</p>
           ) : (
             !matches.length && <Empty />
@@ -570,12 +579,14 @@ export function Shell({ children }: { children: React.ReactNode }) {
   );
 }
 export function FiltersBar({ showChannel = true }: { showChannel?: boolean }) {
-  const { filters, setFilters } = useWorkspace();
+  const { filters, setFilters, dataMode } = useWorkspace();
+  const live = dataMode !== "demo";
   return (
     <section className="filters glass" aria-label="Filtros globais">
       {showChannel && (
         <Choice
-          label="Canal"
+          label={live ? "Canal · indisponível nesta leitura" : "Canal"}
+          disabled={live}
           value={filters.channel}
           onChange={(channel) => setFilters({ ...filters, channel })}
           options={[
@@ -586,7 +597,8 @@ export function FiltersBar({ showChannel = true }: { showChannel?: boolean }) {
         />
       )}
       <Choice
-        label="Coleção"
+        label={live ? "Coleção · fonte não certificada" : "Coleção"}
+        disabled={live}
         value={filters.collection}
         onChange={(collection) => setFilters({ ...filters, collection })}
         options={[
@@ -599,7 +611,21 @@ export function FiltersBar({ showChannel = true }: { showChannel?: boolean }) {
         <Button
           variant="ghost"
           className="btn-ghost"
-          onClick={() => setFilters(defaultFilters)}
+          onClick={() =>
+            setFilters(
+              live
+                ? {
+                    ...filters,
+                    channel: "all",
+                    collection: "all",
+                    state: "all",
+                    segment: "all",
+                    media: "all",
+                    search: "",
+                  }
+                : defaultFilters,
+            )
+          }
         >
           Limpar filtros
         </Button>

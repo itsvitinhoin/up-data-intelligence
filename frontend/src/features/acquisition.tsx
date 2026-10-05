@@ -1,6 +1,5 @@
 "use client";
 import { B2BReadBoundary } from "@/hooks/use-dashboard-read";
-import { RealAcquisition } from "./b2b-read-pages";
 
 import { LeadCards } from "@/components/lead-cards";
 import { OrderDialog } from "@/components/order-dialog";
@@ -18,6 +17,7 @@ import {
 import { DataTable } from "@/components/data-table";
 import { customerColumns, orderColumns } from "@/components/business";
 import { ConversionVelocity } from "@/features/lifecycle";
+import { ticket } from "@/services/api/overview-presenter";
 import { date } from "@/lib/format";
 import type { Customer, Metric, Order } from "@/types/domain";
 const columns: ColumnDef<Customer>[] = [
@@ -47,7 +47,7 @@ function DemoAcquisitionPage() {
   const metrics: Metric[] = q.compare((data) => [
     {
       label: "Clientes compradores",
-      value: String(data.buyerCount),
+      value: data.buyerCount === null ? null : String(data.buyerCount),
       format: "number",
       hint: "Todos os compradores da marca no período",
     },
@@ -88,17 +88,13 @@ function DemoAcquisitionPage() {
     },
     {
       label: "Ticket solicitado · primeira compra",
-      value: data.firstOrders.length
-        ? String(Number(data.requested) / data.firstOrders.length)
-        : null,
+      value: ticket(data.requested, data.firstOrders.length),
       format: "currency",
       hint: "Solicitado / primeiros pedidos observados",
     },
     {
       label: "Ticket atendido · primeira compra",
-      value: data.firstOrders.length
-        ? String(Number(data.fulfilled) / data.firstOrders.length)
-        : null,
+      value: ticket(data.fulfilled, data.firstOrders.length),
       format: "currency",
       hint: "Atendido / primeiros pedidos observados",
     },
@@ -154,9 +150,7 @@ function DemoAcquisitionPage() {
 
 export function AcquisitionPage() {
   return (
-    <B2BReadBoundary
-      real={(metadata) => <RealAcquisition metadata={metadata} />}
-    >
+    <B2BReadBoundary>
       <DemoAcquisitionPage />
     </B2BReadBoundary>
   );

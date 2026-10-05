@@ -62,6 +62,11 @@ def customer_row(id: str = "c1", key: str = "a" * 64) -> dict[str, Any]:
         "customer_id": id,
         "customer_type": "B2B",
         "purchases": 2,
+        "qualifying_orders": 2,
+        "first_observed_at": "2026-09-01T12:00:00Z",
+        "last_observed_at": "2026-09-03T12:00:00Z",
+        "summary_requested": Decimal("100.25"),
+        "summary_fulfilled": Decimal("75.50"),
         "first_purchase_at": "2026-09-01T12:00:00Z",
         "first_purchase_date": date(2026, 9, 1),
         "ltv_lifetime_observed": Decimal("100.25"),
@@ -151,6 +156,31 @@ class FakeReader:
                     "cursor_key": "2026-09-01T12:00:00.000000Z:" + "c" * 64,
                 }
             ]
+        if query.name == "retention_details":
+            original_calls = list(self.calls)
+            data = {}
+            for field, model in (
+                ("distribution", "retention_distribution"),
+                ("cohorts", "retention_cohorts"),
+                ("gaps", "retention_gaps"),
+            ):
+                data[field] = self.query(
+                    build(PROJECT, model),
+                    request_id=request_id,
+                    store_id=store_id,
+                    generation=generation,
+                )
+            self.calls = original_calls
+            data["series"] = [
+                {
+                    "order_date": date(2026, 9, 1),
+                    "buyers": 1,
+                    "recurring_buyers": 1,
+                    "recurring_orders": 1,
+                    "recurring_fulfilled": Decimal("50.25"),
+                }
+            ]
+            return [data]
         if query.name == "retention_distribution":
             return [
                 {
@@ -483,8 +513,10 @@ def test_funnel_event_grain_and_geography_gate(setup: tuple[DashboardService, Fa
     ]
     with pytest.raises(ReadError, match="analytics_facts_coverage_incomplete"):
         service.funnel(PRINCIPAL, GRANT, from_day="2026-09-01", to_day="2026-09-02")
-    with pytest.raises(ReadError, match="geography_coverage_not_certified"):
-        service.geography(PRINCIPAL, GRANT)
+    reader.override["geography"] = []
+    geography = service.geography(PRINCIPAL, GRANT)
+    assert geography["data"]["states"] == []
+    assert geography["data"]["coverage"]["basis"] == "order_shipping_location"
 
 
 def test_scope_values_are_parameters_not_sql(setup: tuple[DashboardService, FakeReader]):
@@ -746,7 +778,7 @@ def test_customer_period_filter_is_parameterized_and_cursor_bound(setup):
     assert "AND EXISTS" in sql.sql and "s.customer_id=m.customer_id" in sql.sql
     assert sql.parameters["from"][1] == "2026-09-01"
     assert sql.parameters["to"][1] == "2026-09-02"
-    assert sql.sql.count("FOR SYSTEM_TIME AS OF @snapshot_at") == 3
+    assert sql.sql.count("FOR SYSTEM_TIME AS OF @snapshot_at") == 4
     with pytest.raises(ReadError, match="invalid_cursor"):
         service.customers(
             PRINCIPAL,
@@ -853,9 +885,9 @@ def test_customer_period_sql_alias_snapshot_correlation_and_parameters():
 )
 def test_dashboard_time_travel_has_no_trailing_alias(name: str):
     query = build(PROJECT, name, from_day="2026-09-01", to_day="2026-09-28")
-    # Every current time-travel table read is followed by WHERE, never an alias.
+    # Time-travel ends at a SQL clause; aliases must precede FOR SYSTEM_TIME.
     following_tokens = re.findall(r"FOR SYSTEM_TIME AS OF @snapshot_at\s+(\w+)", query.sql)
-    assert all(token == "WHERE" for token in following_tokens)
+    assert all(token in {"WHERE", "JOIN", "ON"} for token in following_tokens)
     assert len(following_tokens) == query.sql.count("FOR SYSTEM_TIME AS OF @snapshot_at")
 
 

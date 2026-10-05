@@ -351,17 +351,17 @@ describe("B2B Analytics V1 preview", () => {
     );
     for (const path of [
       "src/hooks/use-dashboard-read.tsx",
-      "src/features/b2b-read-pages.tsx",
+      "src/services/api/live.ts",
     ])
       expect(readFileSync(path, "utf8")).not.toMatch(
         /DASHBOARD_DEV_PREVIEW_TOKEN|google.auth|NEXT_PUBLIC.*TOKEN|localStorage/,
       );
-    const views = readFileSync("src/features/b2b-read-pages.tsx", "utf8");
-    expect(
-      views.slice(
-        views.indexOf("export function RealPerformance"),
-        views.indexOf("export function RealFunnel"),
-      ),
-    ).not.toContain("useResource");
+    const boundary = readFileSync("src/hooks/use-dashboard-read.tsx", "utf8");
+    expect(boundary).not.toContain("real(metadata)");
+    const adapter = readFileSync("src/services/api/live.ts", "utf8");
+    expect(adapter).not.toMatch(/services\/demo|demoApi/);
+    expect(readFileSync("src/features/commerce.tsx", "utf8")).toContain(
+      "<ProductDrawer",
+    );
   });
 });

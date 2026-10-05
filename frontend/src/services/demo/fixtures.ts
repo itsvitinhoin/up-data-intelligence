@@ -8,7 +8,7 @@ import type {
   Product,
   Retention,
   TimelineEvent,
-} from "@/types/domain";
+} from "@/services/demo/types";
 export const customers: Customer[] = [
   {
     id: "c1",

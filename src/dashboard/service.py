@@ -312,6 +312,10 @@ class DashboardService:
             "state": row.get("state"),
             "city": row.get("city"),
             "purchases_observed": integer(row.get("purchases")),
+            "fulfilled_lifetime_observed": decimal_string(row.get("summary_fulfilled")),
+            "last_purchase_at_observed": _timestamp(row["last_observed_at"])
+            if row.get("last_observed_at") is not None
+            else None,
             "first_purchase_at_observed": _timestamp(row["first_purchase_at"])
             if row.get("first_purchase_at") is not None
             else None,
@@ -377,18 +381,17 @@ class DashboardService:
     ) -> dict[str, Any]:
         self._scope(principal, grant)
         row = self._customer_row(customer_id)
-        summary = self._rows("customer_summary", customer=customer_id)
-        if len(summary) != 1:
+        if integer(row.get("qualifying_orders")) != integer(row.get("purchases")):
             raise ReadError(503, "invalid_customer_summary")
         commercial = {
-            "qualifying_orders_observed": integer(summary[0].get("qualifying_orders")),
-            "requested_revenue_observed": decimal_string(summary[0].get("requested")),
-            "fulfilled_revenue_observed": decimal_string(summary[0].get("fulfilled")),
-            "first_purchase_at_observed": _timestamp(summary[0]["first_purchase_at"])
-            if summary[0].get("first_purchase_at") is not None
+            "qualifying_orders_observed": integer(row.get("qualifying_orders")),
+            "requested_revenue_observed": decimal_string(row.get("summary_requested")),
+            "fulfilled_revenue_observed": decimal_string(row.get("summary_fulfilled")),
+            "first_purchase_at_observed": _timestamp(row["first_observed_at"])
+            if row.get("first_observed_at") is not None
             else None,
-            "last_purchase_at_observed": _timestamp(summary[0]["last_purchase_at"])
-            if summary[0].get("last_purchase_at") is not None
+            "last_purchase_at_observed": _timestamp(row["last_observed_at"])
+            if row.get("last_observed_at") is not None
             else None,
             "ltv_complete": None,
         }
@@ -451,11 +454,14 @@ class DashboardService:
         size: str | None = None,
         cursor: str | None = None,
         status: str | None = None,
+        first_purchase: bool = False,
     ) -> dict[str, Any]:
         self._scope(principal, grant)
         start, end = self._interval(from_day, to_day)
         if status is not None and not re.fullmatch(r"[A-Z][A-Z0-9_]{0,49}", status):
             raise ReadError(400, "invalid_order_status")
+        if type(first_purchase) is not bool:
+            raise ReadError(400, "invalid_first_purchase_filter")
         selected, pagination = self._page(
             "store_orders",
             page_size(size),
@@ -464,6 +470,7 @@ class DashboardService:
                 "from_day": start,
                 "to_day": end,
                 "status": status,
+                "first_purchase": first_purchase,
                 "timezone": self.policy.reporting_timezone,
                 "as_of": self.publication.as_of,
             },
@@ -522,15 +529,31 @@ class DashboardService:
         self._scope(principal, grant)
         start, end = self._interval(from_day, to_day)
         population = self._rows("customer_period", from_day=start, to_day=end)
-        distribution = self._rows("retention_distribution")
-        cohorts = self._rows("retention_cohorts")
-        gaps = self._rows("retention_gaps")
-        if len(population) != 1 or len(distribution) > 1000 or len(cohorts) > 1000:
+        details = self._rows("retention_details", from_day=start, to_day=end)
+        if len(details) != 1:
+            raise ReadError(503, "retention_details_invalid")
+        distribution, cohorts, gaps, series = (
+            details[0][field] for field in ("distribution", "cohorts", "gaps", "series")
+        )
+        if (
+            len(population) != 1
+            or any(not isinstance(rows, list) for rows in (distribution, cohorts, gaps, series))
+            or len(distribution) > 1000
+            or len(cohorts) > 1000
+            or len(gaps) > 4
+            or len(series) > 366
+        ):
             raise ReadError(503, "retention_result_unbounded")
+        dates = [_date(row["order_date"]) for row in series]
+        if len(set(dates)) != len(dates) or any(not start <= day < end for day in dates):
+            raise ReadError(503, "retention_series_invalid")
         by_stage: dict[str, int] = {}
         for row in distribution:
             bucket = str(row["purchase_bucket"])
-            by_stage[bucket] = by_stage.get(bucket, 0) + (integer(row["customers"]) or 0)
+            count = integer(row["customers"])
+            if count is None or count < 0 or bucket not in {"1", "2", "3", "4", "5+"}:
+                raise ReadError(503, "retention_population_invalid")
+            by_stage[bucket] = by_stage.get(bucket, 0) + count
         gap_map = {integer(row["stage"]): row for row in gaps}
         stages = []
         for stage in range(1, 5):
@@ -547,7 +570,48 @@ class DashboardService:
                     "median_days_observed": _float(gap.get("median_days")) if gap else None,
                 }
             )
+        purchase_stages = []
+        accumulated: str | None = "0"
+        for stage in range(1, 6):
+            bucket = "5+" if stage == 5 else str(stage)
+            rows = [r for r in distribution if str(r["purchase_bucket"]) == bucket]
+            revenue = _sum_money(rows, "revenue")
+            accumulated = (
+                None
+                if accumulated is None or revenue is None
+                else format(Decimal(accumulated) + Decimal(revenue), "f")
+            )
+            previous_stage = by_stage.get(str(stage - 1), 0) if stage > 1 else None
+            count = by_stage.get(bucket, 0)
+            purchase_stages.append(
+                {
+                    "stage": stage,
+                    "buyers_observed": count,
+                    "share_observed": _ratio(count, by_stage.get("1", 0)),
+                    "continuation_observed": _ratio(count, previous_stage)
+                    if previous_stage is not None
+                    else None,
+                    "requested_revenue_observed": revenue,
+                    "accumulated_requested_revenue_observed": accumulated,
+                    "mean_days_observed": _float(gap_map[stage].get("mean_days"))
+                    if stage in gap_map
+                    else None,
+                }
+            )
         data = {
+            "purchase_stages": purchase_stages,
+            "series": [
+                {
+                    "date": _date(r["order_date"]),
+                    "buyers_observed": integer(r.get("buyers")),
+                    "recurring_buyers_observed": integer(r.get("recurring_buyers")),
+                    "retention_observed": _ratio(r.get("recurring_buyers"), r.get("buyers")),
+                    "retention_ticket_observed": _ratio(
+                        r.get("recurring_fulfilled"), r.get("recurring_orders")
+                    ),
+                }
+                for r in series
+            ],
             "buyers_observed": integer(population[0].get("buyers")),
             "recurring_buyers_observed": integer(population[0].get("recurring_buyers")),
             "retention_observed": _ratio(
@@ -592,7 +656,15 @@ class DashboardService:
         self._scope(principal, grant)
         start, end = self._interval(from_day, to_day)
         selected, pagination = self._page(
-            "products", page_size(size), cursor, extra={"from_day": start, "to_day": end}
+            "products",
+            page_size(size),
+            cursor,
+            extra={
+                "from_day": start,
+                "to_day": end,
+                "as_of": self.publication.as_of,
+                "timezone": self.policy.reporting_timezone,
+            },
         )
         return self._response(
             [
@@ -601,20 +673,20 @@ class DashboardService:
                     "product_key": row["product_key"],
                     "product_id": row.get("product_id"),
                     "sku": row.get("sku"),
-                    "name": None,
+                    "name": row.get("name"),
                     "requested_revenue": decimal_string(row.get("requested")),
                     "fulfilled_revenue": decimal_string(row.get("fulfilled")),
                     "units_requested": decimal_string(row.get("units_requested")),
                     "units_fulfilled": decimal_string(row.get("units_fulfilled")),
                     "orders_observed": integer(row.get("orders")),
-                    "buyers_unique": None,
+                    "buyers_unique": integer(row.get("buyers_unique")),
                 }
                 for row in selected
             ],
             pagination=pagination,
             limitations=[
-                "product_name_not_in_analytics_v1",
-                "unique_buyers_not_additive_across_days",
+                "product_identity_uses_exact_current_core_variant_sku",
+                "current_core_at_publication_read_snapshot",
             ],
         )
 
@@ -664,7 +736,32 @@ class DashboardService:
             limitations=["funnel_events_not_financial_orders"],
         )
 
-    def geography(self, principal: Principal | None, grant: Grant) -> dict[str, Any]:
-        self._scope(principal, grant)
-        # Current-state CORE location is not a certified historic geography dimension.
-        raise ReadError(424, "geography_coverage_not_certified")
+    def order(self, principal: Principal | None, grant: Grant, order_id: str) -> dict[str, Any]:
+        from src.dashboard.product_reads import order
+
+        return order(self, principal, grant, order_id)
+
+    def product(
+        self,
+        principal: Principal | None,
+        grant: Grant,
+        product_key: str,
+        *,
+        from_day: str | None = None,
+        to_day: str | None = None,
+    ) -> dict[str, Any]:
+        from src.dashboard.product_reads import product
+
+        return product(self, principal, grant, product_key, from_day, to_day)
+
+    def geography(
+        self,
+        principal: Principal | None,
+        grant: Grant,
+        *,
+        from_day: str | None = None,
+        to_day: str | None = None,
+    ) -> dict[str, Any]:
+        from src.dashboard.product_reads import geography
+
+        return geography(self, principal, grant, from_day, to_day)

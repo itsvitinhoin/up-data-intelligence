@@ -1,10 +1,9 @@
 "use client";
-import { RealCampaigns } from "./intelligence-read-pages";
 import { B2BReadBoundary } from "@/hooks/use-dashboard-read";
-import { RealOrders, RealPerformance } from "./b2b-read-pages";
 import dynamic from "next/dynamic";
 import { ConversionVelocity } from "@/features/lifecycle";
 import Link from "next/link";
+import { OrderDialog } from "@/components/order-dialog";
 import { money } from "@/lib/format";
 import { useState } from "react";
 import { useResource, useCampaign } from "@/hooks/use-resource";
@@ -16,6 +15,7 @@ import {
   Failure,
   Notice,
   MetricCard,
+  Choice,
 } from "@/components/ui-kit";
 import { FiltersBar } from "@/components/shell";
 import { DataTable } from "@/components/data-table";
@@ -34,7 +34,7 @@ function PerformanceTrend() {
   return (
     <Panel
       title="Faturamento × Investimento por período"
-      subtitle="Receita atendida influenciada, sem duplicação de pedidos, e investimento em mídia. Valores demonstrativos no período selecionado."
+      subtitle="Receita atendida influenciada, sem duplicação de pedidos, e investimento em mídia no período selecionado."
     >
       {q.isPending ? (
         <Loading />
@@ -97,6 +97,8 @@ function DemoInfluencePage({
           <div className="metrics">
             {q
               .compare((data) => {
+                if (data.metrics)
+                  return performance ? data.metrics : data.metrics.slice(0, 4);
                 const previousSpend = data.campaigns.reduce(
                   (sum, campaign) => sum + Number(campaign.spend),
                   0,
@@ -240,7 +242,7 @@ function DemoCampaignDetailPage({ id }: { id: string }) {
               item={{
                 ...m,
                 format: "currency",
-                hint: "Participação demonstrativa",
+                hint: "Influência observada, sem atribuição exclusiva",
               }}
             />
           ))}
@@ -269,7 +271,11 @@ function DemoCampaignDetailPage({ id }: { id: string }) {
             <DataTable
               data={orders}
               columns={[
-                { accessorKey: "id", header: "Pedido" },
+                {
+                  accessorKey: "id",
+                  header: "Pedido",
+                  cell: ({ row }) => <OrderDialog id={row.original.id} />,
+                },
                 {
                   accessorKey: "customer_name",
                   header: "Cliente",
@@ -302,6 +308,7 @@ function DemoCommercialPage({ revenue = false }: { revenue?: boolean }) {
   const q = useResource("orders");
   const overview = useResource("overview");
   const { scope } = useWorkspace();
+  const [status, setStatus] = useState("all");
   return (
     <>
       <PageHead
@@ -325,13 +332,36 @@ function DemoCommercialPage({ revenue = false }: { revenue?: boolean }) {
             ))}
         </div>
       )}
-      <Panel title="Pedidos no recorte">
+      <Panel
+        title="Pedidos no recorte"
+        action={
+          <Choice
+            label="Status do pedido"
+            value={status}
+            onChange={setStatus}
+            options={[
+              { value: "all", label: "Todos" },
+              { value: "CANCELED", label: "Cancelado" },
+              { value: "CONFIRMED", label: "Confirmado" },
+              { value: "SHIPPED", label: "Enviado" },
+              { value: "DELIVERED", label: "Entregue" },
+              { value: "INVOICED", label: "Faturado" },
+            ]}
+          />
+        }
+      >
         {q.isPending ? (
           <Loading />
         ) : q.isError ? (
           <Failure retry={() => void q.refetch()} />
         ) : (
-          <DataTable data={q.data} columns={orderColumns} />
+          <DataTable
+            key={status}
+            data={q.data.filter(
+              (row) => status === "all" || row.status === status,
+            )}
+            columns={orderColumns}
+          />
         )}
       </Panel>
     </>
@@ -343,16 +373,14 @@ export function InfluencePage(props: {
   performance?: boolean;
 }) {
   return (
-    <B2BReadBoundary
-      real={(metadata) => <RealPerformance metadata={metadata} />}
-    >
+    <B2BReadBoundary>
       <DemoInfluencePage {...props} />
     </B2BReadBoundary>
   );
 }
 export function CommercialPage(props: { revenue?: boolean }) {
   return (
-    <B2BReadBoundary real={(metadata) => <RealOrders metadata={metadata} />}>
+    <B2BReadBoundary>
       <DemoCommercialPage {...props} />
     </B2BReadBoundary>
   );
@@ -360,9 +388,7 @@ export function CommercialPage(props: { revenue?: boolean }) {
 
 export function CampaignDetailPage({ id }: { id: string }) {
   return (
-    <B2BReadBoundary
-      real={(metadata) => <RealCampaigns metadata={metadata} id={id} />}
-    >
+    <B2BReadBoundary>
       <DemoCampaignDetailPage id={id} />
     </B2BReadBoundary>
   );

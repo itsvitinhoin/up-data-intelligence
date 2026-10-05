@@ -134,8 +134,12 @@ export function retailProductMetrics(
   inventory: boolean,
 ): Metric[] {
   const active = rows.filter((p) => p.active === true);
-  const stock = active.reduce((sum, p) => sum + p.stock, 0),
-    sold = active.reduce((sum, p) => sum + p.units, 0);
+  const stock = active.some((p) => p.stock === null)
+      ? null
+      : active.reduce((sum, p) => sum + (p.stock as number), 0),
+    sold = active.some((p) => p.units === null)
+      ? null
+      : active.reduce((sum, p) => sum + (p.units as number), 0);
   const power = stockPower(rows);
   const observedMonthlyRevenue = active.reduce(
     (sum, p) => sum + Number(p.requested),
@@ -171,7 +175,9 @@ export function retailProductMetrics(
     : [
         m(
           "Peças Vendidas",
-          rows.reduce((sum, p) => sum + p.units, 0),
+          rows.some((p) => p.units === null)
+            ? null
+            : rows.reduce((sum, p) => sum + (p.units as number), 0),
           "number",
           "Peças vendidas no recorte selecionado; cenário demonstrativo.",
         ),
@@ -233,7 +239,7 @@ export function RetailProductsPage({
       cell: (c) => (
         <div className="product-ranking-name">
           <span
-            className={`curve-dot ${promising(c.row.original, rows) ? "curve-dot--promising" : `curve-dot--${c.row.original.abc.toLowerCase()}`}`}
+            className={`curve-dot ${promising(c.row.original, rows) ? "curve-dot--promising" : `curve-dot--${c.row.original.abc?.toLowerCase()}`}`}
             title={
               promising(c.row.original, rows)
                 ? "Promissor"

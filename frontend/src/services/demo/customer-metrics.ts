@@ -1,4 +1,4 @@
-import type { Metric, Order } from "@/types/domain";
+import type { Metric, Order } from "@/services/demo/types";
 
 // Observed commercial purchases, not a confirmation of financial payment.
 export const qualifyingStatuses = new Set([

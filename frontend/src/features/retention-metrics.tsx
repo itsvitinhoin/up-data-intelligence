@@ -15,13 +15,13 @@ export function RetentionMetrics() {
   const metrics: Metric[] = q.compare((data) => [
     {
       label: "Compradores",
-      value: String(data.buyers),
+      value: data.buyers === null ? null : String(data.buyers),
       format: "number",
       hint: "Clientes distintos com compra qualificante no período.",
     },
     {
       label: "Compradores Recorrentes",
-      value: String(data.recurring),
+      value: data.recurring === null ? null : String(data.recurring),
       format: "number",
       hint: "Compradores com recompra no período e uma compra anterior observada, inclusive antes do recorte.",
     },
@@ -47,7 +47,7 @@ export function RetentionMetrics() {
       </section>
       <Panel
         title="% de Retenção por período"
-        subtitle="Recorrentes / compradores distintos em cada semana, dentro do período selecionado. Semanas sem compradores ficam sem taxa; histórico observado parcial."
+        subtitle="Recorrentes / compradores distintos em cada período da série selecionada. Semanas sem compradores ficam sem taxa; histórico observado parcial."
       >
         <RetentionTrend data={d.weekly} />
       </Panel>

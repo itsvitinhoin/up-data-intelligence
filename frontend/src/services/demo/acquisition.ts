@@ -1,4 +1,4 @@
-import type { Acquisition, Order, RequestContext } from "@/types/domain";
+import type { Acquisition, Order, RequestContext } from "@/services/demo/types";
 import { dateRange, inPeriod, DEMO_TODAY } from "@/lib/period";
 import { customersFor, ordersFor, total } from "./business";
 export function acquisitionFor(context: RequestContext): Acquisition {

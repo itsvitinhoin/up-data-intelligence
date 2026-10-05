@@ -16,6 +16,16 @@ variable "product_api_image" {
 
   }
 }
+variable "product_read_image" {
+  description = "Optional immutable read-only product release; admin runtime remains pinned separately."
+  type        = string
+  default     = null
+  nullable    = true
+  validation {
+    condition     = var.product_read_image == null ? true : can(regex("^southamerica-east1-docker.pkg.dev/up-data-intelligence-dev/up-data-intelligence/product-api@sha256:[a-f0-9]{64}$", var.product_read_image))
+    error_message = "An immutable DEV product Read API digest is required."
+  }
+}
 variable "product_web_image" {
   type     = string
   default  = null
@@ -42,7 +52,7 @@ locals {
   product_enabled = var.product_api_image != null
   product_read_tables = toset([
     "store_runtime_config", "workspace_store_bindings", "installation_plans", "installation_work_units",
-    "sync_checkpoints", "sync_runs", "source_connections", "customers", "orders",
+    "sync_checkpoints", "sync_runs", "source_connections", "customers", "orders", "order_items",
     "analytics_publications", "analytics_store_daily", "analytics_customer_metrics",
     "analytics_customer_purchase_sequence", "analytics_cohorts", "analytics_purchase_distribution",
     "analytics_products_daily", "analytics_funnel_daily", "analytics_intelligence_publications",
@@ -223,7 +233,7 @@ resource "google_cloud_run_v2_service" "product_api" {
       max_instance_count = 3
     }
     containers {
-      image   = var.product_api_image
+      image   = each.key == "read" && var.product_read_image != null ? var.product_read_image : var.product_api_image
       command = ["gunicorn"]
       args    = ["--bind", "0.0.0.0:8080", "--workers", "1", "--threads", "8", "--timeout", "120", "--access-logfile", "/dev/null", "src.product_auth.runtime:${each.key}_app()"]
       ports {

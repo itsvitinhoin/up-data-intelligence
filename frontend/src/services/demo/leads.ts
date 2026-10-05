@@ -3,7 +3,7 @@ import type {
   LeadSummary,
   Order,
   RequestContext,
-} from "@/types/domain";
+} from "@/services/demo/types";
 import { dateRange, DEMO_TODAY } from "@/lib/period";
 import { geographyFor, hasDemoData, ordersFor } from "./business";
 import { approvals, customers, geography } from "./fixtures";

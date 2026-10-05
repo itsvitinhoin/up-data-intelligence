@@ -1,5 +1,18 @@
 import type { ErpData } from "./erp";
-import type { RetentionSummary } from "@/services/demo/retention-summary";
+export interface RetentionSummary {
+  buyers: number | null;
+  recurring: number | null;
+  rate: number | null;
+  ticket: string | number | null;
+  weekly: {
+    date: string;
+    buyers: number | null;
+    recurring: number | null;
+    rate: number | null;
+    ticket: string | number | null;
+  }[];
+  series: RetentionSummary["weekly"];
+}
 export type Role = "ADMIN" | "MANAGER" | "VIEWER";
 export type Operation = "B2B" | "B2C";
 export type DashboardDataMode = "demo" | "read-api-preview" | "live";
@@ -60,46 +73,56 @@ export interface Metric {
 }
 export interface Customer {
   id: string;
-  name: string;
-  city: string;
-  state: string;
-  orders: number;
-  requested: string;
-  fulfilled: string;
-  lastPurchase: string;
-  segment: string;
-  paid: boolean;
-  firstPurchase: string;
+  name: string | null;
+  city: string | null;
+  state: string | null;
+  orders: number | null;
+  requested: string | null;
+  fulfilled: string | null;
+  lastPurchase: string | null;
+  segment: string | null;
+  paid: boolean | null;
+  firstPurchase: string | null;
 }
 export interface Order {
   id: string;
-  customer_id: string;
+  customer_id: string | null;
   date: string;
-  requested: string;
-  fulfilled: string;
-  requestedQuantity: number;
-  fulfilledQuantity: number;
-  status: string;
-  paid: boolean;
+  requested: string | null;
+  fulfilled: string | null;
+  requestedQuantity: number | null;
+  fulfilledQuantity: number | null;
+  status: string | null;
+  paid: boolean | null;
 }
 export interface OrderDetail {
   order: Order;
-  customer: Customer & {
-    cnpj: string | null;
-    email: string | null;
-    phone: string | null;
-  };
+  customer:
+    | (Pick<Customer, "id" | "name" | "city" | "state"> & {
+        cnpj: string | null;
+        email: string | null;
+        phone: string | null;
+      })
+    | null;
   items: {
-    product_id: string;
-    name: string;
-    sku: string;
-    color: string;
-    size: string;
-    requestedQuantity: number;
-    fulfilledQuantity: number;
-    requested: string;
-    fulfilled: string;
+    product_id: string | null;
+    product_key?: string;
+    image?: string | null;
+    unitPrice?: string | null;
+    name: string | null;
+    sku: string | null;
+    color: string | null;
+    size: string | null;
+    requestedQuantity: number | null;
+    fulfilledQuantity: number | null;
+    requested: string | null;
+    fulfilled: string | null;
   }[];
+  reconciliation?: {
+    requestedOrderAdjustment: string | null;
+    fulfilledOrderAdjustment: string | null;
+    quantityReconciled: boolean | null;
+  };
 }
 export interface Product {
   category?: string | null;
@@ -108,43 +131,46 @@ export interface Product {
   colorHex?: string | null;
   variantSales?: { color: string; size: string; units: number }[];
   variants?: {
-    color: string;
+    color: string | null;
     size: string;
-    sku: string;
+    sku: string | null;
     stock: number | null;
     hex?: string | null;
   }[];
   id: string;
-  name: string;
-  sku: string;
-  requested: string;
-  fulfilled: string;
-  units: number;
-  customers: number;
-  orders: number;
-  share: number;
-  sizes: Record<string, boolean>;
-  abc: string;
-  views: number;
-  cart: number;
-  checkout: number;
-  stock: number;
-  sellThrough: number;
-  turnover: number;
-  coverage: number;
-  color: string;
+  name: string | null;
+  sku: string | null;
+  requested: string | null;
+  fulfilled: string | null;
+  units: number | null;
+  customers: number | null;
+  orders: number | null;
+  share: number | null;
+  sizes: Record<string, boolean> | null;
+  abc: string | null;
+  views: number | null;
+  cart: number | null;
+  checkout: number | null;
+  stock: number | null;
+  sellThrough: number | null;
+  turnover: number | null;
+  coverage: number | null;
+  color: string | null;
+  image?: string | null;
+  canonicalProductId?: string | null;
+  variantId?: string | null;
 }
 export interface Campaign {
   id: string;
-  name: string;
-  spend: string;
-  customers: number;
+  name: string | null;
+  spend: string | null;
+  customers: number | null;
   newCustomers: number | null;
-  orders: number;
-  requested: string;
-  fulfilled: string;
-  roasRequested: string;
-  roasFulfilled: string;
+  orders: number | null;
+  requested: string | null;
+  fulfilled: string | null;
+  roasRequested: string | null;
+  roasFulfilled: string | null;
   cac: string | null;
 }
 export interface TimelineEvent {
@@ -189,31 +215,31 @@ export interface Overview {
   };
   series: {
     date: string;
-    requested: number;
-    fulfilled: number;
-    orders: number;
+    requested: number | null;
+    fulfilled: number | null;
+    orders: number | null;
   }[];
-  goal: { requested: number; fulfilled: number };
+  goal: { requested: number | null; fulfilled: number | null };
   week: { day: string; orders: number }[];
 }
 export interface Geography {
   approvedWithoutPurchase: number | null;
   conversionRate: number | null;
-  fulfilled: number;
-  influencedCustomers: number;
+  fulfilled: number | string | null;
+  influencedCustomers: number | null;
   averageTicket: number | null;
   cities: {
     name: string;
-    customers: number;
-    requested: number;
-    fulfilled: number;
-    orders: number;
+    customers: number | null;
+    requested: number | string | null;
+    fulfilled: number | string | null;
+    orders: number | null;
   }[];
   uf: string;
   name: string;
-  requested: number;
-  customers: number;
-  orders: number;
+  requested: number | string | null;
+  customers: number | null;
+  orders: number | null;
   newCustomers: number | null;
 }
 export interface Retention {
@@ -221,10 +247,11 @@ export interface Retention {
   customers: number;
   mean: number | null;
   median: number | null;
-  rate: number;
+  rate: number | null;
   cohorts: { day: number; rate: number | null }[];
 }
 export interface CustomerDetail {
+  marketingTouches?: { first: string | null; last: string | null };
   customer: Customer;
   orders: Order[];
   products: Product[];
@@ -290,22 +317,30 @@ export interface MarketingCreative {
   purchases: number;
 }
 export interface Marketing {
+  metrics?: Metric[];
+  source?: "real" | "demo";
+  summary?: {
+    spend: string | null;
+    leads: number | null;
+    clicks: number | null;
+    ctr: string | null;
+  };
   creatives: MarketingCreative[];
   campaigns: (Campaign & {
-    impressions: number;
-    clicks: number;
-    leads: number;
-    approved: number;
-    purchases: number;
+    impressions: number | null;
+    clicks: number | null;
+    leads: number | null;
+    approved: number | null;
+    purchases: number | null;
     platform: string;
-    status: string;
+    status: string | null;
   })[];
   series: {
     date: string;
-    spend: number;
-    leads: number;
-    purchases: number;
-    revenue: number;
+    spend: number | string | null;
+    leads: number | null;
+    purchases: number | null;
+    revenue: number | string | null;
   }[];
 }
 export interface Lifecycle {
@@ -314,34 +349,34 @@ export interface Lifecycle {
     customers: number;
     share: number | null;
     continuation: number | null;
-    revenue: number;
-    accumulated: number;
+    revenue: number | string | null;
+    accumulated: number | string | null;
     meanDays: number | null;
   }[];
   cohorts: { month: string; customers: number; rates: (number | null)[] }[];
   conversion: {
-    buckets: { label: string; count: number; percent: number | null }[];
-    buyers: number;
-    excluded: number;
+    buckets: { label: string; count: number | null; percent: number | null }[];
+    buyers: number | null;
+    excluded: number | null;
     mean: number | null;
     median: number | null;
-    withinWeek: number;
-    withinMonth: number;
+    withinWeek: number | null;
+    withinMonth: number | null;
   };
 }
 export interface Acquisition {
   customers: Customer[];
   firstOrders: Order[];
-  buyerCount: number;
+  buyerCount: number | null;
   confirmedNewCustomers: number | null;
-  requested: string;
-  fulfilled: string;
+  requested: string | null;
+  fulfilled: string | null;
   historyComplete: boolean;
 }
 export interface LeadSummary {
-  leads: number;
-  approved: number;
-  converted: number;
+  leads: number | null;
+  approved: number | null;
+  converted: number | null;
   qualificationRate: number | null;
   conversionRate: number | null;
 }
@@ -353,7 +388,7 @@ export interface ResourceMap {
   acquisition: Acquisition;
   lifecycle: Lifecycle;
   marketing: Marketing;
-  funnel: { label: string; value: number }[];
+  funnel: { label: string; value: number | null }[];
   overview: Overview;
   customers: Customer[];
   orders: Order[];
@@ -382,6 +417,7 @@ export interface DataApi {
     context: RequestContext,
   ): Promise<ResourceMap[K]>;
   order(id: string, context: RequestContext): Promise<OrderDetail>;
+  product?(id: string, context: RequestContext): Promise<Product>;
   customer(id: string, context: RequestContext): Promise<CustomerDetail>;
   campaign(id: string, context: RequestContext): Promise<CampaignDetail>;
   saveCompany(company: Company, context: RequestContext): Promise<void>;
@@ -396,8 +432,9 @@ export interface Influence {
   customers: Customer[];
   orders: Order[];
   campaigns: Campaign[];
-  requested: string;
-  fulfilled: string;
+  requested: string | null;
+  fulfilled: string | null;
+  metrics?: Metric[];
 }
 export interface CampaignDetail extends Influence {
   campaign: Campaign;

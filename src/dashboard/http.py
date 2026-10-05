@@ -101,6 +101,8 @@ def dispatch(
     overview = re.fullmatch(r"/v1/stores/([^/]+)/overview", path)
     customer_orders = re.fullmatch(r"/v1/customers/([^/]+)/orders", path)
     customer = re.fullmatch(r"/v1/customers/([^/]+)", path)
+    order = re.fullmatch(r"/v1/orders/([^/]+)", path)
+    product = re.fullmatch(r"/v1/products/([^/]+)", path)
     store: str | None
     resource: str
     if overview:
@@ -109,6 +111,10 @@ def dispatch(
         resource, store = "customer_orders", _value(query, "store_id")
     elif customer:
         resource, store = "customer", _value(query, "store_id")
+    elif order:
+        resource, store = "order", _value(query, "store_id")
+    elif product:
+        resource, store = "product", _value(query, "store_id")
     elif path in {
         "/v1/orders",
         "/v1/acquisition",
@@ -132,12 +138,14 @@ def dispatch(
         "retention",
         "products",
         "funnel",
+        "product",
+        "geography",
     }:
         allowed.update({"from", "to"})
     if resource in {"orders", "customers", "products", "customer_orders"}:
         allowed.update({"page_size", "cursor"})
     if resource == "orders":
-        allowed.add("status")
+        allowed.update({"status", "first_purchase"})
     if set(query) - allowed:
         raise ReadError(400, "unsupported_filter")
     tenant = _value(query, "tenant_id")
@@ -159,6 +167,9 @@ def dispatch(
             to_day=_value(query, "to"),
         )
     elif resource == "orders":
+        first_purchase = _value(query, "first_purchase")
+        if first_purchase not in {None, "true", "false"}:
+            raise ReadError(400, "invalid_first_purchase_filter")
         result = service.orders(
             principal,
             grant,
@@ -167,6 +178,7 @@ def dispatch(
             from_day=_value(query, "from"),
             to_day=_value(query, "to"),
             status=_value(query, "status"),
+            first_purchase=first_purchase == "true",
         )
     elif resource == "acquisition":
         result = service.acquisition(
@@ -174,6 +186,16 @@ def dispatch(
         )
     elif resource == "customer":
         result = service.customer(principal, grant, unquote(customer.group(1)))  # type: ignore[union-attr]
+    elif resource == "order":
+        result = service.order(principal, grant, unquote(order.group(1)))  # type: ignore[union-attr]
+    elif resource == "product":
+        result = service.product(
+            principal,
+            grant,
+            unquote(product.group(1)),  # type: ignore[union-attr]
+            from_day=_value(query, "from"),
+            to_day=_value(query, "to"),
+        )
     elif resource == "customer_orders":
         result = service.customer_orders(
             principal,
@@ -200,7 +222,9 @@ def dispatch(
             principal, grant, from_day=_value(query, "from"), to_day=_value(query, "to")
         )
     else:
-        result = service.geography(principal, grant)
+        result = service.geography(
+            principal, grant, from_day=_value(query, "from"), to_day=_value(query, "to")
+        )
     return 200, result
 
 

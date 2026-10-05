@@ -1,4 +1,4 @@
-import type { Metric, RequestContext } from "@/types/domain";
+import type { Metric, RequestContext } from "@/services/demo/types";
 import {
   ordersFor,
   customersFor,

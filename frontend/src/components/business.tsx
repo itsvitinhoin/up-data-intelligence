@@ -1,4 +1,6 @@
 "use client";
+import { useState } from "react";
+import { useProduct } from "@/hooks/use-resource";
 import { useWorkspace } from "@/features/providers";
 import { ProductSales } from "@/components/product-sales";
 import { ListExport } from "@/components/exports";
@@ -22,7 +24,7 @@ import {
   SheetDescription,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { Panel } from "@/components/ui-kit";
+import { Panel, Loading, Failure } from "@/components/ui-kit";
 import { money, date, number } from "@/lib/format";
 import type {
   Customer,
@@ -31,14 +33,20 @@ import type {
   Campaign,
   TimelineEvent,
 } from "@/types/domain";
-export function MediaBadge({ paid }: { paid: boolean }) {
+export function MediaBadge({ paid }: { paid: boolean | null }) {
   return (
     <span className={`pill ${paid ? "media-pill" : "muted"}`}>
-      {paid ? "Sim · influenciado" : "Não · sem evidência observada"}
+      {paid === null
+        ? "Indisponível"
+        : paid
+          ? "Sim · influenciado"
+          : "Não · sem evidência observada"}
     </span>
   );
 }
 export function Sizes({ product }: { product: Product }) {
+  if (product.sizes === null)
+    return <span className="muted">Indisponível</span>;
   return (
     <div className="sizes">
       {Object.entries(product.sizes).map(([size, available]) => (
@@ -53,56 +61,76 @@ export function Sizes({ product }: { product: Product }) {
     </div>
   );
 }
-export function ProductDrawer({ product }: { product: Product }) {
-  const { scope } = useWorkspace();
+export function ProductDrawer({
+  product: initialProduct,
+}: {
+  product: Product;
+}) {
+  const { scope, dataMode } = useWorkspace();
+  const [open, setOpen] = useState(false);
+  const detail = useProduct(initialProduct.id, open && dataMode !== "demo");
+  const product = detail.data ?? initialProduct;
   const b2c = scope?.operation === "B2C";
   return (
-    <Sheet>
+    <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
         <button className="prod text-left">
           <span className="prod-thumb">
             <Package size={17} />
           </span>
           <span>
-            <span className="prod-name">{product.name}</span>
+            <span className="prod-name">
+              {product.name ?? product.sku ?? "Identificação indisponível"}
+            </span>
             <span className="prod-sku block">{product.sku}</span>
           </span>
         </button>
       </SheetTrigger>
       <SheetContent className="detail-sheet">
-        <SheetTitle>{product.name}</SheetTitle>
+        <SheetTitle>
+          {product.name ?? product.sku ?? "Identificação indisponível"}
+        </SheetTitle>
         <SheetDescription>
-          {product.sku} · Curva {product.abc}
+          {product.sku ?? "SKU indisponível"} · Curva{" "}
+          {product.abc ?? "indisponível"}
         </SheetDescription>
         <Panel title="Desempenho comercial">
-          <dl className="detail-list">
-            <div>
-              <dt>{b2c ? "Faturamento captado" : "Solicitado"}</dt>
-              <dd>{money(product.requested)}</dd>
-            </div>
-            {!b2c && (
+          {dataMode !== "demo" && detail.isPending ? (
+            <Loading />
+          ) : dataMode !== "demo" && detail.isError ? (
+            <Failure retry={() => void detail.refetch()} />
+          ) : (
+            <dl className="detail-list">
               <div>
-                <dt>Atendido</dt>
-                <dd>{money(product.fulfilled)}</dd>
+                <dt>{b2c ? "Faturamento captado" : "Solicitado"}</dt>
+                <dd>{money(product.requested)}</dd>
               </div>
-            )}
-            <div>
-              <dt>Pedidos</dt>
-              <dd>{product.orders}</dd>
-            </div>
-            <div>
-              <dt>Clientes compradores</dt>
-              <dd>{product.customers}</dd>
-            </div>
-          </dl>
+              {!b2c && (
+                <div>
+                  <dt>Atendido</dt>
+                  <dd>{money(product.fulfilled)}</dd>
+                </div>
+              )}
+              <div>
+                <dt>Pedidos</dt>
+                <dd>{number(product.orders)}</dd>
+              </div>
+              <div>
+                <dt>Clientes compradores</dt>
+                <dd>{number(product.customers)}</dd>
+              </div>
+            </dl>
+          )}
         </Panel>
         <Panel title="Estoque e grade">
           <StockMatrix product={product} />
           <p>
-            {product.stock} peças · {product.coverage} dias de cobertura
+            {number(product.stock)} peças · {number(product.coverage)} dias de
+            cobertura
           </p>
           <span className="metric-hint">
-            Disponibilidade demonstrativa. Fonte de estoque ainda não conectada.
+            Disponibilidade não certificada na fonte atual; traço indica dado
+            indisponível.
           </span>
         </Panel>
         <ProductSales product={product} />
@@ -117,10 +145,10 @@ export const customerColumns: ColumnDef<Customer>[] = [
     cell: ({ row }) => (
       <Link className="customer-link" href={`/customers/${row.original.id}`}>
         <span className="avatar">
-          {row.original.name.slice(0, 2).toUpperCase()}
+          {row.original.name?.slice(0, 2).toUpperCase() ?? "—"}
         </span>
         <span>
-          {row.original.name}
+          {row.original.name ?? "Nome indisponível"}
           <small>
             {row.original.city} · {row.original.state}
           </small>
@@ -227,7 +255,11 @@ export const productColumns: ColumnDef<Product>[] = [
         <span className="share-track">
           <i style={{ width: `${i.getValue<number>()}%` }} />
         </span>
-        <span className="share-pct">{i.getValue<number>()}%</span>
+        <span className="share-pct">
+          {i.getValue<number | null>() === null
+            ? "—"
+            : `${i.getValue<number>()}%`}
+        </span>
       </div>
     ),
   },
@@ -280,7 +312,7 @@ export const campaignColumns: ColumnDef<Campaign>[] = [
     header: "Campanha",
     cell: ({ row }) => (
       <Link className="table-link" href={`/campaigns/${row.original.id}`}>
-        {row.original.name}
+        {row.original.name ?? "Nome indisponível"}
         <ArrowUpRight size={13} />
       </Link>
     ),

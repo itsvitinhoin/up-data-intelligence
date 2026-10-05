@@ -12,7 +12,7 @@ import type {
   RequestContext,
   Resource,
   ResourceMap,
-} from "@/types/domain";
+} from "@/services/demo/types";
 import { assertAccess, ApiError } from "@/services/api/access";
 import { tenants } from "@/config/tenants";
 import { adminApi, assertUp } from "./admin";

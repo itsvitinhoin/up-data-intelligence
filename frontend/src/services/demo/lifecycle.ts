@@ -1,4 +1,4 @@
-import type { Lifecycle, Order, RequestContext } from "@/types/domain";
+import type { Lifecycle, Order, RequestContext } from "@/services/demo/types";
 import { dateRange, inPeriod, isoDay, DEMO_TODAY } from "@/lib/period";
 import { ordersFor, total } from "./business";
 import { qualifyingStatuses as qualifying } from "./customer-metrics";

@@ -7,13 +7,13 @@ export function LeadCards() {
   const metrics: Metric[] = q.compare((data) => [
     {
       label: "Leads",
-      value: String(data.leads),
+      value: data.leads === null ? null : String(data.leads),
       format: "number",
       hint: "Cadastros únicos da marca no período, de todas as origens. Base demonstrativa; independe de canal e coleção.",
     },
     {
       label: "Leads aprovados",
-      value: String(data.approved),
+      value: data.approved === null ? null : String(data.approved),
       format: "number",
       hint: "Dos leads cadastrados no período, quantos foram aprovados até o fim do recorte.",
     },

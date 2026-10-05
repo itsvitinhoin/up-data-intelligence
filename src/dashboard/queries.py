@@ -25,6 +25,7 @@ def table(project: str, dataset: str, name: str) -> str:
         "analytics_funnel_daily",
         "customers",
         "orders",
+        "order_items",
     }:
         raise ValueError("dashboard_table_not_allowed")
     return f"`{project}.{dataset}.{name}`"
@@ -32,6 +33,26 @@ def table(project: str, dataset: str, name: str) -> str:
 
 def build(project: str, name: str, **values: object) -> Query:
     """Only project/table identifiers are interpolated; caller values are parameters."""
+
+    if name in {"order_detail", "order_detail_items", "geography", "product_evidence"}:
+        from src.dashboard.product_queries import build_product_read
+
+        return build_product_read(project, name, **values)
+
+    if name == "retention_details":
+        models = {
+            "distribution": "retention_distribution",
+            "cohorts": "retention_cohorts",
+            "gaps": "retention_gaps",
+            "series": "retention_series",
+        }
+        queries = {field: build(project, model, **values) for field, model in models.items()}
+        parameters = {k: v for query in queries.values() for k, v in query.parameters.items()}
+        sql = "SELECT " + ",".join(
+            f"ARRAY(SELECT AS STRUCT * FROM ({query.sql})) AS {field}"
+            for field, query in queries.items()
+        )
+        return Query(name, "/* dashboard:retention_details */\n" + sql, parameters)
 
     def a(model: str) -> str:
         return table(project, "up_analytics", model)
@@ -114,6 +135,13 @@ WITH metrics AS (
  SELECT *,LOWER(TO_HEX(SHA256(CONCAT(store_id,':',customer_id)))) AS cursor_key
  FROM {a("analytics_customer_metrics")} {history}
  WHERE {scope} AND customer_id IS NOT NULL
+), summaries AS (
+ SELECT customer_id,COUNT(*) AS qualifying_orders,MIN(order_at) AS first_observed_at,
+ MAX(order_at) AS last_observed_at,
+ IF(COUNTIF(revenue_generated IS NULL)>0,NULL,SUM(revenue_generated)) AS summary_requested,
+ IF(COUNTIF(revenue_fulfilled IS NULL)>0,NULL,SUM(revenue_fulfilled)) AS summary_fulfilled
+ FROM {a("analytics_customer_purchase_sequence")} {history}
+ WHERE {scope} GROUP BY customer_id
 ), profiles AS (
  SELECT customer_id,name,company_name,trade_name,state,city
  FROM {c("customers")} {history}
@@ -122,8 +150,10 @@ WITH metrics AS (
 )
 SELECT m.customer_id,m.customer_type,m.purchases,m.first_purchase_at,
  m.first_purchase_date,m.ltv_lifetime_observed,m.ltv_paid,m.cursor_key,
- p.name,p.company_name,p.trade_name,p.state,p.city
+ p.name,p.company_name,p.trade_name,p.state,p.city,
+ s.qualifying_orders,s.first_observed_at,s.last_observed_at,s.summary_requested,s.summary_fulfilled
 FROM metrics m LEFT JOIN profiles p ON p.customer_id=m.customer_id
+ LEFT JOIN summaries s ON s.customer_id=m.customer_id
 WHERE {selector} {period_selector} ORDER BY m.cursor_key LIMIT @limit"""
     elif name == "store_orders":
         params.update(
@@ -132,6 +162,7 @@ WHERE {selector} {period_selector} ORDER BY m.cursor_key LIMIT @limit"""
                 "to": ("DATE", values.get("to_day")),
                 "timezone": ("STRING", values.get("timezone")),
                 "status": ("STRING", values.get("status")),
+                "first_purchase": ("BOOL", values.get("first_purchase", False)),
                 "after": ("STRING", values.get("after", "")),
                 "limit": ("INT64", values.get("limit")),
                 "as_of": ("TIMESTAMP", values.get("as_of")),
@@ -142,13 +173,18 @@ WITH selected AS (
  SELECT order_id,customer_id,created_at,order_status,payment_status,
  requested_total,fulfilled_total,requested_items_qty,fulfilled_items_qty,
  CONCAT(FORMAT_TIMESTAMP('%Y-%m-%dT%H:%M:%E6SZ',created_at),':',order_id) AS cursor_key
- FROM {c("orders")} {history}
- WHERE store_id=@store AND source_system='upzero'
+ FROM {c("orders")} AS o {history}
+ WHERE o.store_id=@store AND source_system='upzero'
+ AND (NOT @first_purchase OR EXISTS (
+   SELECT 1 FROM {a("analytics_customer_purchase_sequence")} AS s {history}
+   WHERE s.store_id=o.store_id AND s.policy_hash=@policy AND s.order_id=o.order_id
+   AND s.customer_id=o.customer_id AND s.purchase_number=1
+   AND s.source_order_version_id=o.version_id
+ ))
  AND DATE(created_at,@timezone)>=@from AND DATE(created_at,@timezone)<@to
  AND created_at<@as_of AND (@status IS NULL OR order_status=@status)
 )
 SELECT * FROM selected WHERE cursor_key>@after ORDER BY created_at,order_id LIMIT @limit"""
-        params.pop("policy")
     elif name == "acquisition_first":
         params.update(
             {"from": ("DATE", values.get("from_day")), "to": ("DATE", values.get("to_day"))}
@@ -196,6 +232,18 @@ SELECT COUNT(*) AS qualifying_orders,MIN(order_at) AS first_purchase_at,
  IF(COUNTIF(revenue_fulfilled IS NULL)>0,NULL,SUM(revenue_fulfilled)) AS fulfilled
 FROM {a("analytics_customer_purchase_sequence")} {history}
 WHERE {scope} AND customer_id=@customer"""
+    elif name == "retention_series":
+        params.update(
+            {"from": ("DATE", values.get("from_day")), "to": ("DATE", values.get("to_day"))}
+        )
+        sql = f"""SELECT order_date,COUNT(DISTINCT customer_id) AS buyers,
+ COUNT(DISTINCT IF(purchase_number>=2,customer_id,NULL)) AS recurring_buyers,
+ COUNTIF(purchase_number>=2) AS recurring_orders,
+ IF(COUNTIF(purchase_number>=2 AND revenue_fulfilled IS NULL)>0,NULL,
+ SUM(IF(purchase_number>=2,revenue_fulfilled,0))) AS recurring_fulfilled
+ FROM {a("analytics_customer_purchase_sequence")} {history}
+ WHERE {scope} AND order_date>=@from AND order_date<@to
+ GROUP BY order_date ORDER BY order_date LIMIT 367"""
     elif name == "retention_distribution":
         sql = f"""/* dashboard:retention_distribution */
 SELECT cohort_month,purchase_bucket,customers,original_cohort_customers,
@@ -227,10 +275,30 @@ FROM (SELECT stage,gap_days,PERCENTILE_CONT(gap_days,0.5)
 GROUP BY stage ORDER BY stage"""
     elif name == "products":
         params.update(
-            {"after": ("STRING", values.get("after", "")), "limit": ("INT64", values.get("limit"))}
+            {
+                "after": ("STRING", values.get("after", "")),
+                "limit": ("INT64", values.get("limit")),
+                "product": ("STRING", values.get("product")),
+                "as_of": ("TIMESTAMP", values.get("as_of")),
+                "timezone": ("STRING", values.get("timezone")),
+            }
         )
+        from src.dashboard.product_queries import product_key_sql
+
         sql = f"""/* dashboard:products */
-WITH grouped AS (
+WITH evidence AS (
+ SELECT {product_key_sql()} AS product_key,
+ IF(COUNTIF(o.customer_id IS NULL)>0,NULL,COUNT(DISTINCT o.customer_id)) AS buyers_unique,
+ IF(COUNT(DISTINCT i.asset_name)=1,MAX(i.asset_name),NULL) AS name
+ FROM {c("order_items")} AS i {history}
+ JOIN {c("orders")} AS o {history} ON o.store_id=i.store_id AND o.order_id=i.order_id
+ AND o.source_system='upzero' AND o.version_id=i.parent_order_version_id
+ WHERE i.store_id=@store AND i.source_system='upzero' AND i.present_in_latest_snapshot
+ AND i.status IN ('active','attended','removed') AND o.created_at<@as_of
+ AND DATE(o.created_at,@timezone)>=@from AND DATE(o.created_at,@timezone)<@to
+ AND DATE(i.order_created_at,@timezone)>=@from AND DATE(i.order_created_at,@timezone)<@to
+ GROUP BY product_key
+), grouped AS (
  SELECT product_key,product_id,sku,
  SUM(orders) AS orders,
  IF(COUNTIF(units_requested IS NULL)>0,NULL,SUM(units_requested)) AS units_requested,
@@ -242,7 +310,7 @@ WITH grouped AS (
  WHERE {scope} AND order_date>=@from AND order_date<@to
  GROUP BY product_key,product_id,sku
 )
-SELECT * FROM grouped WHERE cursor_key>@after ORDER BY cursor_key LIMIT @limit"""
+SELECT g.*,e.buyers_unique,e.name FROM grouped g LEFT JOIN evidence e USING(product_key) WHERE g.cursor_key>@after AND (@product IS NULL OR g.product_key=@product) ORDER BY g.cursor_key LIMIT @limit"""
     elif name == "funnel_daily":
         sql = f"""/* dashboard:funnel_daily */
 SELECT event_date,observation_complete,sessions,product_views,add_to_cart,

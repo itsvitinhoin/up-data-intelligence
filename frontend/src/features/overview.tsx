@@ -1,4 +1,5 @@
 "use client";
+import { PublicationContext } from "@/hooks/publication-context";
 import { RetailOverview } from "@/features/retail";
 import { B2BOverview } from "@/features/b2b-overview";
 import { useWorkspace } from "@/features/providers";
@@ -41,11 +42,13 @@ export function OverviewPage() {
               permanecem indisponíveis.
             </Notice>
           )}
-          <B2BOverview
-            data={q.data.overview.data}
-            goal={q.data.overview.goal}
-            preview
-          />
+          <PublicationContext value={q.data.overview.metadata}>
+            <B2BOverview
+              data={q.data.overview.data}
+              goal={q.data.overview.goal}
+              preview
+            />
+          </PublicationContext>
         </>
       ) : b2b && q.data.source === "demo" && q.data.overview.b2b ? (
         <B2BOverview data={q.data.overview.b2b} goal={q.data.overview.goal} />

@@ -1,5 +1,5 @@
-import { platforms, erps } from "@/types/domain";
-import type { Company, Session, User, Tenant } from "@/types/domain";
+import { platforms, erps } from "@/services/demo/types";
+import type { Company, Session, User, Tenant } from "@/services/demo/types";
 import { tenants } from "@/config/tenants";
 import { ApiError } from "@/services/api/access";
 export type MetaAccount = {

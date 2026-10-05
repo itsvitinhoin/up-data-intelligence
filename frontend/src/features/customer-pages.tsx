@@ -1,6 +1,5 @@
 "use client";
 import { B2BReadBoundary } from "@/hooks/use-dashboard-read";
-import { RealCustomers, RealCustomer } from "./b2b-read-pages";
 
 import { recordColumns } from "@/lib/list-export";
 import { ListExport } from "@/components/exports";
@@ -100,7 +99,8 @@ function RetailCustomerDetail({ data }: { data: CustomerDetail }) {
   );
 }
 function DemoCustomersPage() {
-  const { filters, setFilters, scope } = useWorkspace();
+  const { filters, setFilters, scope, dataMode } = useWorkspace();
+  const live = dataMode !== "demo";
   const b2c = scope?.operation === "B2C";
   const q = useResource("customers");
   return (
@@ -131,18 +131,25 @@ function DemoCustomersPage() {
               },
               {
                 label: "Recorrentes observados",
-                value: String(rows.filter((c) => c.orders > 1).length),
+                value: String(
+                  rows.filter((c) => c.orders !== null && c.orders > 1).length,
+                ),
                 format: "number",
                 hint: "Compradores do recorte com mais de uma compra no histórico observado. Não confirma histórico completo.",
               },
               {
                 label: "Sem recompra observada",
-                value: String(rows.filter((c) => c.orders <= 1).length),
+                value: String(
+                  rows.filter((c) => c.orders !== null && c.orders <= 1).length,
+                ),
                 format: "number",
-                hint: "Compradores do recorte sem segunda compra no histórico demonstrativo observado; não confirma cliente novo definitivo.",
+                hint: "Compradores do recorte sem segunda compra no histórico observado; não confirma cliente novo definitivo.",
               },
               {
-                label: "Novos confirmados",
+                label: live
+                  ? "Novos confirmados · sem histórico integral"
+                  : "Novos confirmados",
+                disabled: live,
                 value: null,
                 format: "number",
                 hint: "Exige histórico comercial completo.",
@@ -197,15 +204,32 @@ function DemoCustomersPage() {
               { value: "Recorrente", label: "Recorrentes" },
               ...(!b2c
                 ? [
-                    { value: "Novo confirmado", label: "Novos confirmados" },
-                    { value: "Reativado", label: "Reativados" },
+                    {
+                      value: "Novo confirmado",
+                      label: live
+                        ? "Novos confirmados · sem histórico integral"
+                        : "Novos confirmados",
+                      disabled: live,
+                    },
+                    {
+                      value: "Reativado",
+                      label: live
+                        ? "Reativados · policy indisponível"
+                        : "Reativados",
+                      disabled: live,
+                    },
                   ]
                 : []),
             ]}
           />
           {!b2c && (
             <Choice
-              label="Influência de mídia"
+              label={
+                live
+                  ? "Influência · filtro não certificado"
+                  : "Influência de mídia"
+              }
+              disabled={live}
               value={filters.media ?? "all"}
               onChange={(media) => setFilters({ ...filters, media })}
               options={[
@@ -273,12 +297,14 @@ function DemoCustomerDetailPage({ id }: { id: string }) {
       </Link>
       <PageHead
         eyebrow="Customer 360"
-        title={d.customer.name}
-        description={`${d.customer.city} · ${d.customer.state} / Histórico observado`}
+        title={d.customer.name ?? "Cliente · identificação indisponível"}
+        description={`${d.customer.city ?? "Cidade indisponível"} · ${d.customer.state ?? "UF indisponível"} / Histórico observado`}
         action={<MediaBadge paid={d.customer.paid} />}
       />
       <div className="profile-strip glass">
-        <span className="brand-avatar">{d.customer.name.slice(0, 2)}</span>
+        <span className="brand-avatar">
+          {d.customer.name?.slice(0, 2) ?? "—"}
+        </span>
         <div>
           <h2>{d.customer.name}</h2>
           <p>
@@ -301,7 +327,10 @@ function DemoCustomerDetailPage({ id }: { id: string }) {
             {
               label: "Pedidos",
               comparisonBasis: "snapshot" as const,
-              value: String(data.customer.orders),
+              value:
+                data.customer.orders === null
+                  ? null
+                  : String(data.customer.orders),
               format: "number" as const,
               hint: "Compras observadas",
             },
@@ -321,17 +350,27 @@ function DemoCustomerDetailPage({ id }: { id: string }) {
             },
             {
               label: "Peças Solicitadas",
-              value: String(
-                data.orders.reduce((s, o) => s + o.requestedQuantity, 0),
-              ),
+              value: data.orders.some((o) => o.requestedQuantity === null)
+                ? null
+                : String(
+                    data.orders.reduce(
+                      (s, o) => s + (o.requestedQuantity as number),
+                      0,
+                    ),
+                  ),
               format: "number" as const,
               hint: "Peças nos pedidos observados",
             },
             {
               label: "Peças Atendidas",
-              value: String(
-                data.orders.reduce((s, o) => s + o.fulfilledQuantity, 0),
-              ),
+              value: data.orders.some((o) => o.fulfilledQuantity === null)
+                ? null
+                : String(
+                    data.orders.reduce(
+                      (s, o) => s + (o.fulfilledQuantity as number),
+                      0,
+                    ),
+                  ),
               format: "number" as const,
               hint: "Peças atendidas",
             },
@@ -370,7 +409,7 @@ function DemoCustomerDetailPage({ id }: { id: string }) {
         <TabsContent value="products">
           <Panel
             title="Produtos comprados"
-            subtitle="Quantidades e receita por produto demonstrativo"
+            subtitle="Quantidades e receita por produto observado"
           >
             <DataTable data={d.products} columns={productColumns} />
           </Panel>
@@ -381,20 +420,34 @@ function DemoCustomerDetailPage({ id }: { id: string }) {
               <div>
                 <dt>Primeiro contato observado</dt>
                 <dd>
-                  {d.customer.paid
-                    ? date(d.timeline[0]?.date)
-                    : "Sem evidência"}
+                  {d.customer.paid === null
+                    ? "Indisponível"
+                    : d.marketingTouches
+                      ? date(d.marketingTouches.first)
+                      : d.customer.paid === null
+                        ? "Indisponível"
+                        : d.customer.paid
+                          ? date(
+                              d.timeline.find((e) => e.type === "paid_touch")
+                                ?.date,
+                            )
+                          : "Sem evidência"}
                 </dd>
               </div>
               <div>
                 <dt>Último contato pago observado</dt>
                 <dd>
-                  {d.customer.paid
-                    ? date(
-                        d.timeline.filter((e) => e.type === "paid_touch").at(-1)
-                          ?.date,
-                      )
-                    : "Sem evidência"}
+                  {d.marketingTouches
+                    ? date(d.marketingTouches.last)
+                    : d.customer.paid === null
+                      ? "Indisponível"
+                      : d.customer.paid
+                        ? date(
+                            d.timeline
+                              .filter((e) => e.type === "paid_touch")
+                              .at(-1)?.date,
+                          )
+                        : "Sem evidência"}
                 </dd>
               </div>
             </dl>
@@ -419,7 +472,7 @@ function DemoCustomerDetailPage({ id }: { id: string }) {
 
 export function CustomersPage() {
   return (
-    <B2BReadBoundary real={(metadata) => <RealCustomers metadata={metadata} />}>
+    <B2BReadBoundary>
       <DemoCustomersPage />
     </B2BReadBoundary>
   );
@@ -427,9 +480,7 @@ export function CustomersPage() {
 
 export function CustomerDetailPage({ id }: { id: string }) {
   return (
-    <B2BReadBoundary
-      real={(metadata) => <RealCustomer metadata={metadata} id={id} />}
-    >
+    <B2BReadBoundary>
       <DemoCustomerDetailPage id={id} />
     </B2BReadBoundary>
   );

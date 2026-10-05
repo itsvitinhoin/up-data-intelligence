@@ -1,3 +1,11 @@
+import {
+  parseOrderDetail,
+  parseProductDetail,
+  parseGeography,
+  type LiveOrderDetail,
+  type LiveProductDetail,
+  type LiveGeography,
+} from "./product-contracts";
 import { parseInstallation } from "./installation";
 /** Analytics V1 read transport. Never selected by the demo composition root. */
 import {
@@ -56,6 +64,8 @@ export type LiveCustomer = {
   first_purchase_at_observed: string | null;
   requested_lifetime_observed: string | null;
   ltv_complete: string | null;
+  fulfilled_lifetime_observed?: string | null;
+  last_purchase_at_observed?: string | null;
 };
 export type LiveOrder = {
   store_id: string;
@@ -125,6 +135,22 @@ export type LiveCustomerDetail = {
   };
 };
 export type LiveRetention = {
+  purchase_stages?: {
+    stage: number;
+    buyers_observed: number;
+    share_observed: string | null;
+    continuation_observed: string | null;
+    requested_revenue_observed: string | null;
+    accumulated_requested_revenue_observed: string | null;
+    mean_days_observed: number | null;
+  }[];
+  series?: {
+    date: string;
+    buyers_observed: number | null;
+    recurring_buyers_observed: number | null;
+    retention_observed: string | null;
+    retention_ticket_observed: string | null;
+  }[];
   buyers_observed: number | null;
   recurring_buyers_observed: number | null;
   retention_observed: string | null;
@@ -277,6 +303,14 @@ function parseCustomer(value: unknown, scope: LiveScope): LiveCustomer {
     state: nullableText(row.state),
     city: nullableText(row.city),
     purchases_observed: count(row.purchases_observed),
+    fulfilled_lifetime_observed:
+      row.fulfilled_lifetime_observed === undefined
+        ? null
+        : decimal(row.fulfilled_lifetime_observed),
+    last_purchase_at_observed:
+      row.last_purchase_at_observed === undefined
+        ? null
+        : nullableText(row.last_purchase_at_observed),
     first_purchase_at_observed: nullableText(row.first_purchase_at_observed),
     requested_lifetime_observed: decimal(row.requested_lifetime_observed),
     ltv_complete: decimal(row.ltv_complete),
@@ -385,14 +419,16 @@ function parseCustomerDetail(
 export type ReadResourceMap = IntelligenceResourceMap & {
   overview: LiveOverview;
   orders: LiveOrder[];
+  order: LiveOrderDetail;
   acquisition: LiveAcquisition;
   customers: LiveCustomer[];
   customer: LiveCustomerDetail;
   customerOrders: LiveOrder[];
   retention: LiveRetention;
   products: LiveProduct[];
+  product: LiveProductDetail;
   funnel: LiveFunnel;
-  geography: Record<string, unknown>;
+  geography: LiveGeography;
 };
 export type ReadResource = keyof ReadResourceMap;
 export function decodeReadEnvelope<K extends ReadResource>(
@@ -446,7 +482,15 @@ export function decodeReadEnvelope<K extends ReadResource>(
     retention: parseRetention,
     products: (v) => array(v).map((item) => parseProduct(item, scope)),
     funnel: parseFunnel,
-    geography: object,
+    order: (v) => {
+      if (!customerId) throw invalid();
+      return parseOrderDetail(v, scope, customerId, parseOrder);
+    },
+    product: (v) => {
+      if (!customerId) throw invalid();
+      return parseProductDetail(v, scope, customerId, parseProduct);
+    },
+    geography: parseGeography,
   };
   const data = parsers[resource as Exclude<ReadResource, IntelligenceResource>](
     payload.data,
@@ -508,6 +552,42 @@ function nullableNumber(value: unknown): number | null {
 function parseRetention(value: unknown): LiveRetention {
   const row = object(value);
   return {
+    ...(row.purchase_stages === undefined
+      ? {}
+      : {
+          purchase_stages: array(row.purchase_stages).map((v) => {
+            const s = object(v),
+              stage = count(s.stage),
+              buyers = count(s.buyers_observed);
+            if (stage === null || stage < 1 || stage > 5 || buyers === null)
+              throw invalid();
+            return {
+              stage,
+              buyers_observed: buyers,
+              share_observed: decimal(s.share_observed),
+              continuation_observed: decimal(s.continuation_observed),
+              requested_revenue_observed: decimal(s.requested_revenue_observed),
+              accumulated_requested_revenue_observed: decimal(
+                s.accumulated_requested_revenue_observed,
+              ),
+              mean_days_observed: nullableNumber(s.mean_days_observed),
+            };
+          }),
+        }),
+    ...(row.series === undefined
+      ? {}
+      : {
+          series: array(row.series).map((v) => {
+            const p = object(v);
+            return {
+              date: text(p.date),
+              buyers_observed: count(p.buyers_observed),
+              recurring_buyers_observed: count(p.recurring_buyers_observed),
+              retention_observed: decimal(p.retention_observed),
+              retention_ticket_observed: decimal(p.retention_ticket_observed),
+            };
+          }),
+        }),
     buyers_observed: count(row.buyers_observed),
     recurring_buyers_observed: count(row.recurring_buyers_observed),
     retention_observed: decimal(row.retention_observed),
@@ -584,6 +664,7 @@ export type ReadOptions = {
   pageSize?: number;
   cursor?: string;
   status?: string;
+  firstPurchase?: boolean;
   signal?: AbortSignal;
 };
 export function createHttpApi(baseUrl: string, fetcher: typeof fetch = fetch) {
@@ -609,6 +690,8 @@ export function createHttpApi(baseUrl: string, fetcher: typeof fetch = fetch) {
       url.searchParams.set("page_size", String(options.pageSize));
     if (options.cursor) url.searchParams.set("cursor", options.cursor);
     if (options.status) url.searchParams.set("status", options.status);
+    if (options.firstPurchase !== undefined)
+      url.searchParams.set("first_purchase", String(options.firstPurchase));
     const response = await fetcher(url, {
       method: "GET",
       credentials: "include",
@@ -683,10 +766,24 @@ export function createHttpApi(baseUrl: string, fetcher: typeof fetch = fetch) {
       if (!response.pagination) throw invalid();
       return response;
     },
+    order: (scope: LiveScope, id: string, options?: ReadOptions) =>
+      request(
+        `/v1/orders/${encodeURIComponent(id)}`,
+        scope,
+        (v) => parseOrderDetail(v, scope, id, parseOrder),
+        options,
+      ),
+    product: (scope: LiveScope, id: string, options?: ReadOptions) =>
+      request(
+        `/v1/products/${encodeURIComponent(id)}`,
+        scope,
+        (v) => parseProductDetail(v, scope, id, parseProduct),
+        options,
+      ),
     acquisition: (scope: LiveScope, options?: ReadOptions) =>
       request("/v1/acquisition", scope, parseAcquisition, options),
     geography: (scope: LiveScope, options?: ReadOptions) =>
-      request("/v1/geography", scope, object, options),
+      request("/v1/geography", scope, parseGeography, options),
     overview: async (scope: LiveScope, options?: ReadOptions) => {
       const response = await request(
         `/v1/stores/${encodeURIComponent(scope.store_id)}/overview`,

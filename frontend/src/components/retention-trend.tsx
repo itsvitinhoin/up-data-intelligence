@@ -8,7 +8,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import type { RetentionSummary } from "@/services/demo/retention-summary";
+import type { RetentionSummary } from "@/types/domain";
 export function RetentionTrend({ data }: { data: RetentionSummary["series"] }) {
   return (
     <div

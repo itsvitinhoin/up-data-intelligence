@@ -3,7 +3,7 @@ import type {
   Marketing,
   MarketingCreative,
   RequestContext,
-} from "@/types/domain";
+} from "@/services/demo/types";
 import {
   campaignsFor,
   factor,

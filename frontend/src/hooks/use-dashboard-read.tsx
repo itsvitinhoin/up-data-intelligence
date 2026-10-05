@@ -12,26 +12,15 @@ import { useRequestContext, queryKey } from "./use-resource";
 import { useWorkspace, overviewScopeKey } from "@/features/providers";
 import { defaultFilters } from "@/config/tenants";
 import { readOverview, overviewQueryKey } from "./use-overview-data";
-import {
-  decodeReadEnvelope,
-  type ReadResource,
-  type ReadMetadata,
-} from "@/services/api/http";
-import {
-  intelligenceResources,
-  type IntelligenceResource,
-} from "@/services/api/intelligence";
+import { type ReadResource, type ReadMetadata } from "@/services/api/http";
 import { exclusiveToInclusive } from "@/lib/period";
 import { ApiError } from "@/services/api/access";
+import { readDashboard } from "@/services/api/read-client";
+export { readDashboard } from "@/services/api/read-client";
+import { PublicationContext, PreviewDemoContext } from "./publication-context";
 import { Failure, Loading } from "@/components/ui-kit";
 
-export function B2BReadBoundary({
-  children,
-  real,
-}: {
-  children: ReactNode;
-  real: (metadata: ReadMetadata) => ReactNode;
-}) {
+export function B2BReadBoundary({ children }: { children: ReactNode }) {
   const context = useRequestContext();
   const { dataMode, setDashboardPageState } = useWorkspace();
   const path = usePathname(),
@@ -47,11 +36,22 @@ export function B2BReadBoundary({
   useEffect(() => {
     if (!preview || result.data?.source === "demo")
       setDashboardPageState({ path, scopeKey, source: "demo" });
-    else if (result.isPending || result.isError)
+    else
       setDashboardPageState({
         path,
         scopeKey,
-        source: result.isError ? "error-real" : "loading-real",
+        source: result.isError
+          ? "error-real"
+          : result.isPending
+            ? "loading-real"
+            : result.data?.source === "real" &&
+                !result.data.overview.metadata.history_complete
+              ? "partial-real"
+              : "real",
+        metadata:
+          result.data?.source === "real"
+            ? result.data.overview.metadata
+            : undefined,
       });
   }, [
     preview,
@@ -62,7 +62,9 @@ export function B2BReadBoundary({
     scopeKey,
     setDashboardPageState,
   ]);
-  if (!preview || result.data?.source === "demo") return children;
+  if (!preview) return children;
+  if (dataMode === "read-api-preview" && result.data?.source === "demo")
+    return <PreviewDemoContext value={true}>{children}</PreviewDemoContext>;
   if (result.isError)
     return (
       <Failure
@@ -76,106 +78,11 @@ export function B2BReadBoundary({
     <div
       key={`${scopeKey}/${metadata.generation}/${context.filters.from}/${context.filters.to}`}
     >
-      {real(metadata)}
+      <PublicationContext value={metadata}>{children}</PublicationContext>
     </div>
   );
 }
 export { usePageSource } from "./use-page-source";
-export async function readDashboard<K extends ReadResource>(
-  resource: K,
-  context: ReturnType<typeof useRequestContext>,
-  generation: number,
-  options: {
-    expectedPolicyHash?: string;
-    expectedIntelligenceGeneration?: number;
-    customerId?: string;
-    cursor?: string;
-    status?: string;
-    signal?: AbortSignal;
-  } = {},
-  fetcher: typeof fetch = fetch,
-) {
-  const intelligence = intelligenceResources.includes(
-    resource as IntelligenceResource,
-  );
-  const params = new URLSearchParams({
-    tenant_id: context.scope.tenant_id,
-    workspace_operation_id:
-      context.scope.workspace_operation_id ?? context.scope.store_id,
-    operation: context.scope.operation,
-  });
-  if (
-    !["customer", "customerOrders", "geography"].includes(resource) &&
-    context.filters.from &&
-    context.filters.to
-  ) {
-    params.set("from", context.filters.from);
-    params.set("to", context.filters.to);
-  }
-  if (
-    (intelligence && !["customer360", "performance"].includes(resource)) ||
-    ["customers", "orders", "customerOrders", "products"].includes(resource)
-  )
-    params.set("page_size", "25");
-  if (options.cursor) params.set("cursor", options.cursor);
-  if (options.status) params.set("status", options.status);
-  const paths: Record<ReadResource, string> = {
-    performance: "performance",
-    campaigns: "campaigns",
-    campaign: `campaigns/${encodeURIComponent(options.customerId ?? "")}`,
-    campaignCustomers: `campaigns/${encodeURIComponent(options.customerId ?? "")}/customers`,
-    campaignOrders: `campaigns/${encodeURIComponent(options.customerId ?? "")}/orders`,
-    customer360: `customers/${encodeURIComponent(options.customerId ?? "")}/intelligence`,
-    timeline: `customers/${encodeURIComponent(options.customerId ?? "")}/timeline`,
-    customerProducts: `customers/${encodeURIComponent(options.customerId ?? "")}/products`,
-    influencedOrders: "orders/influenced",
-    influencedCustomers: "customers/influenced",
-    overview: "overview",
-    orders: "orders",
-    acquisition: "acquisition",
-    customers: "customers",
-    customer: `customers/${encodeURIComponent(options.customerId ?? "")}`,
-    customerOrders: `customers/${encodeURIComponent(options.customerId ?? "")}/orders`,
-    retention: "retention",
-    products: "products",
-    funnel: "funnel",
-    geography: "geography",
-  };
-  const response = await fetcher(
-    `/api/dashboard/${paths[resource]}?${params}`,
-    { method: "GET", cache: "no-store", signal: options.signal },
-  );
-  if (!response.ok)
-    throw new ApiError(
-      response.status,
-      response.status === 424
-        ? "Cobertura ainda não certificada."
-        : response.status === 400
-          ? "Filtro ou cursor inválido. Reinicie a página."
-          : "Leitura real indisponível.",
-    );
-  const envelope = decodeReadEnvelope(
-    resource,
-    await response.json(),
-    options.customerId,
-  );
-  if (
-    (intelligence
-      ? envelope.metadata.analytics_generation !== generation
-      : envelope.metadata.generation !== generation) ||
-    (intelligence &&
-      options.expectedIntelligenceGeneration !== undefined &&
-      envelope.metadata.generation !==
-        options.expectedIntelligenceGeneration) ||
-    (options.expectedPolicyHash !== undefined &&
-      envelope.metadata.policy_hash !== options.expectedPolicyHash)
-  )
-    throw new ApiError(
-      409,
-      "Publicação mudou. Atualize para reiniciar a paginação.",
-    );
-  return envelope;
-}
 export function dashboardReadKey(
   mode: string,
   resource: string,
@@ -193,7 +100,7 @@ export function useDashboardRead<K extends ReadResource>(
   const base = useRequestContext(),
     { dataMode } = useWorkspace(),
     client = useQueryClient();
-  const context = ["customer", "customerOrders", "geography"].includes(resource)
+  const context = ["customer", "customerOrders", "order"].includes(resource)
     ? { ...base, filters: defaultFilters }
     : {
         ...base,

@@ -22,7 +22,7 @@ export function OrderDialog({
   id: string;
   allOrigins?: boolean;
 }) {
-  const { scope } = useWorkspace();
+  const { scope, dataMode } = useWorkspace();
   const b2c = scope?.operation === "B2C";
   const [open, setOpen] = useState(false);
   const q = useOrder(id, open, allOrigins);
@@ -38,7 +38,9 @@ export function OrderDialog({
         <DialogDescription>
           {b2c
             ? "Itens comprados e valor captado deste pedido."
-            : "Produtos e cliente deste pedido · dados de contato fictícios no ambiente demonstrativo."}
+            : dataMode === "demo"
+              ? "Produtos e cliente deste pedido · dados de contato fictícios no ambiente demonstrativo."
+              : "Itens atuais do pedido. Valores solicitados e atendidos separados; contatos não certificados ficam indisponíveis."}
         </DialogDescription>
         {q.isPending ? (
           <Loading />
@@ -57,17 +59,21 @@ export function OrderDialog({
             {!b2c && (
               <section aria-label="Cliente do pedido">
                 <h3 className="card-title">Cliente</h3>
-                <Link
-                  href={`/customers/${q.data.customer.id}`}
-                  className="customer-link"
-                >
-                  {q.data.customer.name} ↗
-                </Link>
+                {q.data.customer ? (
+                  <Link
+                    href={`/customers/${q.data.customer?.id ?? ""}`}
+                    className="customer-link"
+                  >
+                    {q.data.customer?.name ?? "Cliente indisponível"} ↗
+                  </Link>
+                ) : (
+                  <p className="muted">Cliente indisponível</p>
+                )}
                 <dl className="detail-list">
                   {[
-                    ["CNPJ", q.data.customer.cnpj],
-                    ["E-mail", q.data.customer.email],
-                    ["Telefone", q.data.customer.phone],
+                    ["CNPJ", q.data.customer?.cnpj],
+                    ["E-mail", q.data.customer?.email],
+                    ["Telefone", q.data.customer?.phone],
                   ].map(([label, value]) => (
                     <div key={label}>
                       <dt>{label}</dt>
@@ -122,19 +128,21 @@ export function OrderDialog({
                     {q.data.items.map((item, i) => (
                       <tr key={`${item.product_id}:${i}`}>
                         <td>
-                          {item.name}
+                          {item.name ??
+                            item.sku ??
+                            "Identificação indisponível"}
                           {!b2c && (
                             <small className="block muted">{item.sku}</small>
                           )}
                         </td>
-                        <td>{item.color}</td>
-                        <td>{item.size}</td>
-                        <td>{item.requestedQuantity}</td>
+                        <td>{item.color ?? "—"}</td>
+                        <td>{item.size ?? "—"}</td>
+                        <td>{item.requestedQuantity ?? "—"}</td>
                         {b2c ? (
                           <td>{money(item.requested)}</td>
                         ) : (
                           <>
-                            <td>{item.fulfilledQuantity}</td>
+                            <td>{item.fulfilledQuantity ?? "—"}</td>
                             <td>{money(item.requested)}</td>
                             <td>{money(item.fulfilled)}</td>
                           </>
@@ -145,6 +153,15 @@ export function OrderDialog({
                 </table>
               </div>
             </section>
+            {q.data.reconciliation && (
+              <p className="metric-hint">
+                Valores dos itens: quantidade × preço unitário atual, antes dos
+                ajustes do pedido. Ajuste solicitado:{" "}
+                {money(q.data.reconciliation.requestedOrderAdjustment, 2)};
+                ajuste atendido:{" "}
+                {money(q.data.reconciliation.fulfilledOrderAdjustment, 2)}.
+              </p>
+            )}
             <div className="order-summary">
               {b2c ? (
                 <span>Valor do pedido: {money(q.data.order.requested)}</span>

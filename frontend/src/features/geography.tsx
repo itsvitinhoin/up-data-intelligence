@@ -1,6 +1,5 @@
 "use client";
 import { B2BReadBoundary } from "@/hooks/use-dashboard-read";
-import { RealGeography } from "./b2b-read-pages";
 
 import { MetricComparisonLine } from "@/components/metric-comparison";
 import type { Metric } from "@/types/domain";
@@ -33,14 +32,15 @@ type GeoMetric =
   | "influencedCustomers";
 function DemoGeographyPage() {
   const q = useResource("geography");
-  const { filters, setFilters } = useWorkspace();
+  const { filters, setFilters, dataMode } = useWorkspace();
+  const live = dataMode !== "demo";
   const [metric, setMetric] = useState<GeoMetric>("requested");
   const [selected, setSelected] = useState("SP");
   const [points, setPoints] = useState(false);
   const values = q.data ?? [];
-  const max = Math.max(1, ...values.map((r) => r[metric] ?? 0));
+  const max = Math.max(1, ...values.map((r) => Number(r[metric] ?? 0)));
   const current = values.find((r) => r.uf === selected);
-  const format = (n: number | null | undefined) =>
+  const format = (n: number | string | null | undefined) =>
     n == null
       ? "Sem cobertura"
       : ["requested", "fulfilled"].includes(metric)
@@ -55,7 +55,7 @@ function DemoGeographyPage() {
             Seu negócio, <em className="hl hl--up">em todo o Brasil.</em>
           </>
         }
-        description="Concentração comercial por estado, sem inferir localização ausente."
+        description="Concentração comercial pelo endereço de entrega dos pedidos no período, sem inferir localização ausente."
       />
       <FiltersBar />
       <Panel
@@ -70,11 +70,20 @@ function DemoGeographyPage() {
               { value: "fulfilled", label: "Receita Atendida" },
               {
                 value: "influencedCustomers",
-                label: "Clientes influenciados por mídia",
+                label: live
+                  ? "Clientes influenciados · não certificado"
+                  : "Clientes influenciados por mídia",
+                disabled: live,
               },
               { value: "customers", label: "Clientes" },
               { value: "orders", label: "Pedidos" },
-              { value: "newCustomers", label: "Novos clientes" },
+              {
+                value: "newCustomers",
+                label: live
+                  ? "Novos clientes · sem histórico integral"
+                  : "Novos clientes",
+                disabled: live,
+              },
             ]}
           />
         }
@@ -122,7 +131,7 @@ function DemoGeographyPage() {
                       fill={
                         v == null
                           ? "rgba(255,255,255,.04)"
-                          : `rgba(4,88,254,${0.18 + (0.72 * v) / max})`
+                          : `rgba(4,88,254,${0.18 + (0.72 * Number(v)) / max})`
                       }
                       stroke={
                         selected === location.id.toUpperCase()
@@ -159,7 +168,7 @@ function DemoGeographyPage() {
                           key={v.uf}
                           cx={center[0]}
                           cy={center[1]}
-                          r={3 + Math.sqrt((v[metric] ?? 0) / max) * 10}
+                          r={3 + Math.sqrt(Number(v[metric] ?? 0) / max) * 10}
                           fill="#B5CEFF"
                           opacity=".75"
                           pointerEvents="none"
@@ -228,7 +237,7 @@ function DemoGeographyPage() {
                         ["% de Conversão", state?.conversionRate, "percent"],
                       ] as [
                         string,
-                        number | null | undefined,
+                        string | number | null | undefined,
                         Metric["format"],
                       ][]
                     ).map(([label, value, format]) => ({
@@ -249,10 +258,9 @@ function DemoGeographyPage() {
                   ))}
               </dl>
               <p className="metric-hint mb-4">
-                Cadastros da marca no período, aprovados até o fim do recorte.
-                Conversão: aprovados com compra qualificante após aprovação /
-                aprovados do mesmo estado. Todas as origens; sem filtro de
-                coleção. Base demonstrativa.
+                {live
+                  ? "Geografia de entrega dos pedidos observados no período. Cadastros aprovados e conversão por estado ainda não certificados. O filtro de clientes usa o endereço atual do cadastro."
+                  : "Cadastros da marca no período, aprovados até o fim do recorte. Conversão: aprovados com compra qualificante após aprovação / aprovados do mesmo estado. Todas as origens; sem filtro de coleção. Base demonstrativa."}
               </p>
               {current && (
                 <Link
@@ -278,13 +286,16 @@ function DemoGeographyPage() {
               />
               <div className="geo-ranking">
                 {current?.cities
-                  .toSorted((a, b) => b.requested - a.requested)
+                  .toSorted(
+                    (a, b) =>
+                      Number(b.requested ?? -1) - Number(a.requested ?? -1),
+                  )
                   .map((city) => (
                     <div className="py-3 text-xs" key={city.name}>
                       <strong>{city.name}</strong>
                       <p className="muted">
-                        {city.customers} clientes · {city.orders} pedidos ·{" "}
-                        {money(city.requested)}
+                        {number(city.customers)} clientes ·{" "}
+                        {number(city.orders)} pedidos · {money(city.requested)}
                       </p>
                     </div>
                   ))}
@@ -295,13 +306,15 @@ function DemoGeographyPage() {
               <h3 className="card-title">Maior concentração</h3>
               <ListExport
                 rows={values.toSorted(
-                  (a, b) => (b[metric] ?? -1) - (a[metric] ?? -1),
+                  (a, b) => Number(b[metric] ?? -1) - Number(a[metric] ?? -1),
                 )}
                 name="estados"
               />
               <div className="geo-ranking">
                 {values
-                  .toSorted((a, b) => (b[metric] ?? -1) - (a[metric] ?? -1))
+                  .toSorted(
+                    (a, b) => Number(b[metric] ?? -1) - Number(a[metric] ?? -1),
+                  )
                   .map((r, i) => (
                     <button
                       key={r.uf}
@@ -335,7 +348,7 @@ function DemoGeographyPage() {
 
 export function GeographyPage() {
   return (
-    <B2BReadBoundary real={(metadata) => <RealGeography metadata={metadata} />}>
+    <B2BReadBoundary>
       <DemoGeographyPage />
     </B2BReadBoundary>
   );

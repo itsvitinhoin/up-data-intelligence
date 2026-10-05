@@ -1,4 +1,4 @@
-import type { Order, RequestContext } from "@/types/domain";
+import type { Order, RequestContext } from "@/services/demo/types";
 import { dateRange, periodDays, DEMO_TODAY } from "@/lib/period";
 import { ordersFor, total } from "./business";
 import { qualifyingStatuses } from "./customer-metrics";

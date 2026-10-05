@@ -246,6 +246,8 @@ export async function authMutation(
   }
 }
 const resources: Record<string, string> = {
+  order: "orders",
+  product: "products",
   customer: "customers",
   customerOrders: "customers",
   customer360: "customers",
@@ -288,6 +290,7 @@ export async function liveRead(
             "page_size",
             "cursor",
             "status",
+            "first_purchase",
           ].includes(k) || params.getAll(k).length !== 1,
       )
     )

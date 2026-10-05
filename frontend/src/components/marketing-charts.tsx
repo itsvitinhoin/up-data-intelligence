@@ -26,9 +26,14 @@ export function MarketingChart({
 }) {
   const data = series.map((row) => ({
     ...row,
+    spend: row.spend === null ? null : Number(row.spend),
+    revenue: row.revenue === null ? null : Number(row.revenue),
     date: row.date.slice(8) + "/" + row.date.slice(5, 7),
     results: b2c ? row.purchases : row.leads,
-    roas: ratio(row.revenue, row.spend),
+    roas: ratio(
+      row.revenue === null ? null : Number(row.revenue),
+      row.spend === null ? null : Number(row.spend),
+    ),
   }));
   return (
     <div

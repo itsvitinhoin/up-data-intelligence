@@ -1,6 +1,5 @@
 "use client";
-import { B2BReadBoundary, usePageSource } from "@/hooks/use-dashboard-read";
-import { RealCampaigns } from "./intelligence-read-pages";
+import { B2BReadBoundary } from "@/hooks/use-dashboard-read";
 import { ListExport } from "@/components/exports";
 import { useState } from "react";
 import Link from "next/link";
@@ -8,13 +7,7 @@ import Image from "next/image";
 import dynamic from "next/dynamic";
 import type { ColumnDef } from "@tanstack/react-table";
 import { ArrowUpRight, MousePointer2, Target, Users } from "lucide-react";
-import {
-  usePeriodComparison,
-  demoComparisonAvailable,
-} from "@/hooks/use-period-comparison";
-import { useQuery } from "@tanstack/react-query";
-import { api } from "@/services/api";
-import { queryKey, useRequestContext } from "@/hooks/use-resource";
+import { useResource } from "@/hooks/use-resource";
 import { useWorkspace } from "@/features/providers";
 import {
   PageHead,
@@ -48,8 +41,14 @@ const pct = (value: number | null) =>
   value === null
     ? "—"
     : `${value.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}%`;
-const statusLabel = (value: string) =>
-  value === "ACTIVE" ? "Ativa" : "Pausada";
+const statusLabel = (value: string | null) =>
+  value === null
+    ? "Indisponível"
+    : value === "ACTIVE"
+      ? "Ativa"
+      : value === "PAUSED"
+        ? "Pausada"
+        : value;
 
 function CreativePreview({
   creative,
@@ -131,7 +130,7 @@ function CreativeRank({
           ))
         ) : (
           <p className="muted text-sm">
-            Sem resultados elegíveis para este ranking.
+            Criativos indisponíveis ou sem resultados elegíveis neste ranking.
           </p>
         )}
       </div>
@@ -139,6 +138,7 @@ function CreativeRank({
   );
 }
 export function marketingMetrics(data: Marketing): Metric[] {
+  if (data.metrics) return data.metrics;
   const sum = (
     key:
       "spend" | "leads" | "approved" | "purchases" | "clicks" | "impressions",
@@ -226,8 +226,8 @@ function MarketingContent({
   const metrics = compare(marketingMetrics);
   const sum = (key: "spend" | "leads" | "clicks" | "impressions") =>
     data.creatives.reduce((sum, ad) => sum + ad[key], 0);
-  const spend = sum("spend"),
-    leads = sum("leads");
+  const spend = data.summary ? data.summary.spend : sum("spend"),
+    leads = data.summary ? data.summary.leads : sum("leads");
   type Row = Marketing["campaigns"][number];
   const columns: ColumnDef<Row>[] = [
     {
@@ -262,16 +262,24 @@ function MarketingContent({
       header: "ROAS",
       cell: (c) => metric(c.getValue<string>(), "ratio"),
     },
-    { accessorKey: "leads", header: "Leads" },
+    {
+      accessorKey: "leads",
+      header: "Leads",
+      cell: (c) => number(c.getValue<number | null>()),
+    },
     {
       accessorKey: b2c ? "purchases" : "approved",
       header: b2c ? "Compras Meta" : "Aprovados",
+      cell: (c) => number(c.getValue<number | null>()),
     },
     {
       id: "cost",
       header: b2c ? "Custo/compra" : "CPL",
       accessorFn: (row) =>
-        ratio(Number(row.spend), b2c ? row.purchases : row.leads),
+        ratio(
+          row.spend === null ? null : Number(row.spend),
+          b2c ? row.purchases : row.leads,
+        ),
       cell: (c) => money(c.getValue<number | null>()),
     },
     ...(!b2c
@@ -279,7 +287,11 @@ function MarketingContent({
           {
             id: "cpa",
             header: "CPA aprovado",
-            accessorFn: (row: Row) => ratio(Number(row.spend), row.approved),
+            accessorFn: (row: Row) =>
+              ratio(
+                row.spend === null ? null : Number(row.spend),
+                row.approved,
+              ),
             cell: (c: { getValue: () => unknown }) =>
               money(c.getValue() as number | null),
           },
@@ -289,24 +301,18 @@ function MarketingContent({
     {
       id: "ctr",
       header: "CTR",
-      accessorFn: (row) => ratio(row.clicks * 100, row.impressions),
+      accessorFn: (row) =>
+        ratio(row.clicks === null ? null : row.clicks * 100, row.impressions),
       cell: (c) => pct(c.getValue<number | null>()),
     },
   ];
   const campaigns = data.campaigns.filter(
     (row) =>
       (status === "all" || row.status === status) &&
-      row.name
+      (row.name ?? "")
         .toLocaleLowerCase("pt-BR")
         .includes(search.toLocaleLowerCase("pt-BR")),
   );
-  if (!data.creatives.length)
-    return (
-      <Empty
-        title="Sem campanhas neste recorte"
-        description="Altere o canal ou selecione uma operação com dados demonstrativos."
-      />
-    );
   return (
     <>
       <section aria-label="Indicadores de Marketing" className="metrics">
@@ -323,7 +329,11 @@ function MarketingContent({
               anúncio.
             </p>
           </div>
-          <span className="pill">Meta Ads · demonstração</span>
+          <span className="pill">
+            {data.source === "real"
+              ? "Meta Ads · criativos indisponíveis"
+              : "Meta Ads · demonstração"}
+          </span>
         </div>
         <div className="marketing-rankings">
           <CreativeRank
@@ -352,7 +362,11 @@ function MarketingContent({
       <section className="marketing-trends">
         <Panel
           title={b2c ? "Investimento × Compras" : "Investimento × Leads"}
-          subtitle="Volume e investimento por dia · série sintética"
+          subtitle={
+            data.source === "real"
+              ? "Investimento diário certificado; leads não disponíveis"
+              : "Volume e investimento por dia · série sintética"
+          }
         >
           <MarketingChart series={data.series} kind="results" b2c={b2c} />
         </Panel>
@@ -377,7 +391,11 @@ function MarketingContent({
           <div className="platform-summary">
             <span className="pill">Meta Ads</span>
             <strong className="num">{money(spend)}</strong>
-            <small>100% do investimento deste cenário</small>
+            <small>
+              {data.source === "real"
+                ? "Investimento da plataforma Meta nesta publicação"
+                : "100% do investimento deste cenário"}
+            </small>
           </div>
           <dl className="detail-list">
             <div>
@@ -386,11 +404,17 @@ function MarketingContent({
             </div>
             <div>
               <dt>Cliques</dt>
-              <dd>{number(sum("clicks"))}</dd>
+              <dd>
+                {number(data.summary ? data.summary.clicks : sum("clicks"))}
+              </dd>
             </div>
             <div>
               <dt>CTR ponderado</dt>
-              <dd>{pct(ratio(sum("clicks") * 100, sum("impressions")))}</dd>
+              <dd>
+                {data.summary
+                  ? metric(data.summary.ctr, "percent")
+                  : pct(ratio(sum("clicks") * 100, sum("impressions")))}
+              </dd>
             </div>
           </dl>
         </Panel>
@@ -497,24 +521,7 @@ export type CampaignPlatform =
   "Meta Ads" | "Google Ads" | "Pinterest Ads" | "TikTok Ads";
 function MetaContent() {
   const { scope, filters } = useWorkspace();
-  const context = useRequestContext();
-  const selected = {
-    ...context,
-    filters: { ...context.filters, channel: "meta" },
-  };
-  const q = useQuery({
-    queryKey: queryKey("marketing", selected),
-    queryFn: ({ signal }) => api.read("marketing", { ...selected, signal }),
-  });
-  const comparison = usePeriodComparison({
-    current: q.data,
-    filters: selected.filters,
-    queryKey: queryKey("marketing", selected),
-    available: demoComparisonAvailable(selected.filters),
-    reason: "Período anterior fora da cobertura demonstrativa.",
-    read: (filters, signal) =>
-      api.read("marketing", { ...selected, filters, signal }),
-  });
+  const q = useResource("marketing");
   return q.isPending ? (
     <Loading />
   ) : q.isError ? (
@@ -523,7 +530,7 @@ function MetaContent() {
     <MarketingContent
       key={`${scope?.store_id}:${JSON.stringify(filters)}`}
       data={q.data}
-      compare={comparison.compare}
+      compare={q.compare}
       b2c={scope?.operation === "B2C"}
     />
   );
@@ -533,7 +540,7 @@ function DemoCampaignsPage({
 }: {
   platform?: CampaignPlatform;
 }) {
-  const { scope } = useWorkspace();
+  const { scope, dataMode } = useWorkspace();
   const labels = [
     "Investimento em mídia",
     "Faturamento atribuído",
@@ -558,7 +565,7 @@ function DemoCampaignsPage({
       <FiltersBar showChannel={false} />
       <Notice>
         {platform === "Meta Ads"
-          ? "Dados sintéticos Meta. Receita influenciada e faturamento atribuído têm significados diferentes; a atribuição não está confirmada."
+          ? `${dataMode === "demo" ? "Dados sintéticos Meta." : "Dados reais Meta; criativos ainda não certificados."} Receita influenciada e faturamento atribuído têm significados diferentes; a atribuição não está confirmada.`
           : `A integração ${platform} ainda não fornece métricas nesta operação. Ausência de dados não representa zero.`}
       </Notice>
       {platform === "Meta Ads" ? (
@@ -605,38 +612,8 @@ function DemoCampaignsPage({
 
 export function CampaignsPage(props: { platform?: CampaignPlatform }) {
   return (
-    <B2BReadBoundary
-      real={(metadata) =>
-        props.platform && props.platform !== "Meta Ads" ? (
-          <UnavailablePlatform metadata={metadata} platform={props.platform} />
-        ) : (
-          <RealCampaigns metadata={metadata} />
-        )
-      }
-    >
+    <B2BReadBoundary>
       <DemoCampaignsPage {...props} />
     </B2BReadBoundary>
-  );
-}
-
-function UnavailablePlatform({
-  metadata,
-  platform,
-}: {
-  metadata: import("@/services/api/http").ReadMetadata;
-  platform: CampaignPlatform;
-}) {
-  usePageSource("unavailable-real", metadata);
-  return (
-    <>
-      <PageHead
-        eyebrow={platform}
-        title="Cobertura ainda não disponível"
-        description="Integração desta plataforma ainda não certificada."
-      />
-      <Notice>
-        Nenhum dado demonstrativo é combinado com a operação real.
-      </Notice>
-    </>
   );
 }

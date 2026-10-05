@@ -1,6 +1,5 @@
 "use client";
 import { B2BReadBoundary } from "@/hooks/use-dashboard-read";
-import { RealRetention } from "./b2b-read-pages";
 
 import { MetricComparisonLine } from "@/components/metric-comparison";
 import { ListExport } from "@/components/exports";
@@ -99,8 +98,8 @@ function DemoRetentionDashboard() {
               ))}
             </div>
             <p className="metric-hint mt-4">
-              Receita atendida por etapa. Compra 5+ reúne pedidos da quinta
-              compra em diante; compradores contados uma vez por etapa.
+              Receita solicitada observada por etapa. Compra 5+ reúne pedidos da
+              quinta compra em diante; compradores contados uma vez por etapa.
             </p>
           </Panel>
           <Panel
@@ -210,9 +209,13 @@ export function ConversionVelocity() {
       <div className="conversion-layout">
         <Panel
           title="Distribuição de compradores"
-          subtitle={`Aprovação → primeiro pedido · base: ${c.buyers} compradores · ${c.excluded} excluídos por data ausente ou inválida`}
+          subtitle={
+            c.buyers === null
+              ? "Datas de aprovação ainda não certificadas; valores indisponíveis"
+              : `Aprovação → primeiro pedido · base: ${c.buyers} compradores · ${c.excluded} excluídos por data ausente ou inválida`
+          }
         >
-          {!c.buyers ? (
+          {c.buyers === 0 ? (
             <Empty title="Sem datas suficientes para calcular" />
           ) : (
             <div className="conversion-bars">
@@ -227,14 +230,18 @@ export function ConversionVelocity() {
                     />
                   </div>
                   <span>{bucket.label}</span>
-                  <small>{bucket.count} lojistas</small>
+                  <small>
+                    {bucket.count === null
+                      ? "Indisponível"
+                      : `${bucket.count} lojistas`}
+                  </small>
                 </div>
               ))}
             </div>
           )}
           <p className="metric-hint mt-5">
-            Intervalos exclusivos, em dias corridos. Aprovações sintéticas;
-            status comercial não confirma pagamento.
+            Intervalos exclusivos, em dias corridos. Aprovação exige cobertura
+            certificada; status comercial não confirma pagamento.
           </p>
         </Panel>
         <div className="conversion-summary">
@@ -242,17 +249,19 @@ export function ConversionVelocity() {
             .compare(({ conversion: c }) => [
               {
                 label: "Compram na primeira semana",
-                value: c.buyers
-                  ? String((c.withinWeek / c.buyers) * 100)
-                  : null,
+                value:
+                  c.buyers && c.withinWeek !== null
+                    ? String((c.withinWeek / c.buyers) * 100)
+                    : null,
                 format: "percent",
                 hint: "Participação dos compradores observados com primeira compra até sete dias após aprovação.",
               },
               {
                 label: "Compram em até 30 dias",
-                value: c.buyers
-                  ? String((c.withinMonth / c.buyers) * 100)
-                  : null,
+                value:
+                  c.buyers && c.withinMonth !== null
+                    ? String((c.withinMonth / c.buyers) * 100)
+                    : null,
                 format: "percent",
                 hint: "Participação dos compradores observados com primeira compra até trinta dias após aprovação.",
               },
@@ -271,9 +280,13 @@ export function ConversionVelocity() {
                 </strong>
                 <p className="card-sub">
                   {index === 0
-                    ? `${c.withinWeek} lojistas`
+                    ? c.withinWeek === null
+                      ? "Indisponível"
+                      : `${c.withinWeek} lojistas`
                     : index === 1
-                      ? `${c.withinMonth} lojistas`
+                      ? c.withinMonth === null
+                        ? "Indisponível"
+                        : `${c.withinMonth} lojistas`
                       : `Média de ${decimal(c.mean)} dias`}
                 </p>
                 <MetricComparisonLine item={item} />
@@ -287,7 +300,7 @@ export function ConversionVelocity() {
 
 export function RetentionDashboard() {
   return (
-    <B2BReadBoundary real={(metadata) => <RealRetention metadata={metadata} />}>
+    <B2BReadBoundary>
       <DemoRetentionDashboard />
     </B2BReadBoundary>
   );

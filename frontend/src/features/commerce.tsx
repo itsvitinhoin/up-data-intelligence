@@ -1,6 +1,5 @@
 "use client";
 import { B2BReadBoundary } from "@/hooks/use-dashboard-read";
-import { RealProducts, RealFunnel, RealPerformance } from "./b2b-read-pages";
 import { RetailProductsPage } from "@/features/retail-products";
 import { ListExport } from "@/components/exports";
 import { RetentionDashboard } from "@/features/lifecycle";
@@ -58,7 +57,7 @@ function DemoPerformancePage() {
       ) : (
         <Panel
           title="Performance por campanha"
-          subtitle="Dados sintéticos · clique em uma campanha para explorar"
+          subtitle="Clique em uma campanha para explorar sua influência observada"
         >
           <DataTable data={q.data} columns={campaignColumns} />
         </Panel>
@@ -92,15 +91,19 @@ const inventoryColumns: ColumnDef<Product>[] = [
       <>
         <Sizes product={row.original} />
         <small className="muted">
-          {Object.values(row.original.sizes).every(Boolean)
-            ? "Completa"
-            : "Quebrada"}{" "}
+          {row.original.sizes === null
+            ? "Indisponível"
+            : Object.values(row.original.sizes).every(Boolean)
+              ? "Completa"
+              : "Quebrada"}{" "}
           ·{" "}
-          {Math.round(
-            (Object.values(row.original.sizes).filter(Boolean).length /
-              Object.keys(row.original.sizes).length) *
-              100,
-          )}
+          {row.original.sizes === null
+            ? "—"
+            : Math.round(
+                (Object.values(row.original.sizes).filter(Boolean).length /
+                  Object.keys(row.original.sizes).length) *
+                  100,
+              )}
           % disponível
         </small>
       </>
@@ -123,7 +126,7 @@ const retailColumns: ColumnDef<Product>[] = [
     id: "conversion",
     header: "View → Compra",
     cell: ({ row }) =>
-      row.original.views
+      row.original.views && row.original.orders !== null
         ? `${((row.original.orders / row.original.views) * 100).toFixed(1)}%`
         : "—",
   },
@@ -166,8 +169,8 @@ function LegacyProductsPage({ inventory = false }: { inventory?: boolean }) {
       <FiltersBar />
       {inventory && (
         <Notice>
-          Estoque e disponibilidade são demonstrativos. A integração de
-          inventário ainda não está conectada.
+          Estoque e disponibilidade não são certificados nesta integração.
+          Ausência de evidência não representa estoque zero.
         </Notice>
       )}
       {q.isPending ? (
@@ -184,32 +187,46 @@ function LegacyProductsPage({ inventory = false }: { inventory?: boolean }) {
                     label: "Produtos no recorte",
                     value: String(data.length),
                     format: "number" as const,
-                    hint: "Catálogo demonstrativo",
+                    hint: "Produtos observados no período",
                   },
                   {
                     label: "Peças em estoque",
                     comparisonBasis: "snapshot" as const,
-                    value: String(data.reduce((s, p) => s + p.stock, 0)),
+                    value: data.some((p) => p.stock === null)
+                      ? null
+                      : String(
+                          data.reduce((s, p) => s + (p.stock as number), 0),
+                        ),
                     format: "number" as const,
                     hint: "Disponibilidade sintética",
                   },
                   {
                     label: "Grades completas",
                     comparisonBasis: "snapshot" as const,
-                    value: String(
-                      data.filter((p) => Object.values(p.sizes).every(Boolean))
-                        .length,
-                    ),
+                    value: data.some((p) => p.sizes === null)
+                      ? null
+                      : String(
+                          data.filter(
+                            (p) =>
+                              p.sizes !== null &&
+                              Object.values(p.sizes).every(Boolean),
+                          ).length,
+                        ),
                     format: "number" as const,
                     hint: "Todos os tamanhos disponíveis",
                   },
                   {
                     label: "Grades quebradas",
                     comparisonBasis: "snapshot" as const,
-                    value: String(
-                      data.filter((p) => !Object.values(p.sizes).every(Boolean))
-                        .length,
-                    ),
+                    value: data.some((p) => p.sizes === null)
+                      ? null
+                      : String(
+                          data.filter(
+                            (p) =>
+                              p.sizes !== null &&
+                              !Object.values(p.sizes).every(Boolean),
+                          ).length,
+                        ),
                     format: "number" as const,
                     hint: "Ao menos um tamanho indisponível",
                   },
@@ -288,8 +305,12 @@ export function OrdersPage() {
             onChange={setStatus}
             options={[
               { value: "all", label: "Todos" },
-              { value: "PAID", label: "Pago · sem fonte" },
-              { value: "PENDING_PAYMENT", label: "Pendente · sem fonte" },
+              { value: "PAID", label: "Pago · sem fonte", disabled: true },
+              {
+                value: "PENDING_PAYMENT",
+                label: "Pendente · sem fonte",
+                disabled: true,
+              },
               { value: "CANCELED", label: "Cancelado" },
               { value: "SHIPPED", label: "Enviado" },
               { value: "DELIVERED", label: "Entregue" },
@@ -336,7 +357,7 @@ function DemoFunnelPage() {
           <Panel
             title="Funil de conversão"
             action={<ListExport rows={q.data} name="funil" />}
-            subtitle="Volumes demonstrativos · etapas não comprovam identidade individual"
+            subtitle="Volumes observados · etapas não comprovam identidade individual"
           >
             <div className="funnel">
               {q.data.map((r, i) => (
@@ -345,7 +366,7 @@ function DemoFunnelPage() {
                   <div>
                     <i
                       style={{
-                        width: `${Math.max(3, (r.value / q.data[0].value) * 100)}%`,
+                        width: `${r.value === null || !q.data[0].value ? 0 : Math.max(3, (r.value / q.data[0].value) * 100)}%`,
                         opacity: 1 - i * 0.09,
                       }}
                     />
@@ -367,9 +388,12 @@ function DemoFunnelPage() {
                   key={String(label)}
                   item={{
                     label: String(label),
-                    value: base
-                      ? String((q.data[Number(to)].value / base) * 100)
-                      : null,
+                    value:
+                      base && q.data[Number(to)].value !== null
+                        ? String(
+                            ((q.data[Number(to)].value as number) / base) * 100,
+                          )
+                        : null,
                     format: "percent",
                     hint: "Razão entre volumes das etapas",
                   }}
@@ -385,23 +409,21 @@ function DemoFunnelPage() {
 
 export function ProductsPage(props: { inventory?: boolean }) {
   return (
-    <B2BReadBoundary real={(metadata) => <RealProducts metadata={metadata} />}>
+    <B2BReadBoundary>
       <DemoProductsPage {...props} />
     </B2BReadBoundary>
   );
 }
 export function FunnelPage() {
   return (
-    <B2BReadBoundary real={(metadata) => <RealFunnel metadata={metadata} />}>
+    <B2BReadBoundary>
       <DemoFunnelPage />
     </B2BReadBoundary>
   );
 }
 export function PerformancePage() {
   return (
-    <B2BReadBoundary
-      real={(metadata) => <RealPerformance metadata={metadata} />}
-    >
+    <B2BReadBoundary>
       <DemoPerformancePage />
     </B2BReadBoundary>
   );

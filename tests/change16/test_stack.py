@@ -391,6 +391,40 @@ class IntelligenceReader(FakeReader):
             r = deepcopy(self.artifact["publication"])
             h = {**r, "record_kind": "HEAD", "row_key": "head", "receipt_json": json.dumps(r)}
             return [h]
+        if q.name == "intelligence_performance_period":
+            self.calls.append(q)
+            rows = deepcopy(self.artifact["tables"]["analytics_performance_summary"])
+            row = next(r for r in rows if r["influence_scope"] == "LIFETIME")
+            return [
+                {
+                    "store_id": row["store_id"],
+                    "policy_hash": row["policy_hash"],
+                    "generation": row["generation"],
+                    "summary": row,
+                    "series": [],
+                }
+            ]
+        if q.name == "intelligence_customer_context":
+            self.calls.append(q)
+            customer = q.parameters["customer"][1]
+            return [
+                {
+                    "journey": deepcopy(
+                        [
+                            r
+                            for r in self.artifact["tables"]["analytics_customer_journey_summary"]
+                            if r["customer_id"] == customer
+                        ]
+                    ),
+                    "marketing": deepcopy(
+                        [
+                            r
+                            for r in self.artifact["tables"]["analytics_customer_paid_influence"]
+                            if r["customer_id"] == customer
+                        ]
+                    ),
+                }
+            ]
         if q.name.startswith("intelligence_analytics_"):
             self.calls.append(q)
             n = q.name.removeprefix("intelligence_")
@@ -516,7 +550,7 @@ def test_authorization_before_queries_customer_isolation_cursor_and_period():
     with pytest.raises(ReadError):
         s.intelligence(p, g, "timeline", entity="c1", cursor="invalid")
     with pytest.raises(ReadError, match="intelligence_period_not_materialized"):
-        s.intelligence(p, g, "performance", from_day="2026-09-02", to_day="2026-09-28")
+        s.intelligence(p, g, "timeline", entity="c1", from_day="2026-09-02", to_day="2026-09-28")
 
 
 def test_terraform_additive_baseline_and_canonical_families():
@@ -705,3 +739,44 @@ def test_secret_reference_rejects_cross_project_store_tokens_or_implicit_version
         "projects/up-data-intelligence-dev/secrets/up-intelligence-meta-global-token/versions/1"
     )
     assert validated_secret_reference(approved) == approved
+
+
+def test_selected_performance_and_campaign_periods_bind_values_and_preserve_nulls():
+    s, r, p, g = service()
+    out = s.intelligence(p, g, "performance", from_day="2026-09-02", to_day="2026-09-28")
+    assert out["data"]["new_customers_influenced"] is None
+    assert out["data"]["cac_new_customer"] is None
+    assert isinstance(out["data"]["series"], list)
+    query = next(q for q in r.calls if q.name == "intelligence_performance_period")
+    assert query.parameters["from"] == ("DATE", "2026-09-02")
+    assert query.parameters["to"] == ("DATE", "2026-09-28")
+    assert "2026-09-02" not in query.sql
+    assert "@history_complete AND @influence_complete" in query.sql
+    assert "COUNT(DISTINCT order_id)" in query.sql
+    s.intelligence(p, g, "campaigns", from_day="2026-09-02", to_day="2026-09-28")
+    q = r.calls[-1]
+    assert "date>=@from AND date<@to" in q.sql
+    assert "DATE(o.created_at,@timezone)>=@from" in q.sql
+    assert "identity_path" not in q.sql
+    assert "FOR SYSTEM_TIME AS OF @snapshot p" not in q.sql
+
+
+def test_selected_campaign_participation_period_cursor_and_store_isolation():
+    s, r, p, g = service()
+    campaigns = s.intelligence(p, g, "campaigns")["data"]
+    campaign = campaigns[0]["campaign_id"]
+    s.intelligence(
+        p, g, "campaignCustomers", entity=campaign, from_day="2026-09-02", to_day="2026-09-28"
+    )
+    q = r.calls[-1]
+    assert q.parameters["campaign"] == ("STRING", campaign)
+    assert q.parameters["store"] == ("STRING", g.store_id)
+    assert "COUNT(DISTINCT order_id)" in q.sql
+    assert "identity_path" not in q.sql
+    assert campaign not in q.sql
+    with pytest.raises(ReadError, match="interval_outside_publication"):
+        s.intelligence(p, g, "performance", from_day="2020-01-01", to_day="2020-01-02")
+    r.calls.clear()
+    with pytest.raises(ReadError):
+        s.intelligence(p, replace(g, store_id="foreign"), "performance")
+    assert not r.calls

@@ -2,7 +2,7 @@
 import { LeadCards } from "@/components/lead-cards";
 import dynamic from "next/dynamic";
 import type { Metric, Overview } from "@/types/domain";
-import { MetricCard, Panel, Notice } from "@/components/ui-kit";
+import { MetricCard, Panel } from "@/components/ui-kit";
 import type { PreviewOverview } from "@/services/api/overview-presenter";
 const OverviewChart = dynamic(
   () => import("@/components/overview-charts").then((m) => m.OverviewChart),
@@ -39,14 +39,7 @@ export function B2BOverview({
   return (
     <div className="b2b-overview">
       <Metrics title="Receita" items={data.revenue} />
-      {preview ? (
-        <Notice>
-          Cadastros e aprovação ainda não estão disponíveis nesta geração de
-          dados.
-        </Notice>
-      ) : (
-        <LeadCards />
-      )}
+      <LeadCards />
       <section className="overview-revenue-row">
         <Panel
           title="Solicitado × Atendido por período"
@@ -71,14 +64,7 @@ export function B2BOverview({
         title="Novos × Recorrentes por período"
         subtitle="Recorrentes observados por dia. Novos dependem da confirmação do histórico; ausência de dado não é zero."
       >
-        {preview ? (
-          <Notice>
-            Série diária de novos e recorrentes ainda não disponível nesta
-            publicação.
-          </Notice>
-        ) : (
-          <OverviewChart data={data.series} kind="customers" />
-        )}
+        <OverviewChart data={data.series} kind="customers" />
       </Panel>
       <Metrics title="Relacionamento" items={data.relationship} />
     </div>

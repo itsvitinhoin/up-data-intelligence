@@ -1,6 +1,11 @@
 import type { MarketingCreative } from "@/types/domain";
-export function ratio(numerator: number, denominator: number): number | null {
-  return denominator > 0 ? numerator / denominator : null;
+export function ratio(
+  numerator: number | null,
+  denominator: number | null,
+): number | null {
+  return numerator !== null && denominator !== null && denominator > 0
+    ? numerator / denominator
+    : null;
 }
 export function rankCreatives(
   rows: MarketingCreative[],

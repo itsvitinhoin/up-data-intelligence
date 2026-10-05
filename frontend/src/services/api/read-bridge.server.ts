@@ -56,6 +56,8 @@ export async function handleReadBridge(
       "retention",
       "products",
       "funnel",
+      "geography",
+      "product",
     ].includes(resource);
   const paged =
     (intelligence && !["performance", "customer360"].includes(resource)) ||
@@ -66,7 +68,7 @@ export async function handleReadBridge(
     "operation",
     ...(period ? ["from", "to"] : []),
     ...(paged ? ["page_size", "cursor"] : []),
-    ...(resource === "orders" ? ["status"] : []),
+    ...(resource === "orders" ? ["status", "first_purchase"] : []),
   ]);
   const params = url.searchParams;
   if (
@@ -90,6 +92,8 @@ export async function handleReadBridge(
   if (!binding) return error(404, "preview_binding_absent");
   if (
     [
+      "order",
+      "product",
       "customer",
       "customerOrders",
       "customer360",
@@ -121,6 +125,8 @@ export async function handleReadBridge(
     (size !== null &&
       (!/^\d+$/.test(size) || Number(size) < 1 || Number(size) > 100)) ||
     (cursor !== null && (!cursor || cursor.length > 8192)) ||
+    (params.has("first_purchase") &&
+      !["true", "false"].includes(params.get("first_purchase") ?? "")) ||
     (status !== null && !/^[A-Z][A-Z0-9_]{0,49}$/.test(status))
   )
     return error(400, "invalid_preview_request");
@@ -132,6 +138,9 @@ export async function handleReadBridge(
       pageSize: size === null ? undefined : Number(size),
       cursor: cursor ?? undefined,
       status: status ?? undefined,
+      firstPurchase: params.has("first_purchase")
+        ? params.get("first_purchase") === "true"
+        : undefined,
       signal: request.signal,
     };
     const readScope = toReadScope(binding);
@@ -144,14 +153,22 @@ export async function handleReadBridge(
         )
       : resource === "customer"
         ? await api.customer(readScope, customerId!, options)
-        : resource === "customerOrders"
-          ? await api.customerOrders(readScope, customerId!, options)
-          : await api[
-              resource as Exclude<
-                ReadResource,
-                IntelligenceResource | "customer" | "customerOrders"
-              >
-            ](readScope, options);
+        : resource === "order"
+          ? await api.order(readScope, customerId!, options)
+          : resource === "product"
+            ? await api.product(readScope, customerId!, options)
+            : resource === "customerOrders"
+              ? await api.customerOrders(readScope, customerId!, options)
+              : await api[
+                  resource as Exclude<
+                    ReadResource,
+                    | IntelligenceResource
+                    | "customer"
+                    | "customerOrders"
+                    | "order"
+                    | "product"
+                  >
+                ](readScope, options);
     return Response.json(response, { headers });
   } catch (cause) {
     if (cause instanceof ApiError) {

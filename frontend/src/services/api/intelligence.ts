@@ -143,6 +143,30 @@ export function parseIntelligence<K extends IntelligenceResource>(
       "cac_new_customer",
     ])
       if (!(k in result)) return invalid();
+    if ("series" in result) {
+      if (!Array.isArray(result.series) || result.series.length > 366)
+        return invalid();
+      const dates = new Set<string>();
+      for (const raw of result.series) {
+        const row = record(raw);
+        if (
+          typeof row.date !== "string" ||
+          !/^\d{4}-\d{2}-\d{2}$/.test(row.date) ||
+          dates.has(row.date)
+        )
+          return invalid();
+        dates.add(row.date);
+        for (const k of [
+          "spend",
+          "impressions",
+          "clicks",
+          "influenced_orders",
+          "requested_revenue_influenced",
+          "fulfilled_revenue_influenced",
+        ])
+          if (!(k in row)) return invalid();
+      }
+    }
   } else {
     if (!Array.isArray(value)) return invalid();
     result = value.map(record);

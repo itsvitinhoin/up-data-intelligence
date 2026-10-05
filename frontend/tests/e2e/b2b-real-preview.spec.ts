@@ -1,184 +1,8 @@
-import { installationFixture } from "../fixtures/installation";
 import { test, expect, type Page } from "@playwright/test";
-// Synthetic offline envelopes only. Live opt-in uses the exact same traversal without fixtures.
+import { restorationResources } from "../fixtures/restoration-routes";
+import { metadata, order } from "../fixtures/restoration";
+// Explicit loopback preview only. Live opt-in never intercepts real responses.
 const live = process.env.DASHBOARD_E2E_LIVE === "1";
-const metadata = {
-  contract_version: "1.0.0",
-  store_id: "mx-fashion",
-  generation: 7,
-  policy_hash: "a".repeat(64),
-  currency: "BRL",
-  reporting_timezone: "America/Sao_Paulo",
-  as_of: "2026-09-28T03:00:00Z",
-  report_from: "2026-09-01",
-  report_to: "2026-09-28",
-  history_complete: false,
-  facts_complete: true,
-  limitations: ["history_incomplete"],
-};
-const customer = {
-  store_id: "mx-fashion",
-  customer_id: "synthetic-customer",
-  customer_type: "B2B",
-  name: "Comprador sintético",
-  state: null,
-  city: null,
-  purchases_observed: 1,
-  first_purchase_at_observed: "2026-09-02T12:00:00Z",
-  requested_lifetime_observed: "50.00",
-  ltv_complete: null,
-};
-const order = {
-  store_id: "mx-fashion",
-  customer_id: customer.customer_id,
-  order_id: "synthetic-order",
-  created_at: "2026-09-02T12:00:00Z",
-  order_status: "CONFIRMED",
-  payment_status: "unpaid",
-  requested_total: "50.00",
-  fulfilled_total: null,
-  requested_items_qty: 2,
-  fulfilled_items_qty: null,
-};
-const values: Record<string, unknown> = {
-  overview: {
-    requested_revenue: "86319.62",
-    fulfilled_revenue: "73220.13",
-    fulfillment_gap: "13099.49",
-    fulfillment_rate: "0.8482443504732759481563982789",
-    cancelled_requested_revenue: "6262.75",
-    orders_requested: 18,
-    orders_cancelled: 2,
-    buyers_observed: 16,
-    recurring_buyers_observed: 0,
-    purchase_frequency_observed: "1",
-    new_customers_confirmed: null,
-    ltv_complete: null,
-    cac: null,
-    revenue_paid: null,
-    series: [
-      {
-        date: "2026-09-01",
-        requested: "86319.62",
-        fulfilled: "73220.13",
-        orders: 18,
-        new_customers_confirmed: null,
-      },
-    ],
-  },
-  orders: [order],
-  customers: [customer],
-  acquisition: {
-    buyers_observed: 16,
-    first_purchase_customers_observed: 16,
-    first_purchase_orders_observed: 16,
-    requested_first_purchase_observed: "80000.00",
-    fulfilled_first_purchase_observed: "72000.00",
-    confirmed_new_customers: null,
-  },
-  retention: {
-    buyers_observed: 16,
-    recurring_buyers_observed: 0,
-    retention_observed: "0",
-    retention_ticket_observed: null,
-    frequency_observed: "1",
-    progression: [1, 2, 3, 4].map((from_purchase) => ({
-      from_purchase,
-      to_purchase: from_purchase === 4 ? "5+" : String(from_purchase + 1),
-      customers_reached_observed: 0,
-      continuation_observed: from_purchase === 1 ? "0" : null,
-      mean_days_observed: null,
-      median_days_observed: null,
-    })),
-    cohorts: [
-      {
-        cohort_month: "2026-09-01",
-        reporting_month: "2026-09-01",
-        month: 0,
-        buyers_observed: 16,
-        rate: null,
-        observed_rate: null,
-        period_complete: false,
-      },
-    ],
-  },
-  products: [
-    {
-      store_id: "mx-fashion",
-      product_key: "synthetic-product",
-      product_id: null,
-      sku: "SYNTHETIC-SKU",
-      name: null,
-      requested_revenue: "50.00",
-      fulfilled_revenue: null,
-      units_requested: "2",
-      units_fulfilled: null,
-      orders_observed: 1,
-      buyers_unique: null,
-    },
-  ],
-};
-async function mocks(page: Page) {
-  await page.route("**/api/dashboard/**", async (route) => {
-    const url = new URL(route.request().url());
-    if (url.searchParams.get("workspace_operation_id") !== "mx-fashion-b2b") {
-      await route.fulfill({
-        status: 404,
-        json: { error: { code: "preview_binding_absent" } },
-      });
-      return;
-    }
-    const path = url.pathname.replace("/api/dashboard/", "");
-    if (path === "installation") {
-      await route.fulfill({ json: installationFixture() });
-      return;
-    }
-    if (
-      path === "performance" ||
-      /\/(intelligence|timeline|products)$/.test(path)
-    ) {
-      await route.fulfill({
-        status: 424,
-        json: { error: { code: "intelligence_publication_unavailable" } },
-      });
-      return;
-    }
-    if (path === "geography") {
-      await route.fulfill({
-        status: 424,
-        json: { error: { code: "geography_coverage_not_certified" } },
-      });
-      return;
-    }
-    const isDetail = path.startsWith("customers/") && !path.endsWith("/orders");
-    const data = isDetail
-      ? {
-          profile: customer,
-          commercial: {
-            qualifying_orders_observed: 1,
-            requested_revenue_observed: "50.00",
-            fulfilled_revenue_observed: null,
-            first_purchase_at_observed: customer.first_purchase_at_observed,
-            last_purchase_at_observed: customer.first_purchase_at_observed,
-            ltv_complete: null,
-          },
-        }
-      : path.endsWith("/orders")
-        ? [order]
-        : values[path];
-    if (data === undefined)
-      throw new Error("Unexpected resource in offline traversal");
-    await route.fulfill({
-      json: {
-        data,
-        pagination: Array.isArray(data)
-          ? { page_size: 25, cursor: null, has_more: false }
-          : null,
-        metadata,
-      },
-    });
-  });
-}
 async function login(page: Page, name = "Maria") {
   await page.goto("/");
   await page.getByRole("combobox", { name: "Usuário demonstrativo" }).click();
@@ -199,110 +23,65 @@ async function realBadge(page: Page) {
     "Dados demonstrativos",
   );
 }
-test("one-round B2B V1 traversal: real, partial and explicitly unavailable", async ({
+test("one-round B2B V1 traversal retains original components and explicit nulls", async ({
   page,
 }) => {
   const errors: string[] = [];
-  page.on("pageerror", (error) => errors.push(error.message));
-  if (!live) await mocks(page);
+  page.on("pageerror", (e) => errors.push(e.message));
+  if (!live) await restorationResources(page, true);
   await login(page);
   await realBadge(page);
   await expect(
     page.getByRole("region", { name: "Indicadores de Receita" }),
-  ).toContainText("86.319,62");
+  ).toBeVisible();
   await expect(
-    page.getByRole("region", { name: "Indicadores de Receita" }),
-  ).toContainText("73.220,13");
-  await expect(page.locator(".workspace-strip .badge")).toHaveText(
-    "Dados reais · Histórico parcial",
-  );
+    page.getByRole("region", { name: "Indicadores de Leads" }),
+  ).toBeVisible();
   await expect(page.locator(".period-trigger")).toBeEnabled();
-  await expect(page.locator(".period-trigger")).toContainText(
-    "01/09/2026 – 27/09/2026",
-  );
-  await expect(page.locator("footer.note")).toContainText("Dados reais");
-  await expect(page.locator("footer.note")).toContainText("Histórico parcial");
-  await expect(page.locator(".print-context")).toContainText(
-    "Dados reais · Histórico parcial",
-  );
+  if (!live)
+    await expect(page.locator(".period-trigger")).toContainText(
+      "01/09/2026 – 27/09/2026",
+    );
   await nav(page, "/b2b/commercial");
   await realBadge(page);
-  await expect(page.locator("tbody tr").first()).toBeVisible();
+  await page.locator(".screen-table-body button").first().click();
+  await expect(page.getByRole("dialog")).toContainText("Solicitado");
+  await page.keyboard.press("Escape");
   await nav(page, "/b2b/acquisition");
   await realBadge(page);
   await expect(
-    page.getByRole("heading", {
-      name: "Primeira compra observada",
-      exact: true,
-    }),
-  ).toBeVisible();
-  await expect(
     page
       .locator(".metric")
-      .filter({ hasText: "Novos confirmados" })
+      .filter({ hasText: "Novos clientes confirmados" })
       .locator(".metric-value"),
   ).toHaveText("—");
   await nav(page, "/b2b/retention");
   await realBadge(page);
   await expect(
-    page.getByRole("heading", { name: "Progressão de compras", exact: true }),
+    page.getByRole("heading", { name: "Progressão de recompra", exact: true }),
   ).toBeVisible();
-  await expect(page.locator(".purchase-stage")).toHaveCount(4);
+  await expect(page.locator(".purchase-stage")).toHaveCount(5);
   await nav(page, "/b2b/customers");
   await realBadge(page);
-  await page.locator("tbody tr a").first().click();
-  await expect(page.locator(".workspace-strip .badge")).toHaveText(
-    "Cobertura ainda não disponível",
-  );
+  await page.locator(".screen-table-body a").first().click();
+  await expect(page.locator(".profile-strip")).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "Resumo do cliente", exact: true }),
+    page.getByRole("tab", { name: "Jornada", exact: true }),
   ).toBeVisible();
-  await expect(
-    page.getByRole("heading", {
-      name: "Pedidos observados do cliente",
-      exact: true,
-    }),
-  ).toBeVisible();
-  await expect(page.locator("tbody tr").first()).toBeVisible();
-  await expect(page.locator(".timeline")).toHaveCount(0);
-  await expect(
-    page.getByRole("heading", { name: /Campanhas participantes/ }),
-  ).toHaveCount(0);
-  await expect(
-    page.getByText(
-      "Performance e influência aguardam materialização das camadas de mídia.",
-    ),
-  ).toBeVisible();
-  await page.goBack();
-  await realBadge(page);
+  await page.getByRole("tab", { name: "Pedidos", exact: true }).click();
+  await expect(page.locator(".screen-table-body button").first()).toBeVisible();
   await nav(page, "/b2b/products");
   await realBadge(page);
-  await expect(page.locator("tbody tr").first()).toBeVisible();
-  await expect(
-    page.getByRole("columnheader", { name: /Estoque|Grade|ABC|Views/ }),
-  ).toHaveCount(0);
+  await page.locator(".screen-table-body .prod").first().click();
+  await expect(page.getByRole("dialog")).toContainText("Estoque e grade");
+  await expect(page.getByRole("dialog")).toContainText("não disponível");
+  await page.keyboard.press("Escape");
   await nav(page, "/b2b/geography");
-  await expect(
-    page.getByText(
-      "Cobertura geográfica ainda não certificada para esta publicação.",
-    ),
-  ).toBeVisible();
+  await realBadge(page);
   await expect(page.locator(".brazil-map path")).toHaveCount(27);
-  await expect(page.locator(".workspace-strip .badge")).toHaveText(
-    "Cobertura ainda não disponível",
-  );
-  await expect(page.locator("tbody tr")).toHaveCount(0);
   await nav(page, "/b2b/performance");
-  await expect(
-    page.getByText(
-      "Performance e influência aguardam materialização das camadas de mídia.",
-    ),
-  ).toBeVisible();
-  await expect(page.locator(".workspace-strip .badge")).toHaveText(
-    "Cobertura ainda não disponível",
-  );
-  await expect(page.locator(".metric")).toHaveCount(0);
-  await expect(page.locator("tbody tr")).toHaveCount(0);
+  await realBadge(page);
+  await expect(page.locator(".metrics .metric")).toHaveCount(8);
   await page.getByRole("combobox", { name: "Operação da marca" }).click();
   await page
     .getByRole("option", { name: "MX Fashion · B2C", exact: true })
@@ -314,290 +93,130 @@ test("one-round B2B V1 traversal: real, partial and explicitly unavailable", asy
   expect(errors).toEqual([]);
 });
 test("unbound brand remains explicitly demo", async ({ page }) => {
-  if (!live) await mocks(page);
+  if (!live) await restorationResources(page, true);
   await login(page, "Gestor Lume");
   await expect(page.locator(".workspace-strip .badge")).toHaveText(
     "Dados demonstrativos",
   );
 });
-
-test("offline cursor pagination resets after a status change; read failure never renders fixtures", async ({
+test("offline complete cursor collection, local pagination/status and unavailable read never uses fixtures", async ({
   page,
 }) => {
-  test.skip(
-    live,
-    "Offline error/next-page injection only; never replace live results.",
-  );
-  await mocks(page);
+  test.skip(live, "Offline injection only; never replace live results.");
+  await restorationResources(page, true);
   let unavailable = false;
+  const cursors: (string | null)[] = [];
   await page.route("**/api/dashboard/orders?**", async (route) => {
-    if (unavailable) {
-      await route.fulfill({
+    if (unavailable)
+      return route.fulfill({
         status: 503,
         json: { error: { code: "read_temporarily_unavailable" } },
       });
-      return;
-    }
-    const params = new URL(route.request().url()).searchParams;
-    const second = params.has("cursor");
+    const cursor = new URL(route.request().url()).searchParams.get("cursor");
+    cursors.push(cursor);
+    const start = cursor ? 6 : 0;
     await route.fulfill({
       json: {
-        metadata,
-        data: [
-          {
-            ...order,
-            order_id: second ? "synthetic-next-page" : "synthetic-first-page",
-            order_status: params.get("status") ?? "CONFIRMED",
-          },
-        ],
+        metadata: {
+          ...metadata,
+          store_id: "mx-fashion",
+          generation: 7,
+          as_of: "2026-09-28T03:00:00Z",
+          report_to: "2026-09-28",
+        },
+        data: Array.from({ length: 6 }, (_, i) => ({
+          ...order,
+          store_id: "mx-fashion",
+          order_id: `synthetic-${start + i}`,
+          order_status: start ? "CANCELED" : "CONFIRMED",
+        })),
         pagination: {
-          page_size: 25,
-          cursor: second ? null : "synthetic-opaque-cursor",
-          has_more: !second,
+          page_size: 100,
+          cursor: cursor ? null : "synthetic-opaque-cursor",
+          has_more: !cursor,
         },
       },
     });
   });
   await login(page);
   await nav(page, "/b2b/commercial");
-  await expect(page.locator("tbody")).toContainText("synthetic-first-page");
-  await page.getByRole("button", { name: "Próxima", exact: true }).click();
-  await expect(page.locator("tbody")).toContainText("synthetic-next-page");
-  await page.getByRole("combobox", { name: "Status do pedido" }).click();
-  await page.getByRole("option", { name: "CANCELED", exact: true }).click();
-  await expect(page.locator("tbody")).toContainText("synthetic-first-page");
+  await expect(page.locator(".screen-table-body tr")).toHaveCount(6);
+  await expect(page.locator(".pagination")).toContainText("12 registros");
+  await page
+    .getByRole("button", { name: "Próxima página", exact: true })
+    .click();
+  await expect(page.locator(".screen-table-body")).toContainText("synthetic-6");
+  expect(cursors).toContain("synthetic-opaque-cursor");
+  await page
+    .getByRole("combobox", { name: "Status do pedido", exact: true })
+    .click();
+  await page.getByRole("option", { name: "Cancelado", exact: true }).click();
+  await expect(page.locator(".pagination")).toContainText(
+    "6 registros · Página 1 de 1",
+  );
   await expect(
-    page.getByRole("button", { name: "Anterior", exact: true }),
+    page.getByRole("button", { name: "Página anterior", exact: true }),
   ).toBeDisabled();
   unavailable = true;
-  await page.getByRole("combobox", { name: "Status do pedido" }).click();
-  await page.getByRole("option", { name: "SHIPPED", exact: true }).click();
+  await login(page);
+  await nav(page, "/b2b/commercial");
   await expect(
     page.getByRole("heading", { name: "Não foi possível carregar os dados." }),
   ).toBeVisible();
-  await expect(page.locator(".workspace-strip .badge")).toHaveText(
-    "Dados reais indisponíveis",
-  );
-  await expect(page.locator("tbody tr")).toHaveCount(0);
+  await expect(page.locator(".screen-table-body tr")).toHaveCount(0);
+  await expect(
+    page.getByText("Dados demonstrativos", { exact: true }),
+  ).toHaveCount(0);
 });
-
-test("CHANGE16 integrated Customer360, Timeline, Meta, Performance and Influence", async ({
+test("Intelligence uses original customer tabs, Performance, Meta campaign panels and drill-down", async ({
   page,
 }) => {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
-  if (!live) {
-    await mocks(page);
-    const intel = {
-      ...metadata,
-      publication_domain: "intelligence",
-      analytics_generation: metadata.generation,
-      generation: 2,
-      publication_id: "b".repeat(64),
-      meta_complete: true,
-      influence_complete: false,
-      customer_intelligence_complete: true,
-      performance_complete: true,
-      limitations: [
-        "history_incomplete",
-        "unresolved_or_unmapped_paid_influence",
-      ],
-    };
-    const campaign = {
-      campaign_id: "synthetic-campaign",
-      campaign_name: "Campanha sintética #16",
-      campaign_status: "ACTIVE",
-      spend: "5.00",
-      observed_spend: "5.00",
-      impressions: 1000,
-      clicks: 10,
-      ctr: "1.00",
-      cpc: "0.50",
-      cpm: "5.00",
-      influenced_customers: 0,
-      influenced_orders: 0,
-      requested_revenue_influenced: "0.00",
-      fulfilled_revenue_influenced: "0.00",
-      roas_requested: null,
-      roas_fulfilled: null,
-    };
-    const performance = {
-      meta_spend: "5.00",
-      observed_meta_spend: "5.00",
-      influenced_customers: 0,
-      influenced_orders: 0,
-      new_customers_influenced: null,
-      requested_revenue_influenced: "0.00",
-      fulfilled_revenue_influenced: "0.00",
-      roas_requested: null,
-      roas_fulfilled: null,
-      cac_new_customer: null,
-    };
-    const customer360 = {
-      profile: {
-        customer_id: customer.customer_id,
-        purchase_count: 1,
-        has_repurchase: false,
-        ltv_observed: "50.00",
-        last_purchase_at: customer.first_purchase_at_observed,
-      },
-      journey: { first_touch_at: null },
-      marketing: ["LIFETIME", "ACQUISITION", "REPEAT_PURCHASE"].map(
-        (influence_scope) => ({
-          influence_scope,
-          paid_media_influenced: null,
-          campaign_count: 0,
-          paid_touch_count: 0,
-          first_paid_touch_at: null,
-          last_paid_touch_at: null,
-        }),
-      ),
-      health_score: null,
-      health_status: null,
-      health_policy: "NOT_DEFINED",
-      ltv_complete: null,
-    };
-    await page.route("**/api/dashboard/**", async (route) => {
-      const path = new URL(route.request().url()).pathname.replace(
-        "/api/dashboard/",
-        "",
-      );
-      let data: unknown;
-      if (path === "performance") data = performance;
-      else if (path === "campaigns" || path === "campaigns/synthetic-campaign")
-        data = [campaign];
-      else if (path.endsWith("/intelligence")) data = customer360;
-      else if (path.endsWith("/timeline"))
-        data = [
-          {
-            event_name: "purchase",
-            occurred_at: customer.first_purchase_at_observed,
-            record_type: "ORDER",
-            campaign_id: null,
-            order_id: order.order_id,
-            value: null,
-          },
-        ];
-      else if (path === `customers/${customer.customer_id}/products`)
-        data = [
-          {
-            product_key: "synthetic-key",
-            product_id: null,
-            sku: "SYNTHETIC",
-            orders_count: 1,
-            requested_quantity: "2",
-            fulfilled_quantity: null,
-            requested_revenue: "50.00",
-            fulfilled_revenue: null,
-          },
-        ];
-      else if (
-        path.endsWith("/influenced") ||
-        path.startsWith("campaigns/synthetic-campaign/")
-      )
-        data = [];
-      else {
-        await route.fallback();
-        return;
-      }
-      await route.fulfill({
-        json: {
-          data,
-          metadata: intel,
-          pagination: Array.isArray(data)
-            ? { page_size: 25, cursor: null, has_more: false }
-            : null,
-        },
-      });
-    });
-  }
+  if (!live) await restorationResources(page, true);
   await login(page);
   await realBadge(page);
-  await expect(
-    page.getByRole("region", { name: "Indicadores de Receita" }),
-  ).toContainText("86.319,62");
-  await expect(
-    page.getByRole("region", { name: "Indicadores de Receita" }),
-  ).toContainText("73.220,13");
-  for (const path of [
-    "/b2b/commercial",
-    "/b2b/acquisition",
-    "/b2b/retention",
-    "/b2b/customers",
-  ]) {
-    await nav(page, path);
-    await realBadge(page);
-  }
-  await page.locator("tbody tr a").first().click();
-  await expect(
-    page.getByRole("heading", { name: "Customer 360", exact: true }),
-  ).toBeVisible();
+  await nav(page, "/b2b/customers");
+  await page.locator(".screen-table-body a").first().click();
   await realBadge(page);
-  for (const name of [
-    "Pedidos observados do cliente",
-    "Marketing Influence",
-    "Timeline do cliente",
-    "Produtos do cliente",
-  ])
-    await expect(
-      page.getByRole("heading", { name, exact: true }),
-    ).toBeVisible();
   await expect(
-    page.getByText(/Health score e segmentação: NOT_DEFINED/),
+    page.getByRole("tab", { name: "Jornada", exact: true }),
   ).toBeVisible();
+  await expect(page.locator(".timeline")).toBeVisible();
+  await page.getByRole("tab", { name: "Produtos", exact: true }).click();
+  await expect(page.locator(".screen-table-body .prod").first()).toBeVisible();
+  await page
+    .getByRole("tab", { name: "Mídia e campanhas", exact: true })
+    .click();
+  if (!live)
+    await expect(
+      page.getByText("Campanha sintética", { exact: true }),
+    ).toBeVisible();
   await nav(page, "/b2b/performance");
   await realBadge(page);
   await expect(
     page.getByRole("heading", {
-      name: "Performance e influência",
-      exact: true,
+      name: "Faturamento × Investimento por período",
     }),
   ).toBeVisible();
-  await expect(
-    page.locator(".metric").filter({ hasText: "CAC" }).locator(".metric-value"),
-  ).toHaveText("—");
-  await expect(page.getByText(/aguardam materialização/)).toHaveCount(0);
   await page.getByRole("button", { name: "Campanhas", exact: true }).click();
   await nav(page, "/campaigns/meta");
   await realBadge(page);
   await expect(
-    page.getByRole("heading", { name: "Campanhas no recorte", exact: true }),
-  ).toBeVisible();
-  const campaigns = page.locator('tbody a[href^="/campaigns/"]');
-  if (await campaigns.count()) {
-    await campaigns.first().click();
-    await realBadge(page);
-    for (const name of ["Clientes participantes", "Pedidos participantes"])
-      await expect(
-        page.getByRole("heading", { name, exact: true }),
-      ).toBeVisible();
-  }
-  await nav(page, "/b2b/performance");
+    page.locator(".marketing-rankings .creative-ranking"),
+  ).toHaveCount(3);
+  if (!live) await page.getByLabel("Buscar campanha").fill("sintética");
   await page
-    .getByRole("link", {
-      name: "Clientes, pedidos e campanhas participantes",
-      exact: true,
-    })
+    .locator('.screen-table-body a[href^="/campaigns/"]')
+    .first()
     .click();
   await realBadge(page);
-  for (const name of ["Clientes influenciados", "Pedidos influenciados"])
-    await expect(
-      page.getByRole("heading", { name, exact: true }),
-    ).toBeVisible();
-  await nav(page, "/b2b/geography");
-  await expect(page.locator(".workspace-strip .badge")).toHaveText(
-    "Cobertura ainda não disponível",
-  );
-  await page.getByRole("combobox", { name: "Operação da marca" }).click();
-  await page
-    .getByRole("option", { name: "MX Fashion · B2C", exact: true })
-    .click();
-  await expect(page.locator(".workspace-strip .badge")).toHaveText(
-    "Dados demonstrativos",
-  );
-  await login(page, "Gestor Lume");
-  await expect(page.locator(".workspace-strip .badge")).toHaveText(
-    "Dados demonstrativos",
-  );
+  await expect(
+    page.getByRole("tab", { name: "Clientes influenciados" }),
+  ).toBeVisible();
+  await page.getByRole("tab", { name: "Pedidos influenciados" }).click();
+  await page.locator(".screen-table-body button").first().click();
+  await expect(page.getByRole("dialog")).toContainText("SKU-sintético");
+  await page.keyboard.press("Escape");
   expect(errors).toEqual([]);
 });

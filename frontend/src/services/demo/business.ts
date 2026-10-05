@@ -12,7 +12,7 @@ import type {
   RequestContext,
   Retention,
   TimelineEvent,
-} from "@/types/domain";
+} from "@/services/demo/types";
 import * as fixtures from "./fixtures";
 export function hasDemoData(c: RequestContext) {
   return [

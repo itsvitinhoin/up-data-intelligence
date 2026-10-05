@@ -6,7 +6,9 @@ export function retailCustomerMetrics(orders: Order[]): Metric[] {
   const purchases = [
     ...new Map(orders.map((order) => [order.id, order])).values(),
   ]
-    .filter((order) => qualifyingStatuses.has(order.status))
+    .filter(
+      (order) => order.status !== null && qualifyingStatuses.has(order.status),
+    )
     .sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
   const revenueCents = purchases.reduce(
     (sum, order) => sum + Math.round(Number(order.requested) * 100),
@@ -30,7 +32,9 @@ export function retailCustomerMetrics(orders: Order[]): Metric[] {
     },
     {
       label: "Receita",
-      value: (revenueCents / 100).toFixed(2),
+      value: purchases.some((order) => order.requested === null)
+        ? null
+        : (revenueCents / 100).toFixed(2),
       format: "currency",
       hint: "Valor captado dos pedidos qualificantes observados; não comprova aprovação ou pagamento.",
     },

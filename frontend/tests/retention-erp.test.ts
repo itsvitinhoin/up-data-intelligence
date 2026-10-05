@@ -7,7 +7,8 @@ import { defaultFilters } from "@/config/tenants";
 import { filterProducts } from "@/lib/erp";
 import { csvContent, workbookBytes } from "@/lib/erp-export";
 import { stockCoverage, stockTurnover } from "@/services/demo/erp";
-import type { Order, RequestContext } from "@/types/domain";
+import type { Order } from "@/services/demo/types";
+import type { RequestContext } from "@/types/domain";
 const context = (): RequestContext => ({
   scope: { tenant_id: "demo-up", store_id: "mx-fashion-b2b", operation: "B2B" },
   session: sessionFor("maria-demo"),

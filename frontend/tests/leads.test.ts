@@ -3,7 +3,8 @@ import { summarizeLeads, type DemoLead } from "@/services/demo/leads";
 import { demoApi } from "@/services/demo/adapter";
 import { sessionFor } from "@/services/demo/admin";
 import { defaultFilters } from "@/config/tenants";
-import type { Order, RequestContext } from "@/types/domain";
+import type { Order } from "@/services/demo/types";
+import type { RequestContext } from "@/types/domain";
 const orders: Order[] = ["CONFIRMED", "SHIPPED", "CANCELED"].map(
   (status, i) => ({
     id: String(i),

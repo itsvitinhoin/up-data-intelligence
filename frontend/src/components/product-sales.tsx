@@ -1,5 +1,6 @@
 "use client";
 import dynamic from "next/dynamic";
+import { useWorkspace } from "@/features/providers";
 import { Panel } from "@/components/ui-kit";
 import { ListExport } from "@/components/exports";
 import type { Product } from "@/types/domain";
@@ -8,6 +9,7 @@ const Bars = dynamic(
   { ssr: false },
 );
 export function ProductSales({ product }: { product: Product }) {
+  const { dataMode } = useWorkspace();
   const sales = product.variantSales;
   return (
     <>
@@ -22,7 +24,11 @@ export function ProductSales({ product }: { product: Product }) {
           <Panel
             key={key}
             title={title}
-            subtitle="Peças vendidas · distribuição demonstrativa, independente do estoque"
+            subtitle={
+              dataMode === "demo"
+                ? "Peças vendidas · distribuição demonstrativa, independente do estoque"
+                : "Vendas por variante · cobertura ainda não certificada"
+            }
             action={
               <ListExport rows={rows} name={`vendas-${product.sku}-${key}`} />
             }

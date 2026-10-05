@@ -4,7 +4,8 @@ import { demoApi } from "@/services/demo/adapter";
 import { sessionFor } from "@/services/demo/admin";
 import { defaultFilters } from "@/config/tenants";
 import { metric } from "@/lib/format";
-import type { Order, RequestContext } from "@/types/domain";
+import type { Order } from "@/services/demo/types";
+import type { RequestContext } from "@/types/domain";
 const order = (
   id: string,
   customer_id: string,
