@@ -208,9 +208,10 @@ def check(plan: dict[str, Any], image: str) -> dict[str, Any]:
             ):
                 raise ValueError("UNAPPROVED_SCHEMA")
             if actions == ["create"]:
-                if (
-                    name not in NEW_TABLES
-                    or after.get("dataset_id") != (TABLES | ANALYTICS_TABLES)[name].dataset
+                if name not in NEW_TABLES or after.get("dataset_id") != (
+                    "up_analytics"
+                    if name == "analytics_publications"
+                    else (TABLES | ANALYTICS_TABLES)[name].dataset
                 ):
                     raise ValueError("UNAPPROVED_TABLE")
             else:
@@ -231,7 +232,11 @@ def check(plan: dict[str, Any], image: str) -> dict[str, Any]:
             name = after.get("table_id")
             if (name, after.get("member"), after.get("role")) not in permissions() or after.get(
                 "dataset_id"
-            ) != (TABLES | ANALYTICS_TABLES)[name].dataset:
+            ) != (
+                "up_analytics"
+                if name == "analytics_publications"
+                else (TABLES | ANALYTICS_TABLES)[name].dataset
+            ):
                 raise ValueError("UNAPPROVED_TABLE_IAM")
             iam.append({k: after[k] for k in ("dataset_id", "table_id", "role", "member")})
         elif kind == "google_cloud_run_v2_job" and actions == ["update"]:
