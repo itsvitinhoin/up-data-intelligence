@@ -10,7 +10,9 @@ import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Settings2, Plug, KeyRound, ArrowRight, Search } from "lucide-react";
 import { useWorkspace } from "@/features/providers";
-import { adminApi, authorizedTenants } from "@/services/api";
+import { adminApi } from "@/services/api";
+import { catalogCompanies } from "@/services/auth/catalog";
+import { requireDemoResource } from "@/hooks/use-resource";
 import {
   platforms,
   erps,
@@ -60,7 +62,7 @@ const searchableName = (value: string) =>
     .toLocaleLowerCase("pt-BR")
     .trim();
 function OnboardedInstallationCard({ item }: { item: OnboardingResult }) {
-  const { session, select } = useWorkspace();
+  const { tenants, select, session } = useWorkspace();
   const router = useRouter();
   const q = useQuery({
     queryKey: ["onboarding-installation", session?.id, item.operation_id],
@@ -79,9 +81,9 @@ function OnboardedInstallationCard({ item }: { item: OnboardingResult }) {
   const state = value.installation?.data;
   const window = state?.recommended_preview_window;
   // An installation response is not authorization. Existing trusted workspace selection is required.
-  const allowed = (session ? authorizedTenants(session) : []).flatMap((t) =>
+  const allowed = tenants.flatMap((t) =>
     t.brands.flatMap((b) =>
-      b.id === item.brand_id
+      b.id === item.brand_id && t.id === item.tenant_id
         ? b.operations
             .filter((o) => o.type === "B2B")
             .map((o) => ({
@@ -135,20 +137,95 @@ function OnboardedInstallationCard({ item }: { item: OnboardingResult }) {
   );
 }
 
+function useBrandInstallation(brand: Company) {
+  const { tenants } = useWorkspace();
+  const tenant = tenants.find(
+    (t) =>
+      (!brand.tenant_id || t.id === brand.tenant_id) &&
+      t.brands.some((b) => b.id === brand.id),
+  );
+  const operation = tenant?.brands
+    .find((b) => b.id === brand.id)
+    ?.operations.find((o) => o.type === "B2B");
+  return useInstallation(
+    tenant && operation
+      ? {
+          tenant_id: tenant.id,
+          workspace_operation_id: operation.id,
+          store_id: operation.id,
+          operation: operation.type,
+        }
+      : null,
+  );
+}
+function LiveConnectionSummary({ brand }: { brand: Company }) {
+  const q = useBrandInstallation(brand);
+  const sources = q.data?.data.sources;
+  return (
+    <div className="integration-summary">
+      <Plug size={16} />
+      <span>
+        {q.isPending
+          ? "Consultando integrações…"
+          : q.isError ||
+              !sources ||
+              sources.some((s) => s.configured && s.active === null)
+            ? "Integrações indisponíveis"
+            : `${sources.filter((s) => s.active === true).length} integrações ativas · ${sources.filter((s) => s.configured && s.active !== true).length} pendentes`}
+      </span>
+    </div>
+  );
+}
+function LiveConnectionRows({ brand }: { brand: Company }) {
+  const q = useBrandInstallation(brand);
+  return (
+    <ul className="integration-statuses">
+      {providers.map((provider) => {
+        const source = q.data?.data.sources.find(
+          (s) =>
+            s.source ===
+            (provider === "Plataforma"
+              ? "upzero"
+              : provider === "Meta Ads"
+                ? "meta"
+                : ""),
+        );
+        const active = source?.configured && source.active === true;
+        return (
+          <li key={provider}>
+            <span>{provider}</span>
+            <span className={`badge ${active ? "badge--up" : ""}`}>
+              {q.isPending
+                ? "Consultando…"
+                : active
+                  ? "Ativa"
+                  : source?.configured
+                    ? "Pendente de verificação"
+                    : "Indisponível"}
+            </span>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
 function BrandDashboard({ brand }: { brand: Company }) {
-  const { session, select, dataMode } = useWorkspace();
+  const { tenants, select, dataMode } = useWorkspace();
   const router = useRouter();
-  const operations = (session ? authorizedTenants(session) : []).flatMap(
-    (tenant) =>
-      tenant.brands
-        .filter((item) => item.id === brand.id)
-        .flatMap((item) =>
-          item.operations.map((operation) => ({
-            tenantId: tenant.id,
-            storeId: operation.id,
-            type: operation.type,
-          })),
-        ),
+  const operations = tenants.flatMap((tenant) =>
+    tenant.brands
+      .filter(
+        (item) =>
+          item.id === brand.id &&
+          (!brand.tenant_id || tenant.id === brand.tenant_id),
+      )
+      .flatMap((item) =>
+        item.operations.map((operation) => ({
+          tenantId: tenant.id,
+          storeId: operation.id,
+          type: operation.type,
+        })),
+      ),
   );
   const [storeId, setStoreId] = useState(operations[0]?.storeId ?? "");
   const selected =
@@ -228,11 +305,14 @@ function BrandDashboard({ brand }: { brand: Company }) {
   );
 }
 function BrandConnectionDot({ brand }: { brand: Company }) {
-  const { session } = useWorkspace();
-  const scope = (session ? authorizedTenants(session) : [])
+  const { tenants, dataMode } = useWorkspace();
+  const scope = tenants
     .flatMap((t) =>
       t.brands
-        .filter((b) => b.id === brand.id)
+        .filter(
+          (b) =>
+            b.id === brand.id && (!brand.tenant_id || brand.tenant_id === t.id),
+        )
         .flatMap((b) =>
           b.operations
             .filter((o) => o.type === "B2B")
@@ -253,7 +333,9 @@ function BrandConnectionDot({ brand }: { brand: Company }) {
         : q.data.data.sources.some((s) => s.configured && s.active === null)
           ? null
           : false
-    : verifiedConnectionCount(brand) > 0;
+    : dataMode === "live"
+      ? null
+      : verifiedConnectionCount(brand) > 0;
   return (
     <span
       className={`connection-dot ${active ? "connection-dot--active" : ""}`}
@@ -269,11 +351,14 @@ function BrandConnectionDot({ brand }: { brand: Company }) {
   );
 }
 function BrandInstallationDetail({ brand }: { brand: Company }) {
-  const { session } = useWorkspace();
-  const scope = (session ? authorizedTenants(session) : [])
+  const { tenants } = useWorkspace();
+  const scope = tenants
     .flatMap((t) =>
       t.brands
-        .filter((b) => b.id === brand.id)
+        .filter(
+          (b) =>
+            b.id === brand.id && (!brand.tenant_id || brand.tenant_id === t.id),
+        )
         .flatMap((b) =>
           b.operations
             .filter((o) => o.type === "B2B")
@@ -309,21 +394,30 @@ export function BrandIntegrationsPage({
   onboarded?: OnboardingResult[];
   createAction?: React.ReactNode;
 }) {
-  const { session, refreshAccess } = useWorkspace();
+  const { session, refreshAccess, dataMode, tenants } = useWorkspace();
+  const live = dataMode === "live";
   const client = useQueryClient();
   const q = useQuery({
-    queryKey: ["up-admin", "brands"],
-    queryFn: () => adminApi.brands(session!),
+    queryKey: ["up-admin", "brands", dataMode, tenants],
+    queryFn: () =>
+      live ? catalogCompanies(tenants) : adminApi.brands(session!),
   });
   const meta = useQuery({
-    queryKey: ["up-admin", "meta"],
-    queryFn: () => adminApi.meta(session!),
+    queryKey: ["up-admin", "meta", dataMode],
+    enabled: !live,
+    queryFn: () => {
+      requireDemoResource(dataMode);
+      return adminApi.meta(session!);
+    },
   });
   const [draft, setDraft] = useState<Company | null>(null);
   const [credential, setCredential] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const save = useMutation({
-    mutationFn: (brand: Company) => adminApi.saveBrand(brand, session!),
+    mutationFn: (brand: Company) => {
+      requireDemoResource(dataMode);
+      return adminApi.saveBrand(brand, session!);
+    },
     onSuccess: () => {
       setDraft(null);
       refreshAccess();
@@ -331,7 +425,10 @@ export function BrandIntegrationsPage({
     },
   });
   const load = useMutation({
-    mutationFn: () => adminApi.configureMetaDemo(session!),
+    mutationFn: () => {
+      requireDemoResource(dataMode);
+      return adminApi.configureMetaDemo(session!);
+    },
     onSuccess: () =>
       void client.invalidateQueries({ queryKey: ["up-admin", "meta"] }),
   });
@@ -350,8 +447,13 @@ export function BrandIntegrationsPage({
       meta_account_id: m.enabled && m.accountId ? m.accountId : null,
     });
   }
-  const visibleBrands = q.data?.filter((brand) =>
-    searchableName(brand.name).includes(searchableName(search)),
+  const visibleBrands = q.data?.filter(
+    (brand) =>
+      searchableName(brand.name).includes(searchableName(search)) &&
+      !onboarded.some(
+        (item) =>
+          item.tenant_id === brand.tenant_id && item.brand_id === brand.id,
+      ),
   );
   return (
     <>
@@ -362,7 +464,7 @@ export function BrandIntegrationsPage({
             Controle de <em className="hl hl--up">marcas.</em>
           </>
         }
-        description="Cadastre marcas, acompanhe conexões e acesse cada dashboard em um só lugar. Ambiente demonstrativo."
+        description={`Cadastre marcas, acompanhe conexões e acesse cada dashboard em um só lugar. ${live ? "DEV · Acesso interno." : "Ambiente demonstrativo."}`}
         action={createAction}
       />
       <div className="brand-search">
@@ -385,20 +487,30 @@ export function BrandIntegrationsPage({
         <Failure retry={() => void q.refetch()} />
       ) : (
         <>
-          <ListExport
-            rows={(visibleBrands ?? []).flatMap((b) =>
-              connections(b).map((i) => ({
-                marca: b.name,
-                criada_em: b.createdAt ?? "Data não informada",
-                conexoes_ativas: verifiedConnectionCount(b),
-                integracao: i.provider,
-                solicitada: i.enabled,
-                conta: i.accountId,
-                status: i.enabled
-                  ? "Pendente de conexão segura"
-                  : "Não configurada",
-              })),
-            )}
+          <ListExport<Record<string, string | number | boolean | null>>
+            rows={
+              live
+                ? (visibleBrands ?? []).map((b) => ({
+                    marca: b.name,
+                    operacao: b.operation,
+                    criada_em: "Não disponível",
+                    plataforma: "Consultar instalação",
+                    erp: "Indisponível",
+                  }))
+                : (visibleBrands ?? []).flatMap((b) =>
+                    connections(b).map((i) => ({
+                      marca: b.name,
+                      criada_em: b.createdAt ?? "Data não informada",
+                      conexoes_ativas: verifiedConnectionCount(b),
+                      integracao: i.provider,
+                      solicitada: i.enabled,
+                      conta: i.accountId,
+                      status: i.enabled
+                        ? "Pendente de conexão segura"
+                        : "Não configurada",
+                    })),
+                  )
+            }
             name="integracoes-por-marca"
           />
           {onboarded
@@ -412,7 +524,7 @@ export function BrandIntegrationsPage({
             <div className="workspace-grid brand-integrations">
               {visibleBrands.map((brand) => (
                 <Panel
-                  key={brand.id}
+                  key={`${brand.tenant_id ?? "demo"}/${brand.id}`}
                   title={
                     <span className="brand-card-heading">
                       <BrandConnectionDot brand={brand} />
@@ -436,19 +548,24 @@ export function BrandIntegrationsPage({
                       </span>
                     </span>
                   }
-                  subtitle={`Operação ${brand.operation} · ${brand.segment}`}
+                  subtitle={`Operação ${brand.operation}${brand.segment ? ` · ${brand.segment}` : ""}`}
                 >
-                  <div className="integration-summary">
-                    <Plug size={16} />
-                    <span>
-                      Configuração demo · {verifiedConnectionCount(brand)}{" "}
-                      integrações ativas ·{" "}
-                      {connections(brand).filter((i) => i.enabled).length}{" "}
-                      preparadas
-                    </span>
-                  </div>
+                  {live ? (
+                    <LiveConnectionSummary brand={brand} />
+                  ) : (
+                    <div className="integration-summary">
+                      <Plug size={16} />
+                      <span>
+                        Configuração demo · {verifiedConnectionCount(brand)}{" "}
+                        integrações ativas ·{" "}
+                        {connections(brand).filter((i) => i.enabled).length}{" "}
+                        preparadas
+                      </span>
+                    </div>
+                  )}
                   <div className="brand-card-meta">
                     <Choice
+                      disabled={live}
                       label={`Plataforma de ${brand.name}`}
                       value={brand.platform ?? "none"}
                       onChange={(value) =>
@@ -461,11 +578,15 @@ export function BrandIntegrationsPage({
                         })
                       }
                       options={[
-                        { value: "none", label: "Não informado" },
+                        {
+                          value: "none",
+                          label: live ? "Indisponível" : "Não informado",
+                        },
                         ...platforms.map((value) => ({ value, label: value })),
                       ]}
                     />
                     <Choice
+                      disabled={live}
                       label={`ERP de ${brand.name}`}
                       value={brand.erp ?? "none"}
                       onChange={(value) =>
@@ -476,7 +597,10 @@ export function BrandIntegrationsPage({
                         })
                       }
                       options={[
-                        { value: "none", label: "Não informado" },
+                        {
+                          value: "none",
+                          label: live ? "Indisponível" : "Não informado",
+                        },
                         ...erps.map((value) => ({ value, label: value })),
                       ]}
                     />
@@ -491,27 +615,31 @@ export function BrandIntegrationsPage({
                           integrations: connections(brand),
                         });
                       }}
-                      aria-label={`Editar integração de ${brand.name}`}
+                      aria-label={`${live ? "Ver" : "Editar"} integração de ${brand.name}`}
                     >
                       <Settings2 size={15} />
-                      Editar integração
+                      {live ? "Ver integração" : "Editar integração"}
                     </Button>
                     <BrandDashboard brand={brand} />
                   </div>
-                  <ul className="integration-statuses">
-                    {connections(brand).map((i) => (
-                      <li key={i.provider}>
-                        <span>{i.provider}</span>
-                        <span
-                          className={`badge ${i.enabled ? "badge--up" : ""}`}
-                        >
-                          {i.enabled
-                            ? "Pendente de conexão"
-                            : "Não configurada"}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
+                  {live ? (
+                    <LiveConnectionRows brand={brand} />
+                  ) : (
+                    <ul className="integration-statuses">
+                      {connections(brand).map((i) => (
+                        <li key={i.provider}>
+                          <span>{i.provider}</span>
+                          <span
+                            className={`badge ${i.enabled ? "badge--up" : ""}`}
+                          >
+                            {i.enabled
+                              ? "Pendente de conexão"
+                              : "Não configurada"}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </Panel>
               ))}
             </div>
@@ -535,11 +663,12 @@ export function BrandIntegrationsPage({
         <DialogContent className="glass brand-integration-dialog">
           <DialogTitle>Integrações · {draft?.name}</DialogTitle>
           <DialogDescription>
-            Selecione as integrações desta marca. As configurações ficam nesta
-            sessão de demonstração.
+            {live
+              ? "Estado real da instalação. Edição de credenciais e integrações ainda indisponível nesta interface."
+              : "Selecione as integrações desta marca. As configurações ficam nesta sessão de demonstração."}
           </DialogDescription>
           {draft && <BrandInstallationDetail brand={draft} />}
-          {draft && (
+          {draft && !live && (
             <form
               onSubmit={(e) => {
                 e.preventDefault();
@@ -558,7 +687,10 @@ export function BrandIntegrationsPage({
                     })
                   }
                   options={[
-                    { value: "none", label: "Não informado" },
+                    {
+                      value: "none",
+                      label: live ? "Indisponível" : "Não informado",
+                    },
                     ...platforms.map((value) => ({ value, label: value })),
                   ]}
                 />
@@ -572,7 +704,10 @@ export function BrandIntegrationsPage({
                     })
                   }
                   options={[
-                    { value: "none", label: "Não informado" },
+                    {
+                      value: "none",
+                      label: live ? "Indisponível" : "Não informado",
+                    },
                     ...erps.map((value) => ({ value, label: value })),
                   ]}
                 />

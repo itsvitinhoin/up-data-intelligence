@@ -246,6 +246,8 @@ export type BrandIntegration = {
   accountId: string;
 };
 export interface Company {
+  /** Present only on server-catalog brand projections; not a browser authorization grant. */
+  tenant_id?: string;
   integrations?: BrandIntegration[];
   /** Server-owned count of verified live connections; setup flags do not count. */
   activeConnections?: number;

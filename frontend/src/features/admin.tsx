@@ -67,7 +67,7 @@ function Field({
   );
 }
 export function AdminShell({ children }: { children: React.ReactNode }) {
-  const { logout } = useWorkspace();
+  const { logout, dataMode } = useWorkspace();
   return (
     <div className="app">
       <aside className="sidebar">
@@ -99,7 +99,11 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           <PageExport />
           <span className="eyebrow">UP Admin · gestão de marcas</span>
           <span className="spacer" />
-          <span className="badge">Ambiente demonstrativo</span>
+          <span className="badge">
+            {dataMode === "live"
+              ? "DEV · Acesso interno"
+              : "Ambiente demonstrativo"}
+          </span>
           <Button variant="ghost" onClick={logout}>
             Sair
           </Button>
@@ -115,11 +119,18 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 }
 export function CompaniesPage() {
   const { session, changed } = useAdmin();
-  const { onboardingEnabled } = useWorkspace();
+  const { onboardingEnabled, dataMode, tenants, refreshAccess } =
+    useWorkspace();
+  const live = dataMode === "live";
+  const [tenant, setTenant] = useState(session.tenant_ids[0] ?? "");
   const [onboarded, setOnboarded] = useState<OnboardingResult[]>([]);
   const meta = useQuery({
-    queryKey: ["up-admin", "meta"],
-    queryFn: () => adminApi.meta(session),
+    queryKey: ["up-admin", "meta", dataMode],
+    enabled: !live,
+    queryFn: () => {
+      if (live) throw new Error("live_admin_unavailable");
+      return adminApi.meta(session);
+    },
   });
   const [open, setOpen] = useState(false);
   const [operation, setOperation] = useState<Company["operation"]>("Ambos");
@@ -129,7 +140,10 @@ export function CompaniesPage() {
   const [logo, setLogo] = useState("");
   const [logoBusy, setLogoBusy] = useState(false);
   const save = useMutation({
-    mutationFn: (brand: Company) => adminApi.saveBrand(brand, session),
+    mutationFn: (brand: Company) => {
+      if (live) throw new Error("live_admin_unavailable");
+      return adminApi.saveBrand(brand, session);
+    },
     onSuccess: () => {
       changed();
       setOpen(false);
@@ -149,13 +163,21 @@ export function CompaniesPage() {
           <DialogContent className="glass">
             <DialogTitle>Cadastrar marca</DialogTitle>
             <DialogDescription>
-              {onboardingEnabled
-                ? "Configuração persistida via backend administrativo DEV. Sem execução de pipelines."
+              {onboardingEnabled || live
+                ? "Configuração segura no backend DEV. A instalação será acompanhada neste painel."
                 : "Cadastro demonstrativo em memória. Use dados fictícios."}
             </DialogDescription>
-            {onboardingEnabled ? (
+            {live && tenants.length > 1 && (
+              <Choice
+                label="Empresa autorizada"
+                value={tenant}
+                onChange={setTenant}
+                options={tenants.map((t) => ({ value: t.id, label: t.name }))}
+              />
+            )}
+            {onboardingEnabled || live ? (
               <SecureOnboardingForm
-                tenant={session.tenant_ids[0] ?? ""}
+                tenant={tenant}
                 onCreated={(result) => {
                   setOnboarded((previous) => [
                     ...previous.filter(
@@ -164,6 +186,7 @@ export function CompaniesPage() {
                     result,
                   ]);
                   setOpen(false);
+                  if (live) refreshAccess();
                 }}
               />
             ) : (

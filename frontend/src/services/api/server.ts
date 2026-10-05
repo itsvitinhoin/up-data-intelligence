@@ -3,6 +3,8 @@ import { createHttpApi } from "./http";
 import type { DashboardDataMode } from "@/types/domain";
 
 export function getDashboardDataMode(): DashboardDataMode {
+  // The canonical deployed frontend cannot silently become a demo on missing live configuration.
+  if (process.env.VERCEL === "1") return "live";
   if (process.env.DASHBOARD_DATA_MODE === "live") return "live";
   return process.env.NODE_ENV === "development" &&
     process.env.DASHBOARD_DATA_MODE === "read-api-preview"

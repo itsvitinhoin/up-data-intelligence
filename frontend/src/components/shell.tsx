@@ -45,7 +45,6 @@ import {
 } from "@/components/ui/dialog";
 import { Choice, Empty } from "@/components/ui-kit";
 import { Login, OperationPicker } from "@/features/auth";
-import { LiveBrands } from "@/features/live-brands";
 import { AdminShell, CompaniesPage } from "@/features/admin";
 function Redirect({ to }: { to: string }) {
   const router = useRouter();
@@ -67,12 +66,6 @@ export function Access({ children }: { children: React.ReactNode }) {
         {sessionError && <p role="alert">{sessionError}</p>}
       </>
     );
-  if (dataMode === "live" && pathname.startsWith("/admin"))
-    return session.role === "ADMIN" ? (
-      <LiveBrands />
-    ) : (
-      <main className="workspace-screen">Acesso restrito</main>
-    );
   if (pathname === "/" || pathname === "/login") {
     if (session.role === "ADMIN") return <Redirect to="/admin" />;
     if (!scope) return <OperationPicker />;
@@ -89,7 +82,19 @@ export function Access({ children }: { children: React.ReactNode }) {
       );
     return (
       <AdminShell>
-        {pathname === "/admin" ? <CompaniesPage /> : children}
+        {pathname === "/admin" ? (
+          <CompaniesPage />
+        ) : dataMode === "live" ? (
+          <section className="card glass">
+            <h1>Indisponível</h1>
+            <p>
+              Gestão de usuários ainda não conectada. Permissões reais são
+              administradas pelo backend.
+            </p>
+          </section>
+        ) : (
+          children
+        )}
       </AdminShell>
     );
   }

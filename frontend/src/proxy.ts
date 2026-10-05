@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 export function proxy(request: NextRequest) {
-  if (process.env.DASHBOARD_DATA_MODE !== "live") return NextResponse.next();
+  if (process.env.VERCEL !== "1" && process.env.DASHBOARD_DATA_MODE !== "live")
+    return NextResponse.next();
   const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
   const csp = [
     "default-src 'self'",

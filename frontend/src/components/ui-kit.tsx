@@ -69,11 +69,13 @@ export function PageHead({
 }
 export function Choice({
   label,
+  disabled = false,
   value,
   onChange,
   options,
 }: {
   label: string;
+  disabled?: boolean;
   value: string;
   onChange: (v: string) => void;
   options: { value: string; label: string }[];
@@ -81,7 +83,7 @@ export function Choice({
   return (
     <div className="field">
       <span className="field-label">{label}</span>
-      <Select value={value} onValueChange={onChange}>
+      <Select value={value} onValueChange={onChange} disabled={disabled}>
         <SelectTrigger aria-label={label} className="select">
           <SelectValue />
         </SelectTrigger>

@@ -1,6 +1,7 @@
 "use client";
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import { Building2, ShoppingBag, ShieldCheck, ArrowRight } from "lucide-react";
 import { firstAccess, liveSignIn, resetPassword } from "@/services/auth/client";
 import { useWorkspace } from "./providers";
 import { Card } from "@/components/ui/card";
@@ -51,9 +52,36 @@ export function LiveLogin() {
   return (
     <main id="main" className="auth-screen">
       <div className="auth-intro">
-        <div className="brand-name">UP Data Intelligence</div>
-        <h1>Inteligência para sua marca.</h1>
-        <p className="lede">Acesse seus dados em um ambiente seguro.</p>
+        <div className="brand">
+          <div className="brand-mark">UP</div>
+          <div>
+            <div className="brand-name">UP Data Intelligence</div>
+            <div className="brand-sub">INTELIGÊNCIA QUE CONECTA</div>
+          </div>
+        </div>
+        <span className="eyebrow">Moda. Dados. Decisões.</span>
+        <h1>
+          Uma visão completa.
+          <br />
+          Um novo nível de <em className="hl hl--up">inteligência.</em>
+        </h1>
+        <p className="lede">
+          A inteligência da sua marca, em um ambiente operado pela UP.
+        </p>
+        <div className="auth-proof">
+          <span>
+            <Building2 />
+            Sua marca
+          </span>
+          <span>
+            <ShoppingBag />
+            B2B & B2C
+          </span>
+          <span>
+            <ShieldCheck />
+            Acesso vinculado
+          </span>
+        </div>
       </div>
       <Card className="glass card login-card">
         <span className="eyebrow">Seu acesso</span>
@@ -64,7 +92,10 @@ export function LiveLogin() {
               ? "Esqueci minha senha"
               : "Bem-vindo à UP."}
         </h2>
-        <form onSubmit={submit}>
+        <p className="muted">
+          Ambiente DEV interno. Entre com seu acesso autorizado.
+        </p>
+        <form className="form-grid" onSubmit={submit}>
           <label htmlFor="live-email">E-mail</label>
           <Input
             id="live-email"
@@ -96,6 +127,7 @@ export function LiveLogin() {
                 : mode === "reset"
                   ? "Enviar instruções"
                   : "Entrar"}
+            <ArrowRight size={16} />
           </Button>
         </form>
         {message && <p role="status">{message}</p>}

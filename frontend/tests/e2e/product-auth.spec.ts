@@ -34,7 +34,10 @@ const idToken = [
   Buffer.from(JSON.stringify(claims)).toString("base64url"),
   "offline-signature",
 ].join(".");
-async function mockedAuth(page: Page) {
+async function mockedAuth(
+  page: Page,
+  role: "CLIENT_USER" | "ADMIN_UP" = "CLIENT_USER",
+) {
   await page.route("**/api/auth/config", (r) =>
     r.fulfill({
       json: {
@@ -81,7 +84,7 @@ async function mockedAuth(page: Page) {
   );
   await page.route("**/api/session", (r) =>
     r.request().headers()["cookie"]?.includes("__Host-up_session=offline")
-      ? r.fulfill({ json: catalog })
+      ? r.fulfill({ json: { data: { ...catalog.data, role } } })
       : r.fulfill({
           status: 401,
           json: { error: { code: "unauthenticated" } },
@@ -117,6 +120,71 @@ async function mockedAuth(page: Page) {
     });
   });
 }
+test("live admin preserves the approved shell, search and brand cards using only server catalog", async ({
+  page,
+}) => {
+  await mockedAuth(page, "ADMIN_UP");
+  await page.goto("/");
+  await expect(
+    page.getByRole("heading", { name: /Uma visão completa/ }),
+  ).toBeVisible();
+  await page.getByLabel("E-mail", { exact: true }).fill(claims.email);
+  await page
+    .getByLabel("Senha", { exact: true })
+    .fill("OfflineSyntheticPassword!2026");
+  await page
+    .getByRole("button", { name: "Entrar", exact: true })
+    .first()
+    .click();
+  await expect(page).toHaveURL("/admin");
+  await expect(
+    page.getByRole("navigation", { name: "Administração UP", exact: true }),
+  ).toBeVisible();
+  await expect(page.locator(".sidebar .brand-name")).toHaveText("UP Admin");
+  await expect(
+    page.getByRole("heading", { name: "Controle de marcas." }),
+  ).toBeVisible();
+  await expect(
+    page.getByLabel("Pesquisar marca", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.locator(".workspace-grid.brand-integrations > .card"),
+  ).toHaveCount(1);
+  await expect(page.getByText("Lume Studio", { exact: true })).toHaveCount(0);
+  await expect(
+    page.getByText("Ambiente demonstrativo", { exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByText("DEV · Acesso interno", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole("combobox", { name: /ERP de/ })).toBeDisabled();
+  await page.getByRole("button", { name: /Ver integração de/ }).click();
+  await expect(page.getByRole("dialog")).toContainText(
+    "Edição de credenciais e integrações ainda indisponível",
+  );
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Criar marca", exact: true }).click();
+  await expect(
+    page.getByRole("dialog").getByLabel("Nome da marca"),
+  ).toBeVisible();
+  await expect(
+    page
+      .getByRole("dialog")
+      .getByText("Cadastro seguro da marca.", { exact: false }),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: /Ver Dashboard de/ }).click();
+  await expect(page).toHaveURL("/b2b");
+  await expect(
+    page.getByRole("navigation", { name: "Principal", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "ERP", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Campanhas", exact: true }),
+  ).toBeVisible();
+});
 test("live login → server catalog → unavailable real data → logout, with no persisted browser token", async ({
   page,
 }) => {

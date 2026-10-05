@@ -1,4 +1,4 @@
-import type { Session, Tenant } from "@/types/domain";
+import type { Company, Session, Tenant } from "@/types/domain";
 export type SessionCatalog = {
   data: {
     role: "ADMIN_UP" | "CLIENT_USER";
@@ -81,7 +81,16 @@ export function catalogView(catalog: SessionCatalog): {
       ),
     ].map((b) => ({
       id: b,
-      name: b.replace(/^brand-/, "").replaceAll("-", " "),
+      // Display-only identifier formatting; no business identity is inferred or replaced.
+      name: b
+        .replace(/^brand-/, "")
+        .split("-")
+        .map((word) =>
+          word.length <= 2
+            ? word.toUpperCase()
+            : word[0].toUpperCase() + word.slice(1),
+        )
+        .join(" "),
       operations: data.workspaces
         .filter((w) => w.tenant_id === t && w.brand_id === b)
         .map((w) => ({ id: w.workspace_operation_id, type: w.operation })),
@@ -97,4 +106,25 @@ export function catalogView(catalog: SessionCatalog): {
     },
     tenants,
   };
+}
+
+/** Catalog-backed brand cards. Missing admin fields are unavailable, never demo fixtures. */
+export function catalogCompanies(tenants: Tenant[]): Company[] {
+  return tenants.flatMap((t) =>
+    t.brands.map((b) => ({
+      tenant_id: t.id,
+      id: b.id,
+      name: b.name,
+      cnpj: "",
+      logo: "",
+      segment: "",
+      platform: null,
+      erp: null,
+      createdAt: null,
+      operation:
+        new Set(b.operations.map((o) => o.type)).size > 1
+          ? "Ambos"
+          : b.operations[0].type,
+    })),
+  );
 }

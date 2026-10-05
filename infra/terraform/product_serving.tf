@@ -70,7 +70,7 @@ resource "google_identity_platform_config" "product" {
   provider           = google.product_identity
   count              = local.product_enabled ? 1 : 0
   project            = var.project_id
-  authorized_domains = concat(["${var.project_id}.firebaseapp.com"], var.product_web_image == null ? [] : [replace(google_cloud_run_v2_service.product_web[0].uri, "https://", "")])
+  authorized_domains = concat(["${var.project_id}.firebaseapp.com"], var.product_web_image == null ? [] : [replace(google_cloud_run_v2_service.product_web[0].uri, "https://", "")], var.product_vercel_enabled ? ["up-data-intelligence.vercel.app"] : [], var.product_vercel_preview_enabled ? var.product_vercel_preview_domains : [])
   sign_in {
     allow_duplicate_emails = false
     email {

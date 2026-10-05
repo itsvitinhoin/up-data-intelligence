@@ -1,5 +1,5 @@
 /** Server-owned service identity, user session and workspace resolution. */
-import { GoogleAuth } from "google-auth-library";
+import { serviceAuthorization } from "./service-identity.server";
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { parseCatalog } from "./catalog";
 import { inclusiveToExclusive } from "@/lib/period";
@@ -103,12 +103,10 @@ export const privateCall: PrivateCaller = async (
     url.password
   )
     throw new Error("invalid_private_service");
-  const auth = new GoogleAuth();
-  const client = await auth.getIdTokenClient(url.origin);
-  const identityHeaders = await client.getRequestHeaders(url.origin);
+  const authorization = await serviceAuthorization(url.origin);
   // A fresh header set overwrites browser attempts to supply any service/user identity.
   const headers = new Headers({
-    Authorization: identityHeaders.get("authorization") ?? "",
+    Authorization: authorization,
     "X-UP-Session": cookie(request, "__Host-up_session"),
     "Content-Type": "application/json",
   });
