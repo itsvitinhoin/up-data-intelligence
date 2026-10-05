@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from scripts.terraform_drift_guard import changed_paths, has_unknown, review_drift
+from src.analytics.schema import SCHEMAS as ANALYTICS_TABLES
 from src.bigquery.catalog import TABLES
 from src.connectors.upzero.catalog_schema import TABLE_NAMES
 
@@ -207,7 +208,10 @@ def check(plan: dict[str, Any], image: str) -> dict[str, Any]:
             ):
                 raise ValueError("UNAPPROVED_SCHEMA")
             if actions == ["create"]:
-                if name not in NEW_TABLES or after.get("dataset_id") != TABLES[name].dataset:
+                if (
+                    name not in NEW_TABLES
+                    or after.get("dataset_id") != (TABLES | ANALYTICS_TABLES)[name].dataset
+                ):
                     raise ValueError("UNAPPROVED_TABLE")
             else:
                 if name not in META_UPDATES or changed_paths(
@@ -227,7 +231,7 @@ def check(plan: dict[str, Any], image: str) -> dict[str, Any]:
             name = after.get("table_id")
             if (name, after.get("member"), after.get("role")) not in permissions() or after.get(
                 "dataset_id"
-            ) != TABLES[name].dataset:
+            ) != (TABLES | ANALYTICS_TABLES)[name].dataset:
                 raise ValueError("UNAPPROVED_TABLE_IAM")
             iam.append({k: after[k] for k in ("dataset_id", "table_id", "role", "member")})
         elif kind == "google_cloud_run_v2_job" and actions == ["update"]:

@@ -213,3 +213,20 @@ def test_existing_production_federation_etag_only_is_not_access_change():
             bad["change"]["after"][mutation] = "unreviewed"
         with pytest.raises(ValueError, match="EXISTING_INFRASTRUCTURE_DRIFT"):
             check(dict(resource_drift=[bad]), IMAGE)
+
+
+@pytest.mark.parametrize(
+    "table", ["analytics_publications", "analytics_store_daily", "analytics_funnel_daily"]
+)
+def test_admin_analytics_read_grants_resolve_the_analytics_catalog(table):
+    a = dict(
+        project=PROJECT,
+        table_id=table,
+        dataset_id="up_analytics",
+        role="roles/bigquery.dataViewer",
+        member=member("up-product-admin-dev"),
+    )
+    assert check(plan("google_bigquery_table_iam_member", None, a), IMAGE)["create"] == 1
+    a["dataset_id"] = "up_core"
+    with pytest.raises(ValueError, match="UNAPPROVED_TABLE_IAM"):
+        check(plan("google_bigquery_table_iam_member", None, a), IMAGE)
