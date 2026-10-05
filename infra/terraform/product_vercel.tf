@@ -8,6 +8,15 @@ variable "product_vercel_preview_enabled" {
   type        = bool
   default     = false
 }
+variable "product_vercel_preview_provider_id" {
+  description = "Explicit temporary preview provider identity; deleted IAM provider IDs cannot be immediately reused. Trust claims remain restricted to this project's preview environment."
+  type        = string
+  default     = "up-product-vercel-preview"
+  validation {
+    condition     = can(regex("^up-product-vercel-preview(-[0-9]+-[0-9]+)?$", var.product_vercel_preview_provider_id)) && length(var.product_vercel_preview_provider_id) <= 32
+    error_message = "Use the canonical preview ID or a bounded change-number suffix."
+  }
+}
 variable "product_vercel_preview_domains" {
   description = "Exact reviewed preview hosts for Firebase Auth; no wildcard."
   type        = list(string)
@@ -50,7 +59,7 @@ resource "google_iam_workload_identity_pool" "product_vercel" {
 resource "google_iam_workload_identity_pool_provider" "product_vercel" {
   for_each                           = local.vercel_environments
   workload_identity_pool_id          = google_iam_workload_identity_pool.product_vercel[0].workload_identity_pool_id
-  workload_identity_pool_provider_id = "up-product-vercel-${each.key}"
+  workload_identity_pool_provider_id = each.key == "preview" ? var.product_vercel_preview_provider_id : "up-product-vercel-production"
   display_name                       = "UP Vercel ${each.key}"
   attribute_mapping = {
     "google.subject"        = "assertion.sub"
