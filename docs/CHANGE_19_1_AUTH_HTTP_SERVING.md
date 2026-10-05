@@ -4,9 +4,13 @@
 
 Implementation and offline acceptance are complete on `change-19-1-auth-http-serving`,
 based on `9b6e9c5eddffafcc88c1180023fb8801c75c1cec`.
-Private DEV services are deployed and negative authentication acceptance passed.
-This document is not full live product acceptance: the authorized MX access gates and
-public web stage remain blocked by missing canonical ownership. No PROD resources are authorized.
+**AUTHENTICATED DEV PRODUCT READY — REAL MX DASHBOARD LIVE**
+
+Private APIs, canonical MX authorization, permanent verified ADMIN_UP provisioning and the
+public HTTPS web are deployed. Negative/positive private acceptance and deployed browser
+acceptance passed. The DEV product is available at
+https://up-web-oynuekcxwa-rj.a.run.app. This is DEV acceptance, not production promotion.
+No PROD resources are authorized.
 No ingestion, Analytics, Intelligence, recurring coverage, Installation or Data Health
 business semantics are changed.
 
@@ -15,12 +19,12 @@ at `2026-10-04T21:11:30.241700Z`. MX Registry remains ACTIVE, sync enabled,
 revision 11, facts complete, history incomplete. All six data schedulers remain ENABLED;
 the three Foundation schedulers remain PAUSED.
 
-**Required ownership input:** both `workspace_store_bindings` and `onboarding_operations`
-are empty. MX has no canonical tenant/workspace binding. The owner tenant must be supplied
-and its initial canonical administrative binding reviewed before a product grant for MX.
-Do not substitute `demo-up`, infer ownership from a login, or grant a synthetic tenant real
-MX data. The initial approved operator must also be a verified Firebase identity before
-the access CLI grants ADMIN_UP. Clear addresses are omitted here.
+**Approved canonical ownership:** the user explicitly authorized legacy metadata adoption:
+tenant `mx-fashion`, brand `brand-mx-fashion`, workspace `mx-fashion-b2b`, technical store
+`mx-fashion`, operation B2B, status ACTIVE. Grupo UP is the platform operator, not the customer
+tenant. `demo-up` stays demo-only. No MX B2C binding is created.
+The initial approved operator must be a verified Firebase identity before the access CLI
+grants ADMIN_UP for tenant mx-fashion. Clear addresses are omitted here.
 
 ## Service boundaries
 
@@ -192,17 +196,17 @@ is pinned to 1.14.5 to address its published advisory.
 
 ## Offline acceptance
 
-- Python full suite: 2163 passed (including 23 product-auth cases), 121.65s.
+- Python full suite: 2163 passed (including 23 product-auth cases), 126.33s.
 - Ruff check/format and mypy: passed (162 source files at this checkpoint).
-- Frontend: 250 tests / 22 files, 2.83s; lint, typecheck, format-check passed.
+- Frontend: 250 tests / 22 files, 2.84s; lint, typecheck, format-check passed.
 - Next production build: passed outside the restricted sandbox; the restricted Turbopack
   attempt stalled and was terminated, then the qualified repeat completed.
-- Authenticated offline browser: 2 passed, Chrome, 6.0s. It uses synthetic intercepted
+- Authenticated offline browser: 2 passed, Chrome, 6.5s. It uses synthetic intercepted
   Firebase/BFF responses over local HTTPS, proves first access, verification messaging,
   server catalog, secure HttpOnly cookie, no browser token persistence, unavailable real
   coverage and header search without demo substitution, POST logout and protected-route denial.
   No Firebase Auth IndexedDB database is created. Existing B2B/Installation preview E2E:
-  11 passed, 14.7s.
+  11 passed, 14.2s.
 - pip-audit of product-requirements.lock and the installed Python environment: no known vulnerabilities.
 - npm production audit: zero vulnerabilities. Full npm audit has five high entries in the
   existing dev-only ESLint -> fast-glob -> micromatch -> braces chain (one advisory surfaced
@@ -323,15 +327,140 @@ onboarding_operations and principal_access. All six intended data schedulers rem
 up-foundation-dev-sync, up-foundation-dev-reconcile and up-foundation-dev-quality remain PAUSED.
 No business/source API, secret value read, data mutation or scheduler alteration was needed.
 
-### Remaining gates
+### Canonical MX adoption and private positive acceptance
 
-The owner tenant for legacy MX is still required. No ownership was guessed and no synthetic
-grant was allowed to authorize real MX data. Thus positive MX catalog/Overview, live tenant/
-workspace/client-admin isolation, permanent operator provisioning, deployed session revocation
-and browser acceptance are not yet certified. Their offline tests passed; that is not a claim
-of live acceptance. Stage 2 has not been planned/applied; up-web remains absent. No PROD exists.
+One guarded, parameterized metadata transaction inserted exactly the approved B2B binding.
+Its canonical row key is digest([tenant_id,workspace_operation_id]):
+`75f64f5e5694c6dfeb3793fdb100b381f864024d37d1491e2a85c353deacd3c1`.
+created_at and updated_at use the same server timestamp. The post-read proved all logical
+fields and timestamp equality, exactly one MX binding and no B2C binding. No Registry,
+source connection, Meta binding, onboarding operation, Installation plan or publication
+was created/changed by the bootstrap.
 
-This change must not be titled authenticated product ready until all gates pass.
+The private helper's initial SQL used the reserved variable name AT. BigQuery returned
+DONE/invalidQuery before any mutation; a reconciliation read proved zero bindings. A corrected
+helper used adopted_at and its separately guarded attempt succeeded. This was a definite
+syntax failure, not an ambiguous write retry and not a runtime/business code change.
+
+Two disposable verified synthetic identities were granted scoped ADMIN_UP and CLIENT_USER
+through the existing CLI. Cloud Shell user ADC requires
+GOOGLE_CLOUD_QUOTA_PROJECT=up-data-intelligence-dev for Firebase Admin calls; this sets the
+quota project only. The initial grant attempt failed before writing; a read proved zero
+grants before the correctly configured CLI proceeded. No credential file or IAM expansion
+was needed. The permanent operator uses the same CLI after human email verification.
+
+Private live acceptance passed:
+
+| Check | Result |
+| --- | --- |
+| ADMIN_UP / CLIENT_USER catalog | 200; only tenant mx-fashion and workspace mx-fashion-b2b |
+| Wrong tenant / wrong workspace | 403 workspace_forbidden |
+| Browser technical store parameter | 403 technical_store_scope_forbidden |
+| CLIENT_USER attempting onboarding | 403 admin_up_required |
+| Invalid ADMIN payload | 400 invalid_onboarding_request before durable mutation |
+| Disabled grant | immediate 403 access_disabled_or_invalid |
+| Logout / previously issued session | cookie cleared; old session rejected with 401 |
+| Overview, Orders, Acquisition, Retention, Customers, Products | 200; exact canonical DashboardService parity |
+| Installation | READY; canonical parity |
+| Performance / Campaigns | 200; canonical IntelligenceDashboardService parity |
+| Period outside certified coverage | 400 |
+
+The audited Analytics snapshot was generation 5, policy hash
+`3098157d095a3bcb0c024dbc6263fa7e5eebdc099a2f72903ca82f7634b9c54c`,
+report_from 2026-09-01, report_to 2026-10-04 exclusive, as_of 2026-10-04T03:00:00Z.
+Requested revenue was decimal string 99033.96, fulfilled revenue 85384.51; history_complete
+remained false and facts_complete true. Intelligence surfaces used generation 3. These are
+observed audit values, not hardcoded product generations; final browser regression rechecks
+current publication metadata. Customer/order rows and identity values were not printed.
+
+### Stage 2 deployment and authenticated browser acceptance
+
+The reviewed saved plan contains exactly two creates (up-web and its public invoker binding)
+and one update (Identity Platform authorized_domains only). No existing data resource,
+Scheduler, Job, private-service IAM or secret changes. Saved binary SHA256:
+`9a84d710ec6b5423a53599194169f1ce7d08223a3a8be08d61175a1244c69ef8`.
+After the permanent operator gate passed, the saved binary hash and exact resource guard
+were revalidated. A fresh read-only Data Health check proved 16 rules and zero blocking
+failures; the exact six ENABLED data schedulers and three PAUSED Foundation schedulers were
+unchanged. The saved plan was applied once (exit 0). A fresh post-plan returned No changes
+(detailed exit 0). The public DEV URL is https://up-web-oynuekcxwa-rj.a.run.app.
+The private deployed-browser helper has traces/video/screenshots disabled, reads synthetic
+passwords from private /tmp files, and does not print credentials.
+
+The permanent approved operator initially did not exist in Firebase at the read-only precheck.
+A private interactive helper was prepared locally and in Cloud Shell: it validates the
+approved identity hash, accepts hidden password input, sends verification through Firebase,
+and stores/prints no password or ID token. Human first access created the identity and Firebase
+accepted the verification email request.
+The initial delivery delay was diagnosed read-only: one enabled, unverified identity and default
+Firebase email delivery, with no custom SMTP. A hidden-input resend helper was prepared, without
+credential storage. The human subsequently verified the email; an independent lookup confirmed
+emailVerified=true and disabled=false. The existing principal-access CLI then granted ADMIN_UP
+only for tenant mx-fashion. Post-read proved exactly one ACTIVE tenant-scoped operator grant
+with workspace_operation_id=NULL. Only the identity hash is persisted. No verification flag
+was forged and no password/token was logged. No PROD exists.
+
+The initial HTTPS acceptance reached all eight data surfaces and passed isolation/CSRF checks,
+then stopped on an overly broad private helper assertion rejecting any Firebase IndexedDB.
+A separate storage inspection proved only firebase-heartbeat-database/firebase-heartbeat-store
+with zero token-bearing records, no auth token in local/session storage and no JS-readable
+session cookie. The Firebase SDK maintains this non-authentication heartbeat store
+([SDK source](https://github.com/firebase/firebase-js-sdk/blob/main/packages/app/src/indexeddb.ts)).
+The helper was refined to reject Firebase Auth/local-storage databases and tokens; deployed
+product code, cookie protections and inMemoryPersistence were unchanged. Repository offline
+E2E already distinguishes authentication databases. Full HTTPS acceptance was repeated after
+that evidence and passed (exit 0); no browser-token safety condition was bypassed.
+
+| Deployed HTTPS check | Result |
+| --- | --- |
+| Real ADMIN_UP and CLIENT_USER login | Server-owned catalog; verified email required |
+| Browser session | Secure, HttpOnly, SameSite=Lax, Path=/, 12 hours |
+| Overview / Orders / Acquisition / Retention / Customers / Products | Real generation 5; Overview data/metadata exactly match canonical service |
+| Performance / Campaigns | Real Intelligence generation 3 |
+| Installation | READY / COMPLETE / 43 of 43 required units |
+| Wrong tenant / workspace | 403 |
+| Browser technical store parameter | 400 |
+| CLIENT_USER admin write | 403 |
+| Missing CSRF / changed origin | 403 |
+| Invalid ADMIN payload | 400 before durable mutation |
+| Outside certified window | 400; no invented zeros |
+| Browser auth storage | No tokens in localStorage/sessionStorage/IndexedDB; HttpOnly cookie unreadable |
+| Logout | Session endpoint and protected reads return 401 |
+
+The browser used actual Firebase email/password authentication, public Cloud Run HTTPS,
+same-origin BFF, service identity and the private APIs. No intercepted live response, demo
+fallback, ignored TLS error, trace, video, screenshot credential or customer payload was
+needed. Assertions use the current publication observed at acceptance, not a fixed generation
+in application code. The available certified window remained 2026-09-01 through
+2026-10-04 exclusive; requested/fulfilled monetary strings stayed distinct and history_complete
+stayed false. Lifetime-sensitive unavailable metrics remain protected by canonical nullability.
+
+Both disposable test identities were revoked through the principal-access CLI, then deleted
+from Firebase with read-only reconciliation proving absence. Their private credential files
+were removed. Their hashed grants remain DISABLED for audit; only the permanent approved
+operator has ACTIVE ADMIN_UP access. No second live store or onboarding operation was created.
+A final read-only audit reconfirmed private API IAM/anonymous 403, immutable image digests,
+canonical binding, unchanged MX Registry and zero blocking Data Health failures.
+
+Final scheduler inventory:
+
+| Scheduler | State |
+| --- | --- |
+| up-upzero-dispatch | ENABLED |
+| up-meta-dispatch | ENABLED |
+| up-analytics-dispatch | ENABLED |
+| up-intelligence-dispatch | ENABLED |
+| up-installation-dispatch | ENABLED |
+| up-data-health-dispatch | ENABLED |
+| up-foundation-dev-sync | PAUSED |
+| up-foundation-dev-reconcile | PAUSED |
+| up-foundation-dev-quality | PAUSED |
+
+No source API, source secret value, business DML, Registry/source/Meta mutation, Installation
+replan, publication modification or data scheduler change was performed in #19.1. Product
+authentication and the explicitly approved legacy ownership metadata are the only added
+application state. Product IAM remains within the reviewed least-privilege Stage 1 grants.
+The final Stage 2 post-plan was clean; no infrastructure outcome remains ambiguous.
 
 ## Remaining production promotion
 
