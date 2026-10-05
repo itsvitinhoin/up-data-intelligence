@@ -133,3 +133,64 @@ preview host must be audited separately before applying any access expansion.
 
 Deployed preview/browser parity and private screenshot comparison remain pending. Production
 promotion is not authorized by these offline or direct-read results.
+
+## Immutable build and saved preview plan — awaiting access approval
+
+Implementation commit: `8e684c1b329ffc7450636745bb068e8668222759`.
+Build allowlist correction: `3a913ff37f04510105c50cbe8b228776c2270e1d`.
+Temporary preview provider configuration: `0f7324665a52a21f85f8c5dedbcd1b426f563b8f`.
+These commits are pushed only to `change-19-3-dashboard-restoration`, without PR or merge.
+
+The source archive for the Python image contains only the committed product Dockerfile,
+hash-pinned product requirements, runtime source and SQL. Two unsuccessful build attempts
+failed during source extraction: the archive had been named `.tgz` without gzip encoding.
+The corrected archive uses `git archive --format=tar.gz`, passes `gzip -t`, and has a recorded
+manifest. The Docker/Cloud Build allowlists also explicitly include the pinned product build
+inputs. A prior submission to the default staging bucket was rejected before building;
+the accepted build uses the existing dedicated build-source bucket and build service account.
+No IAM expansion was used to make the build succeed.
+
+Successful build: `7dfc898c-90cf-4493-813d-932c9f6582d1`, source commit
+`3a913ff37f04510105c50cbe8b228776c2270e1d`.
+Image: `southamerica-east1-docker.pkg.dev/up-data-intelligence-dev/up-data-intelligence/product-api@sha256:28042ffc9c48824b9684c913302f84e31d91b2ad43472ad26ef54343e39f63ee`.
+Cloud Build and Artifact Registry digests match. The image's network-disabled Gunicorn
+version smoke passed. No runtime deployment has occurred at this checkpoint.
+
+Final frontend preview: `dpl_GQxdUxgvTPoUH4vhBs1xsGZmhXPn`,
+`https://up-data-intelligence-f6dwylmop-victorcheunin-6445s-projects.vercel.app`.
+The actual Vercel `npm run build` with Next 16.3.7 Turbopack passed and the deployment is READY.
+Only this branch's preview variables were configured. Production remains
+`dpl_EA5gpJfDQuyLS7LqfpuWUw8Km9e5`; no promotion or production environment change occurred.
+The preview is not yet authenticated/data/functionally accepted.
+
+The former preview provider is in DELETED state. A separately named temporary provider,
+`up-product-vercel-preview-19-3`, avoids reusing the deleted identity. Its trust conditions
+remain exactly the approved Vercel team, project, preview environment, subject, issuer and
+audience. Vercel's claims do not provide a branch restriction: the IAM trust covers this
+project's previews. Branch-scoped application variables do not narrow that IAM trust.
+The service account still has only private Read/Admin invocation permissions; verified user
+session and canonical workspace grants remain mandatory. Remove temporary preview trust
+during a separately approved production promotion.
+
+Saved plan: `/tmp/restore19-3/restoration.plan` in Cloud Shell.
+SHA256: `abab6dea2350247f4f8ba11f8a5de48ac1cc0d426378e5156088442ab094b470`.
+The strict JSON guard proves exactly three creates and two updates:
+
+| Resource | Approved candidate delta |
+|---|---|
+| Read API service | Image only; all other attributes preserved |
+| Read service `up_core.order_items` grant | Table-scoped `roles/bigquery.dataViewer` |
+| Preview WIF provider | Exact project/preview identity above |
+| Preview federation member | `roles/iam.workloadIdentityUser` on dedicated invoker SA |
+| Firebase Identity Platform | Add only the exact final preview hostname |
+
+No deletes/replacements, Admin/web changes, business table changes, source credentials,
+data Jobs or schedulers are included. The plan has not been applied. Action-time browser
+confirmation is pending for this access expansion and temporary synthetic CLIENT_USER
+acceptance access limited to MX B2B. Final browser parity, exports, screenshots, privacy,
+Health and scheduler inventory remain mandatory after deployment; no success claim is made.
+
+Additional completed checks: frontend 276 unit tests across 25 files, lint, typecheck and
+Prettier; Python Ruff and formatting (299 files), mypy (164 source files); Terraform fmt and
+validate after the temporary provider configuration; `git diff --check`. No test failure is
+hidden by the successful remote frontend or image builds.
