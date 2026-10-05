@@ -4,6 +4,9 @@
 !.dockerignore
 !requirements.lock
 !cloudbuild.yaml
+!product.Dockerfile
+!product-requirements.lock
+!cloudbuild.product-api.yaml
 !src/
 !src/**/
 !src/**/*.py
