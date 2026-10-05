@@ -194,3 +194,58 @@ Additional completed checks: frontend 276 unit tests across 25 files, lint, type
 Prettier; Python Ruff and formatting (299 files), mypy (164 source files); Terraform fmt and
 validate after the temporary provider configuration; `git diff --check`. No test failure is
 hidden by the successful remote frontend or image builds.
+
+## Approved preview deployment and browser review — 2026-10-05
+
+The user explicitly approved the permissions required to finish this preview. The exact
+saved plan above was hash-verified and applied once: exit 0, three creates, two updates,
+zero destroys. The fresh post-apply plan returned `No changes`. The Read API is READY
+with the exact immutable digest recorded above. Admin, Cloud Run web, business tables,
+Registry, source configuration and data Jobs were preserved. Scheduler inventory remained
+six intended data schedulers ENABLED and three Foundation schedulers PAUSED.
+
+The original `f6dwylmop` preview is superseded. Its build succeeded, but deployment
+inspection showed that the ten branch-scoped application variables were absent at runtime;
+`/api/auth/config` returned 503 before credential verification. A new preview of the same
+frontend source supplies the approved routing/public Firebase/federation configuration
+explicitly to build and runtime. No source change, production variable change or production
+promotion was needed.
+
+Working preview: `dpl_Aeu6sbx8vvJhby2ebPQtkmEtJzZi`, READY,
+`https://up-data-intelligence-p484pm1uv-victorcheunin-6445s-projects.vercel.app`.
+The remote Next 16.3.7 Turbopack production build passed. Firebase authorized_domains in
+the exact saved plan added the earlier hostname; email/password session exchange was
+successfully verified on the new hostname. No additional OAuth/redirect-domain acceptance
+is claimed. Production remains `dpl_EA5gpJfDQuyLS7LqfpuWUw8Km9e5`.
+
+Browser acceptance used a disposable verified synthetic CLIENT_USER granted only canonical
+MX B2B access. Login, session catalog, workspace selection and real source rendering passed.
+The original Overview, Orders, Acquisition, Retention, Customers, Products, Geography,
+Performance and Meta Ads surfaces loaded. Order and product drawers, customer profile
+tabs and campaign participation tabs were exercised. Products showed the full 305-record
+collection, rather than stopping at the first API page. Uncertified stock/variant and
+lifetime-dependent fields remained unavailable. Empty campaign participation was displayed
+without invented rows. Overview and campaign detail were inspected at 390 × 844; the
+temporary viewport override was reset.
+
+Rendered Overview requested `99033.96` and fulfilled `85384.51` matched the canonical
+read-only result: Analytics generation 6, 22 orders, report_from `2026-09-01`, report_to
+`2026-10-05` exclusive, as_of `2026-10-05T03:00:00Z`, history_complete false and
+facts_complete true. Current durable Data Health evidence still contained 16 rules and
+zero findings, checked `2026-10-05T07:00:10.073507Z`. The final metadata read exited 0.
+No UP Zero/Meta source API, Secret Manager value read or business mutation was performed.
+
+Logout returned the preview to its entry screen. The canonical principal-access CLI revoked
+the synthetic grant, and its explicitly disposable Firebase user was deleted; cleanup exited
+0. No permanent operator account or production session was changed. The working preview
+entry screen was left open for the user's visual review.
+
+Acceptance limits remain explicit: CSV export options for the current six rows and all 305
+rows were visible, but the browser download-event tool timed out and no downloaded artifact
+was captured. Deployed PDF/export artifact verification is still pending; existing offline
+portrait PDF/export checks remain the available evidence. Automated access through a Vercel
+protection bypass was rejected by automatic approval review and was not executed; the live
+checks used normal authenticated browser access. Cookie/storage security checks were covered
+by the existing offline authentication E2E, not independently re-inspected on this deployment.
+These results establish a usable real-data preview, not completion of all production-promotion
+acceptance gates. No frontend production promotion, PR or merge was performed.
