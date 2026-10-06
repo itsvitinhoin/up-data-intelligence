@@ -115,7 +115,10 @@ resource "google_cloud_run_v2_service" "completion_preview_api" {
       image   = var.dashboard_completion_preview_image
       command = ["gunicorn"]
       args    = ["--bind", "0.0.0.0:8080", "--workers", "1", "--threads", "8", "--timeout", "120", "--access-logfile", "/dev/null", "src.product_auth.runtime:${each.key}_app()"]
-      ports { container_port = 8080 }
+      ports {
+        container_port = 8080
+        name           = "http1"
+      }
       resources { limits = { cpu = "1", memory = "1Gi" } }
       dynamic "env" {
         for_each = merge({
