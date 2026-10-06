@@ -50,13 +50,21 @@ class IntegrationReader:
             return {"data": [], "metadata": {"as_of": now(), "basis": "operational_metadata"}}
         rows = self.query(
             "admin_brand_summaries",
-            f"""SELECT r.store_id,r.status,r.sync_enabled,r.created_at,
- r.facts_coverage_from,r.facts_coverage_to,
- ARRAY(SELECT AS STRUCT c.source_system,c.status,c.secret_resource_name IS NOT NULL credential_configured
- FROM `{self.project}.up_core.source_connections` c WHERE c.store_id=r.store_id ORDER BY c.source_system,c.connection_id) sources
- FROM `{self.project}.up_ops.store_runtime_config` r
- WHERE r.store_id IN (SELECT JSON_VALUE(v) FROM UNNEST(JSON_QUERY_ARRAY(PARSE_JSON(@stores))) v)
- ORDER BY r.store_id LIMIT 1001""",
+            f"""WITH scoped_registry AS (
+ SELECT store_id,status,sync_enabled,created_at,facts_coverage_from,facts_coverage_to
+ FROM `{self.project}.up_ops.store_runtime_config`
+ WHERE store_id IN (SELECT JSON_VALUE(v) FROM UNNEST(JSON_QUERY_ARRAY(PARSE_JSON(@stores))) v)
+), source_summary AS (
+ SELECT c.store_id,ARRAY_AGG(STRUCT(c.source_system,c.status,
+ c.secret_resource_name IS NOT NULL AS credential_configured)
+ ORDER BY c.source_system,c.connection_id) AS sources
+ FROM `{self.project}.up_core.source_connections` c
+ WHERE c.store_id IN (SELECT store_id FROM scoped_registry)
+ GROUP BY c.store_id
+)
+SELECT r.*,IFNULL(s.sources,[]) AS sources FROM scoped_registry r
+LEFT JOIN source_summary s ON s.store_id=r.store_id
+ORDER BY r.store_id LIMIT 1001""",
             {"stores": ("STRING", json.dumps(stores))},
         )
         if (

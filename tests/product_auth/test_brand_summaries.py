@@ -56,6 +56,32 @@ def test_summary_single_bounded_query_safe_projection():
     assert headers["Cache-Control"] == "private, no-store"
 
 
+def test_summary_aggregates_sources_before_registry_join():
+    repo, reader = Repository(), Reader()
+    access = Sessions(Verifier(), repo).authenticate("verified-cookie")
+    IntegrationReader("test-project", reader).summary(access.admin(), access.workspaces)
+    sql = " ".join(reader.calls[0].sql.split())
+    assert "ARRAY_AGG(STRUCT(" in sql
+    assert "GROUP BY c.store_id" in sql
+    assert "LEFT JOIN source_summary s ON s.store_id=r.store_id" in sql
+    assert "WHERE c.store_id IN (SELECT store_id FROM scoped_registry)" in sql
+    assert "ARRAY(SELECT" not in sql
+    assert "c.store_id=r.store_id" not in sql
+    assert "@stores" in sql and "technical-a" not in sql
+    # Preserve duplicated source rows so the existing ambiguity guard can reject them.
+    assert "DISTINCT" not in sql
+
+
+def test_summary_store_without_source_rows_remains_visible():
+    repo, reader = Repository(), Reader()
+    reader.rows[0]["sources"] = []
+    access = Sessions(Verifier(), repo).authenticate("verified-cookie")
+    result = IntegrationReader("test-project", reader).summary(access.admin(), access.workspaces)
+    assert len(result["data"]) == 1
+    assert result["data"][0]["sources"] == []
+    assert result["data"][0]["active_connections"] == 0
+
+
 @pytest.mark.parametrize(
     "role,cookie,query,expected",
     [
