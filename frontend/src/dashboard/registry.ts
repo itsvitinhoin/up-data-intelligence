@@ -18,6 +18,11 @@ export type RegisteredMetric = {
   format: Metric["format"];
 };
 export const MetricRegistry: Readonly<Record<string, RegisteredMetric>> = {
+  purchase_frequency_observed: {
+    id: "purchase_frequency_observed",
+    label: "Frequência de compra observada",
+    format: "decimal",
+  },
   meta_impressions: {
     id: "meta_impressions",
     label: "Impressões Meta",
@@ -538,6 +543,15 @@ export const managerPages: readonly ManagerPage[] = [
     title: "Visão Geral",
     group: "Performance",
     metricIds: [
+      "revenue_captured",
+      "orders_generated",
+      "orders_paid",
+      "roas_requested",
+      "meta_impressions",
+      "meta_clicks",
+      "average_ticket",
+      "purchase_frequency_observed",
+      "repurchase_rate",
       "revenue_paid",
       "roas_paid",
       "total_media_spend",

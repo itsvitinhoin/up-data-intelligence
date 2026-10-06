@@ -377,3 +377,57 @@ def test_authorization_queries_are_bounded_and_parameterized():
     assert "LIMIT 1001" in reader.queries[1].sql
     with pytest.raises(ValueError):
         BigQueryAccess(reader, "unsafe`project")
+
+
+def test_one_statement_access_snapshot_is_fresh_and_keeps_all_isolation_guards():
+    from copy import deepcopy
+
+    from src.product_auth.repository import BigQueryAccess
+
+    fixture = Repository()
+
+    class Reader:
+        def __init__(self):
+            self.queries = []
+
+        def query(self, query, **metadata):
+            self.queries.append(query)
+            return [{"grants": deepcopy(fixture.rows), "bindings": deepcopy(fixture.workspaces)}]
+
+    reader = Reader()
+    repo = BigQueryAccess(reader, "up-data-intelligence-dev")
+    access = resolve(fixture.identity, repo)
+    assert len(reader.queries) == 1
+    query = reader.queries[0]
+    assert query.name == "access_snapshot"
+    assert query.parameters == {"identity": ("STRING", fixture.identity.identity_hash)}
+    assert fixture.identity.identity_hash not in query.sql
+    assert "LIMIT 101" in query.sql and "LIMIT 1001" in query.sql
+    assert "tenant_id IN (SELECT tenant_id FROM grants)" in query.sql
+    with pytest.raises(ReadError, match="workspace_forbidden"):
+        access.binding("other-tenant", "workspace-a", "B2B")
+    with pytest.raises(ReadError, match="workspace_forbidden"):
+        access.binding("tenant-a", "other-workspace", "B2B")
+    fixture.rows[0]["status"] = "DISABLED"
+    with pytest.raises(ReadError, match="access_disabled_or_invalid"):
+        resolve(fixture.identity, repo)
+    assert len(reader.queries) == 2  # No authorization cache, even on the same object.
+    fixture.rows[0]["status"] = "ACTIVE"
+    fixture.workspaces[0]["tenant_id"] = "other-tenant"
+    with pytest.raises(ReadError, match="workspace_binding_invalid"):
+        resolve(fixture.identity, repo)
+    assert len(reader.queries) == 3
+
+
+@pytest.mark.parametrize(
+    "rows", [[], [{"grants": None, "bindings": []}], [{"grants": [], "bindings": ["bad"]}]]
+)
+def test_invalid_access_snapshot_is_rejected(rows):
+    from src.product_auth.repository import BigQueryAccess
+
+    class Reader:
+        def query(self, query, **metadata):
+            return rows
+
+    with pytest.raises(ReadError, match="access_snapshot_invalid"):
+        BigQueryAccess(Reader(), "up-data-intelligence-dev").snapshot("synthetic-identity")

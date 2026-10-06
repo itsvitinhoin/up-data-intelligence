@@ -64,6 +64,42 @@ trusted tenant/workspace, complete publication identity, policy, period and SQL
 contract. Authorization and publication are freshly resolved for each request.
 Entity/PII projections cannot enter the cache. Replicas may miss independently.
 
+The protected authenticated Preview measured Overview BigQuery work at 1991 ms
+and 968 ms on a reused read, with BFF totals 3673 ms and 3052 ms respectively.
+These measurements do not meet the complete server response target. Fresh access
+and workspace evidence is therefore consolidated into one bounded parameterized
+statement, retaining every isolation/revocation guard and no authorization cache.
+Only the two pure aggregate Performance projections additionally use the bounded
+cache, keyed by both freshly verified Analytics and Intelligence publications.
+Detail/timeline/customer queries and both HEAD resolutions remain uncached.
+
+General Performance also exposes existing supported UP Zero requested revenue,
+requested/explicitly-paid order counts, requested ROAS and Meta impressions/clicks
+using the current card components. No Meta purchase value enters these cards.
+
+## Stage 1 and authenticated Preview evidence
+
+The exact reviewed Stage 1 binary, SHA256
+`76b3decf463e7ca08f74dea1af44a5fa4bd1a8dc3ca597987aad075c3033f9ad`,
+was applied once successfully: 12 creates and 6 updates. Fresh post-plan showed
+No changes. Four Installation Jobs passed their single `--help` smokes. Production
+services, other Job templates and all nine Scheduler states matched the pre-apply
+snapshot. The reviewed table grants are unchanged from the approval.
+
+Deployment `dpl_AstgzsxTzgpYT2dsLs9e9VM1QyCj`, source commit
+`9bb357dd35aa5f5626ef6a558bb484d5ba788709`, passed protected Vercel access and
+the user's real application login. Live MX Overview, Performance and Funnel
+loaded with certified values. This is intermediate acceptance; no final success
+or Production promotion is claimed.
+
+The user additionally authorized the 41 missing daily Meta history work units
+between 21 July and 31 August 2026. Read-only canonical preflight proved current
+Meta coverage valid and that expanded UP Zero history would otherwise invalidate
+cumulative Intelligence. This complementary extension preserves the existing
+binding/reporting definition, budgets and bounded V2 processing. It must complete
+before the historical UP Zero publication is expanded. Neither historical plan
+has been persisted at this documentation point; current catalog work is preserved.
+
 ## Live gates still required
 
 Offline release validation: Python 2563 passed; frontend 34 files / 353 tests

@@ -35,6 +35,7 @@ import {
 } from "@/services/demo/manager-v2";
 import { useRequestContext } from "@/hooks/use-resource";
 import { percentOfRatio } from "@/services/api/overview-presenter";
+import { metric } from "@/lib/format";
 const bodies: Record<string, ComponentType> = {
   overview: dynamic(() =>
     import("@/features/overview").then((m) => m.OverviewPage),
@@ -712,7 +713,16 @@ function ReadFunnel({
             {
               accessorKey: "value",
               header: "Valor",
-              cell: ({ row }) => row.original.value ?? row.original.limitation,
+              cell: ({ row }) =>
+                row.original.value === null
+                  ? row.original.limitation
+                  : metric(
+                      String(row.original.value),
+                      row.original.stage.startsWith("Faturamento")
+                        ? "currency"
+                        : "number",
+                      row.original.stage.startsWith("Faturamento") ? 2 : 0,
+                    ),
             },
             { accessorKey: "source", header: "Fonte" },
           ]}
@@ -737,7 +747,18 @@ function ReadFunnel({
             {
               accessorKey: "value",
               header: "Taxa certificada",
-              cell: ({ row }) => row.original.value ?? row.original.limitation,
+              cell: ({ row }) =>
+                row.original.value === null
+                  ? row.original.limitation
+                  : metric(
+                      String(row.original.value),
+                      row.original.stage === "Frequência Meta"
+                        ? "decimal"
+                        : row.original.stage === "CPC"
+                          ? "currency"
+                          : "percent",
+                      2,
+                    ),
             },
           ]}
         />

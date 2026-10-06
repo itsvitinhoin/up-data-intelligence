@@ -2,9 +2,24 @@ import { describe, expect, it } from "vitest";
 import { decodeReadEnvelope } from "@/services/api/http";
 import { parseIntelligence } from "@/services/api/intelligence";
 import { managerMetrics } from "@/dashboard/presenters";
+import { managerPages } from "@/dashboard/registry";
 import { metadata, performance } from "./fixtures/restoration";
 
 describe("UP Zero commercial authority and exact observed progression", () => {
+  it("exposes supported commercial and media values on general Performance", () => {
+    const page = managerPages.find((p) => p.path === "/b2b/performance")!;
+    expect(page.metricIds).toEqual(
+      expect.arrayContaining([
+        "revenue_captured",
+        "orders_generated",
+        "orders_paid",
+        "roas_requested",
+        "meta_impressions",
+        "meta_clicks",
+      ]),
+    );
+    expect(page.metricIds).not.toContain("meta_purchase_value");
+  });
   it("uses commercial ROAS, preserves paid count and never substitutes influence", () => {
     const data = {
       ...performance,

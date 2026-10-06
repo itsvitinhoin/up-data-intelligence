@@ -31,6 +31,11 @@ const payment: MetricBinding = {
     "SOURCE_DOES_NOT_PROVIDE · valor pago não certificado; atendimento não comprova pagamento.",
 };
 const overrides: Record<string, MetricBinding> = {
+  purchase_frequency_observed: source(
+    "overview",
+    "purchase_frequency_observed",
+    "Pedidos qualificantes / compradores observados no período selecionado. Não certifica frequência lifetime.",
+  ),
   orders_paid: source(
     "overview",
     "orders_paid",

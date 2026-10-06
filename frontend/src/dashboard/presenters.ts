@@ -31,7 +31,14 @@ export function managerMetrics(
       label:
         id === "total_media_spend" && value !== null
           ? "Investimento disponível em Ads (Meta)"
-          : definition.label,
+          : ((
+              {
+                revenue_captured: "Faturamento solicitado UP Zero",
+                revenue_paid: "Faturamento pago UP Zero",
+                orders_generated: "Pedidos solicitados UP Zero",
+                orders_paid: "Pedidos com status pago UP Zero",
+              } as Record<string, string>
+            )[id] ?? definition.label),
       value,
       format: definition.format,
       hint: binding.reason,

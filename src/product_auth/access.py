@@ -84,7 +84,11 @@ class Access:
 
 
 def resolve(identity: Identity, repository: AccessRepository) -> Access:
-    rows = repository.access(identity.identity_hash)
+    snapshot = getattr(repository, "snapshot", None)
+    if callable(snapshot):
+        rows, bindings = snapshot(identity.identity_hash)
+    else:
+        rows, bindings = repository.access(identity.identity_hash), None
     if not rows:
         raise ReadError(403, "access_not_provisioned")
     if len(rows) > 100:
@@ -109,7 +113,8 @@ def resolve(identity: Identity, repository: AccessRepository) -> Access:
             raise ReadError(403, "access_disabled_or_invalid")
         keys.add((tenant, workspace))
     tenants = frozenset(t for t, _ in keys)
-    bindings = repository.bindings(tenants)
+    if bindings is None:
+        bindings = repository.bindings(tenants)
     if len(bindings) > 1000:
         raise ReadError(503, "workspace_inventory_limit")
     seen: set[tuple[str, str]] = set()

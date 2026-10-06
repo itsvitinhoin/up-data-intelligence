@@ -134,3 +134,46 @@ def test_cache_does_not_cross_trusted_workspaces_or_detail_reads():
     service.customer(principal, GRANT, "c1")
     service.customer(principal, GRANT, "c1")
     assert sum(q.name == "customer" for q in reader.calls) == 2
+
+
+def test_intelligence_aggregate_reuse_requires_both_fresh_publications():
+    from tests.change16.test_stack import service
+
+    s, reader, principal, grant = service()
+    s.aggregate_cache = AggregateCache()
+    s.aggregate_workspace = (grant.tenant_id, "workspace-a", grant.store_id, "B2B")
+    first = s.intelligence(principal, grant, "performance")
+    second = s.intelligence(principal, grant, "performance")
+    assert first == second
+    assert sum(q.name == "head" for q in reader.calls) == 2
+    assert sum(q.name == "intelligence_head" for q in reader.calls) == 2
+    assert sum(q.name == "intelligence_performance_period" for q in reader.calls) == 1
+    s.aggregate_workspace = (grant.tenant_id, "workspace-b", grant.store_id, "B2B")
+    s.intelligence(principal, grant, "performance")
+    assert sum(q.name == "intelligence_performance_period" for q in reader.calls) == 2
+    reader.override["intelligence_head"] = []
+    with pytest.raises(ReadError, match="intelligence_publication_unavailable"):
+        s.intelligence(principal, grant, "performance")
+
+
+def test_intelligence_cache_separates_its_own_generation_and_excludes_entity_queries():
+    from tests.change16.test_stack import service
+
+    s, reader, principal, grant = service()
+    s.aggregate_cache = AggregateCache()
+    s.aggregate_workspace = (grant.tenant_id, "workspace-a", grant.store_id, "B2B")
+    s._intelligence_scope(principal, grant)
+    parameters = {
+        "store": ("STRING", grant.store_id),
+        "snapshot": ("TIMESTAMP", s.publication.snapshot_at),
+    }
+    reader.override["intelligence_performance_period"] = [{"count": 1, "paid": None}]
+    assert s._iq("performance_period", "aggregate-sql", parameters) == [{"count": 1, "paid": None}]
+    assert s._iq("performance_period", "aggregate-sql", parameters) == [{"count": 1, "paid": None}]
+    s.intelligence_head = {**s.intelligence_head, "generation": 2, "publication_id": "new-id"}
+    s._iq("performance_period", "aggregate-sql", parameters)
+    assert sum(q.name == "intelligence_performance_period" for q in reader.calls) == 2
+    reader.override["intelligence_customer_context"] = [{"customer_id": "c1"}]
+    s._iq("customer_context", "entity-sql", parameters)
+    s._iq("customer_context", "entity-sql", parameters)
+    assert sum(q.name == "intelligence_customer_context" for q in reader.calls) == 2

@@ -24,6 +24,8 @@ RESOURCES = frozenset(
         "customer_period",
         "funnel_daily",
         "retention_exact_stages",
+        "intelligence_performance_period",
+        "intelligence_meta_period_evidence",
     }
 )
 PRIVATE_FIELDS = frozenset(
@@ -61,7 +63,7 @@ def cache_key(
     # Query read clock changes each request. The certified publication identity,
     # scope, policy, selected period and TTL determine reuse, never a caller clock.
     identity.pop("snapshot_at")
-    parameters = {k: v for k, v in query.parameters.items() if k != "snapshot_at"}
+    parameters = {k: v for k, v in query.parameters.items() if k not in {"snapshot_at", "snapshot"}}
     return digest([project, workspace, identity, coverage, query.name, query.sql, parameters])
 
 

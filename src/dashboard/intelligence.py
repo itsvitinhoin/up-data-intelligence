@@ -3,12 +3,13 @@
 from decimal import Decimal
 from typing import Any
 
+from src.dashboard.aggregate_cache import cache_key
 from src.dashboard.contracts import Grant, Principal, ReadError, metadata, page_size
 from src.dashboard.queries import Query
 from src.dashboard.service import DashboardService, _date, _ratio, _sum_count, _timestamp
 from src.intelligence.api import JOURNEY, PRODUCT, PROFILE, TIMELINE
 from src.intelligence.live.schema import PUBLICATION, SCHEMAS
-from src.utils.data import timestamp
+from src.utils.data import digest, timestamp
 
 DENIED = frozenset(
     "cpf cnpj email phone identity_path session_id visitor_id user_id fbclid fbc fbp gclid raw payload access_token".split()
@@ -38,12 +39,47 @@ class IntelligenceDashboardService(DashboardService):
     def _iq(
         self, name: str, sql: str, parameters: dict[str, tuple[str, object]]
     ) -> list[dict[str, Any]]:
-        return self.reader.query(
-            Query("intelligence_" + name, sql, parameters),
+        query = Query("intelligence_" + name, sql, parameters)
+        key = None
+        if (
+            self.aggregate_cache is not None
+            and self.aggregate_workspace is not None
+            and hasattr(self, "intelligence_head")
+            and (
+                self.aggregate_workspace[0],
+                self.aggregate_workspace[2],
+                self.aggregate_workspace[3],
+            )
+            == (
+                self.grant.tenant_id,
+                self.grant.store_id,
+                self.grant.operation,
+            )
+        ):
+            # Both publication authorities were resolved afresh. The complete
+            # Intelligence HEAD identity also prevents reuse after republishing
+            # against the same Analytics generation. No entity reader is allowed.
+            base = cache_key(
+                self.project,
+                self.aggregate_workspace,
+                self.publication,
+                query,
+                (self.policy.history_complete, self.policy.facts_complete),
+            )
+            if base is not None:
+                key = digest([base, self.intelligence_head])
+                cached = self.aggregate_cache.get(key)
+                if cached is not None:
+                    return cached
+        rows = self.reader.query(
+            query,
             request_id=self.request_id,
             store_id=self.grant.store_id,
             generation=getattr(self, "intelligence_head", {}).get("generation"),
         )
+        if key is not None and self.aggregate_cache is not None:
+            self.aggregate_cache.put(key, rows)
+        return rows
 
     def _intelligence_scope(self, principal: Principal | None, grant: Grant) -> None:
         self._scope(principal, grant)
