@@ -213,3 +213,73 @@ Latest Data Health: **16 rules, 0 blocking failures**, checked at
 Schedulers unchanged: UP Zero 03 UTC, Meta 04, Analytics 05, Intelligence 06,
 Data Health 07 and Installation every minute remain ENABLED. Foundation sync,
 reconcile and quality remain PAUSED. Production serving/images/Vercel are unchanged.
+
+## Immutable release artifacts
+
+Runtime/frontend source: `7af97a10fd6e2427a4c578ea1203ddb070bc34d2`, clean and
+pushed before Cloud Build. Product API build `7445b18c-71da-4849-9f78-ff176a06feeb`
+completed SUCCESS. Build digest and independently inspected Artifact Registry
+digest match:
+
+```text
+southamerica-east1-docker.pkg.dev/up-data-intelligence-dev/up-data-intelligence/product-api@sha256:e9150c789b7c2d8ff730021ead7a396c678379bdfe76b8d3044e4ae9e43b6b8a
+```
+
+The build uses the existing DEV build identity and allowlisted runtime context,
+with an offline Gunicorn version smoke. No serving deployment or source probe ran.
+No credential, saved plan/state, customer export, cache or local helper entered Git
+or the image context. Static browser output was scanned for private keys/service
+credentials. No new dependency was introduced.
+
+Worker runtime is unchanged and reused: source
+`d455758628f59b0318301cffac62097677e2c677`, build
+`f7c2dad7-951e-4432-8aa8-acf964c7aab2`, digest
+`sha256:1f99d1e0aa6b994c7e7b7ed4528f235dee0b0549a86ef78417ca05b890e050b0`.
+The new private preview services use product-api, never this worker image.
+
+The strict Stage 2 guard rejected the first plan because provider-computed HTTP
+port name was unknown, although the five-resource scope was exact. Infrastructure
+commit `207a3cf4997540754b546b835b7e58fda65bcbef` declares `name = http1`
+explicitly for the preview ports. It changes no existing service and does not relax
+the guard. The guard regression suite passed **20 tests**. Runtime/frontend files
+remain byte-identical to the immutable product API source commit.
+
+## Final Stage 2 saved plan — unapplied
+
+Cloud Shell path (not a local Mac file):
+`/home/upagency_oficial/dashboard19c-review/stage2.plan`
+
+SHA256:
+`bcb1f3968086f728f7f7367946b20a4fbf8abb5c09961932a06422ac6a8ec509`
+
+Terraform fmt/validate PASS. `scripts/dashboard_completion_preview_guard.py`
+executed against the actual saved-plan JSON: PASS. Exactly **5 creates, 0 updates,
+0 deletes, 0 replacements**. Provider operational drift: 128 allowlisted benign
+entries, **0 material drift**; no drift-driven resource mutation is proposed.
+
+| Terraform address | Exact proposed resource / privilege |
+| --- | --- |
+| `google_cloud_run_v2_service.completion_preview_api["read"]` | Private `up-read-api-data-preview`, existing `up-product-read-dev` identity |
+| `google_cloud_run_v2_service.completion_preview_api["admin"]` | Private `up-admin-api-data-preview`, existing `up-product-admin-dev` identity |
+| `google_cloud_run_v2_service_iam_member.completion_preview_invoker["read"]` | `roles/run.invoker`, existing `up-product-vercel-dev`, Read preview service only |
+| `google_cloud_run_v2_service_iam_member.completion_preview_invoker["admin"]` | Same existing Vercel identity, Admin preview service only |
+| `google_secret_manager_secret_iam_member.completion_admin_meta_probe[0]` | `roles/secretmanager.secretAccessor`, `up-product-admin-dev`, existing `up-intelligence-meta-global-token` only |
+
+Both services are DEV southamerica-east1, min=0/max=3, concurrency=8,
+120s timeout, 1 CPU/1GiB, deletion protection, IAM invoker enforcement and no public
+invoker. Product API digest is the immutable release artifact above. Existing
+server subject key/pinned Meta version are reused privately; no value is printed
+or copied to frontend. Existing approved preview federation is preserved, not
+expanded; production federation and production APIs are unchanged.
+
+Preview variables are documented above for the post-apply phase. This round does
+not modify Vercel production, deploy a functional real preview, create either
+service or grant the Admin secret accessor. A functional real preview is still
+pending exact saved-plan approval/apply and authenticated acceptance.
+
+The binary, JSON and private tfvars remain outside Git/build context with private
+permissions. Revalidate SHA and plan/state before an eventual approved apply;
+no apply command is executed by this change. Automatic enrichment=false,
+enriched health=false, no catalog/creative extension, no Meta credentialed probe,
+no historical extraction, no business-data mutation, no scheduler or production
+change. Stop boundary reached.

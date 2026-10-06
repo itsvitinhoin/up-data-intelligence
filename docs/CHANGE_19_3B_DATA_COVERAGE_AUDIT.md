@@ -183,3 +183,11 @@ with duplicate/store identity guards and no list/export/cache exposure. Lead coh
 semantics still require a decision; see `CHANGE_19_3C_MANAGER_DASHBOARD_V2.md` for
 Option A/Option B and the read-only six-surface query audit. Catalog/creative tables
 remain unpopulated by this round. No new source enrichment or credentialed probe.
+
+#19.3C final artifacts: product API source `7af97a10fd6e2427a4c578ea1203ddb070bc34d2`,
+Cloud Build `7445b18c-71da-4849-9f78-ff176a06feeb`, immutable digest
+`sha256:e9150c789b7c2d8ff730021ead7a396c678379bdfe76b8d3044e4ae9e43b6b8a`.
+Stage 2 exact five-create guard PASS, unapplied binary in Cloud Shell
+`/home/upagency_oficial/dashboard19c-review/stage2.plan`, SHA256
+`bcb1f3968086f728f7f7367946b20a4fbf8abb5c09961932a06422ac6a8ec509`.
+The release runbook contains full scope/IAM/test evidence and stop boundary.
