@@ -312,6 +312,26 @@ describe("controlled B2B Overview preview", () => {
     );
     expect(p.metadata.history_complete).toBe(false);
   });
+  it("maps explicit paid-status order counts without inferring paid monetary revenue", () => {
+    for (const count of [13, 0, null]) {
+      const envelope = decodeOverviewEnvelope({
+        ...live,
+        data: { ...live.data, orders_paid: count, revenue_paid: null },
+      });
+      const presented = presentLiveOverview(envelope);
+      const paid = presented.data.orders.find(
+        (m) => m.label === "Pedidos Pagos",
+      );
+      expect(paid?.value).toBe(count === null ? null : String(count));
+      if (count !== null)
+        expect(paid?.hint).toContain("status pago explícito UP Zero");
+      expect(envelope.data.revenue_paid).toBeNull();
+      expect(
+        presented.data.revenue.find((m) => m.label === "Faturamento Atendido")
+          ?.value,
+      ).toBe("73220.13");
+    }
+  });
   it("maps certified piece counts and observed retention into the existing overview body", () => {
     const envelope = decodeOverviewEnvelope({
       ...live,

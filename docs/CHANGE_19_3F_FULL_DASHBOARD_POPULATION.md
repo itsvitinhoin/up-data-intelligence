@@ -162,3 +162,14 @@ Offline Chrome E2E: B2C ten-route test 1/1 passed (14.0s), including the exact
 Webpack and Turbopack for source `883524625010a842e5147ea9efc8fee332ab10cf`
 also passed. Deployment and final-host certification of the Demo correction
 remain pending. No change to connected source data is implied by these tests.
+
+
+## Existing Orders body mapping correction
+
+Authenticated Orders review found the legacy body left the paid-order count NULL
+even when the decoded Overview envelope certified an explicit UP Zero paid-status
+count (13 in the current window). The presenter now maps `orders_paid` exactly;
+zero and NULL remain distinct. The tooltip explicitly separates the count from
+paid monetary evidence. Paid revenue remains NULL. No backend/source semantics
+changed. Frontend 35 files / 360 tests, lint, typecheck and format passed.
+Final Preview publication and live verification remain pending.

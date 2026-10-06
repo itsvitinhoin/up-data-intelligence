@@ -150,7 +150,14 @@ export function presentLiveOverview(
           "number",
           "Status de cancelamento observado.",
         ),
-        card("Pedidos Pagos", null, "number", payment),
+        card(
+          "Pedidos Pagos",
+          v.orders_paid ?? null,
+          "number",
+          v.orders_paid == null
+            ? payment
+            : "Pedidos com status pago explícito UP Zero. A contagem não certifica o valor monetário pago.",
+        ),
         card(
           "Ticket Médio Solicitado",
           ticket(v.requested_revenue, v.orders_requested),
