@@ -103,3 +103,12 @@ def test_build_upload_and_image_preserve_only_the_reviewed_reporting_json():
         assert entry in rules
         assert "!src/**/*.json" not in rules
         assert "!**/*.json" not in rules
+
+
+def test_foundation_runtime_keeps_private_archive_files_readable_not_writable():
+    root = Path(__file__).resolve().parents[2]
+    docker = (root / "Dockerfile").read_text()
+    assert "COPY --chown=0:10001 src ./src" in docker
+    assert "find src sql config docs -type d -exec chmod 0750" in docker
+    assert "find src sql config docs -type f -exec chmod 0640" in docker
+    assert docker.index("chmod 0640") < docker.index("USER 10001:10001")

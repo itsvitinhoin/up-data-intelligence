@@ -241,7 +241,8 @@ def test_paid_metrics_unchanged_for_approved_policy():
 def test_container_and_terraform_contract():
     docker = Path("Dockerfile").read_text()
     assert (
-        "COPY config/analytics/mx-fashion.dev.json ./config/analytics/mx-fashion.dev.json" in docker
+        "COPY --chown=0:10001 config/analytics/mx-fashion.dev.json ./config/analytics/mx-fashion.dev.json"
+        in docker
     )
     assert "!config/analytics/mx-fashion.dev.json" in Path(".dockerignore").read_text()
     tf = Path("infra/terraform/analytics_runtime.tf").read_text()
