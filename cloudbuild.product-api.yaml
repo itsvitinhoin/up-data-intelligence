@@ -13,8 +13,11 @@ steps:
       - run
       - --rm
       - --network=none
+      - --user=10001:10001
+      - --entrypoint=python
       - southamerica-east1-docker.pkg.dev/up-data-intelligence-dev/up-data-intelligence/product-api:${_VERSION}
-      - --version
+      - -m
+      - src.product_auth.image_smoke
 images:
   - southamerica-east1-docker.pkg.dev/up-data-intelligence-dev/up-data-intelligence/product-api:${_VERSION}
 options:
