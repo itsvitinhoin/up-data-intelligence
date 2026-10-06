@@ -27,7 +27,7 @@ import {
   Sizes,
 } from "@/components/business";
 import type { Product } from "@/types/domain";
-import { money, number } from "@/lib/format";
+import { money, number, metric } from "@/lib/format";
 function DemoPerformancePage() {
   const q = useResource("performance");
   return (
@@ -71,17 +71,38 @@ const inventoryColumns: ColumnDef<Product>[] = [
     header: "Produto",
     cell: ({ row }) => <ProductDrawer product={row.original} />,
   },
-  { accessorKey: "stock", header: "Estoque" },
+  {
+    accessorKey: "stock",
+    header: "Estoque",
+    cell: (i) => number(i.getValue<number | null>()),
+  },
   {
     accessorKey: "sellThrough",
     header: "Sell through",
-    cell: (i) => `${i.getValue()}%`,
+    cell: (i) =>
+      metric(
+        i.getValue<number | null>() === null
+          ? null
+          : String(i.getValue<number>()),
+        "percent",
+        2,
+      ),
   },
-  { accessorKey: "turnover", header: "Giro", cell: (i) => `${i.getValue()}x` },
+  {
+    accessorKey: "turnover",
+    header: "Giro",
+    cell: (i) =>
+      i.getValue<number | null>() === null
+        ? "—"
+        : `${number(i.getValue<number>())}x`,
+  },
   {
     accessorKey: "coverage",
     header: "Cobertura",
-    cell: (i) => `${i.getValue()} dias`,
+    cell: (i) =>
+      i.getValue<number | null>() === null
+        ? "—"
+        : `${number(i.getValue<number>())} dias`,
   },
   { accessorKey: "color", header: "Cor" },
   {
@@ -142,7 +163,7 @@ function DemoProductsPage({ inventory = false }: { inventory?: boolean }) {
 }
 function LegacyProductsPage({ inventory = false }: { inventory?: boolean }) {
   const q = useResource("products");
-  const { scope } = useWorkspace();
+  const { scope, dataMode } = useWorkspace();
   return (
     <>
       <PageHead
@@ -169,8 +190,9 @@ function LegacyProductsPage({ inventory = false }: { inventory?: boolean }) {
       <FiltersBar />
       {inventory && (
         <Notice>
-          Estoque e disponibilidade não são certificados nesta integração.
-          Ausência de evidência não representa estoque zero.
+          {dataMode === "demo"
+            ? "Disponibilidade demonstrativa."
+            : "Estoque atual dos SKUs com vendas no recorte, com evidência de catálogo quando certificada. Abra um produto para ver a grade completa da família. Traço significa ausência de evidência; não representa estoque zero."}
         </Notice>
       )}
       {q.isPending ? (
@@ -198,7 +220,10 @@ function LegacyProductsPage({ inventory = false }: { inventory?: boolean }) {
                           data.reduce((s, p) => s + (p.stock as number), 0),
                         ),
                     format: "number" as const,
-                    hint: "Disponibilidade sintética",
+                    hint:
+                      dataMode === "demo"
+                        ? "Disponibilidade sintética"
+                        : "Estoque atual certificado dos SKUs observados no período; não é estoque histórico nem todo o catálogo",
                   },
                   {
                     label: "Grades completas",

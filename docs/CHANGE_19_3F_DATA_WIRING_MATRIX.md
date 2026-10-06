@@ -125,8 +125,8 @@ is already live. Missing certified source data never becomes demo or numeric zer
 | overview | LIVE_REAL_PARTIAL_COVERAGE | overview, acquisition, retention | requested_revenue, fulfilled_revenue, fulfillment_rate, fulfillment_gap, leads_generated, leads_approved, lead_qualification_rate, approved_conversion_rate, purchase_frequency_observed, ltv_complete, series |
 | orders | LIVE_REAL_PARTIAL_COVERAGE | orders, order | order_id, created_at, order_status, payment_status, requested_total, fulfilled_total, requested_items_qty, fulfilled_items_qty, items |
 | customers | LIVE_REAL_PARTIAL_COVERAGE | customers, customer360, timeline | customer_id, purchases_observed, requested_lifetime_observed, fulfilled_lifetime_observed, first_purchase_at_observed, last_purchase_at_observed, timeline |
-| products | LIVE_REAL_PARTIAL_COVERAGE | products, product | name, reference, requested_revenue, fulfilled_revenue, units_requested, units_fulfilled, orders, buyers_unique, requested_share_observed, catalog, image |
-| stock | LIVE_REAL_PARTIAL_COVERAGE | products, product | catalog.current_stock, catalog.variants, catalog.grade, catalog.color_hex; exact stored attribute codes color/cor and size/tamanho |
+| products | LIVE_REAL_PARTIAL_COVERAGE | products, product | name, reference, requested_revenue, fulfilled_revenue, units_requested, units_fulfilled, orders, buyers_unique, requested_share_observed, stock, color, size, color_hex, active, sale_price, catalog, image |
+| stock | LIVE_REAL_PARTIAL_COVERAGE | products, product | stock, color, size, color_hex, catalog; product detail variants; current certified SKU stock, exact stored attribute codes color/cor and size/tamanho |
 | geography | LIVE_REAL_PARTIAL_COVERAGE | geography | state, cities, customers, orders, requested_revenue, fulfilled_revenue, requested_ticket |
 | campaigns | LIVE_REAL_PARTIAL_COVERAGE | metaAds, creatives | campaign_id, campaign_name, spend, impressions, clicks, ctr, cpc, cpm, preview, actions, frequency |
 | retail-orders | B2C_DEMO | none | demo.orders, demo.captured, demo.approved, demo.cancelled |

@@ -8,6 +8,7 @@ import { ListExport } from "@/components/exports";
 import { OrderDialog } from "@/components/order-dialog";
 import { StockMatrix } from "@/components/stock-matrix";
 import Link from "next/link";
+import Image from "next/image";
 import {
   ArrowUpRight,
   Package,
@@ -77,7 +78,20 @@ export function ProductDrawer({
       <SheetTrigger asChild>
         <button className="prod text-left">
           <span className="prod-thumb">
-            <Package size={17} />
+            {product.image ? (
+              <Image
+                src={product.image}
+                alt=""
+                width={36}
+                height={36}
+                unoptimized
+                loading="lazy"
+                referrerPolicy="no-referrer"
+                className="object-cover rounded"
+              />
+            ) : (
+              <Package size={17} />
+            )}
           </span>
           <span>
             <span className="prod-name">

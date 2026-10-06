@@ -210,3 +210,29 @@ The presenter converts only this display ratio to a percentage; monetary
 transport remains decimal strings. Tooltip identifies the gross requested
 line basis, distinct from paid revenue. Tests cover decimal, zero, NULL,
 full-period SQL ordering and rejection of float transport.
+
+
+## Certified catalog fields on the existing product list
+
+The commercial product list already resolved the current certified catalog but
+dropped SKU stock, color, size, HEX, active status and sale price before HTTP
+projection. It now carries these exact fields using that same bounded read.
+The parser requires current catalog proof and preserves zero/NULL and
+false/unknown separately. No source call, per-row detail query or business
+rewrite was added. The current stock refers to SKUs with observed sales in the
+selected period; it is not all catalog inventory or historical stock. Full
+family grade remains in the existing detail. Official thumbnail URLs are now
+rendered lazily, without browser credentials or referrer transmission.
+Unsupported turnover/coverage cells render a dash rather than literal null.
+
+Focused catalog/read suites: 139 passed. Full Python: 2,583 passed; Ruff,
+formatting (363 files), and mypy (193 source files) passed. Frontend: 35 files /
+362 tests, lint, typecheck and format passed. Offline B2B/Admin: 4 passed
+(22.0s); B2C Demo: 1 test covering 10 routes passed (13.3s). Local production
+Webpack build passed.
+The earlier exact-code commit `f625d5d57d753fac64463163406727c397ad6415` passed
+remote Webpack and Turbopack and built product API digest
+`sha256:9ea2254e3fd45415349a36bc7d45f3d214ae348d713ee6c0830fc05f4794723b`
+(build `fe148ca5-1a89-47b0-abb9-56a98af4b8d8`). This intermediate image was
+not deployed; the list-field correction will be built from its own clean
+pushed commit before the final Preview API image update.

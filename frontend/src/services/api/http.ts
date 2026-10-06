@@ -3,6 +3,7 @@ import { parseCreatives, type LiveCreative } from "./creatives";
 import {
   parseOrderDetail,
   parseCatalogEvidence,
+  parseProductCatalogFields,
   type CatalogEvidence,
   parseProductDetail,
   parseGeography,
@@ -138,6 +139,13 @@ export type LiveOverview = OperationalLeads & {
   }[];
 };
 export type LiveProduct = {
+  variant_id?: string | null;
+  color?: string | null;
+  size?: string | null;
+  color_hex?: string | null;
+  stock?: string | null;
+  active?: boolean | null;
+  sale_price?: string | null;
   requested_share_observed?: string | null;
   image?: string | null;
   reference?: string | null;
@@ -616,6 +624,7 @@ function parseProduct(value: unknown, scope: LiveScope): LiveProduct {
   const row = object(value);
   if (row.store_id !== scope.store_id) throw invalid();
   return {
+    ...parseProductCatalogFields(row),
     store_id: text(row.store_id),
     product_key: text(row.product_key),
     ...(row.image === undefined ? {} : { image: nullableImage(row.image) }),

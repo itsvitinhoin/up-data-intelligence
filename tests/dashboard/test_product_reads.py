@@ -363,3 +363,56 @@ def test_variant_family_commercial_identity_and_null_unobserved_sales(setup, mon
     reader.override["variant_sales"][0]["variant_id"] = "foreign"
     with pytest.raises(ReadError, match="variant_commercial_identity_invalid"):
         service.product(PRINCIPAL, GRANT, "d" * 64)
+
+
+@pytest.mark.parametrize("stock", ["0", "5.25", None])
+def test_product_list_keeps_certified_current_sku_fields_without_extra_queries(
+    setup, monkeypatch, stock
+):
+    service, reader = setup
+    reader.override["products"] = [
+        {
+            "store_id": GRANT.store_id,
+            "product_key": "d" * 64,
+            "product_id": None,
+            "sku": "EXPLICIT-SKU",
+            "variant_id": "variant-1",
+            "name": None,
+            "requested": Decimal("10.00"),
+            "fulfilled": None,
+            "units_requested": Decimal("2"),
+            "units_fulfilled": None,
+            "orders": 1,
+        }
+    ]
+    proof = {
+        "basis": "current_source_snapshot",
+        "snapshot_as_of": "2026-10-05T03:00:00Z",
+        "evidence_hash": "e" * 64,
+    }
+    calls = []
+
+    def catalog(ids):
+        calls.append(ids)
+        return {
+            "variant-1": {
+                "product_id": "parent",
+                "variant_id": "variant-1",
+                "catalog": proof,
+                "stock": stock,
+                "color": "Azul",
+                "size": "M",
+                "color_hex": "#123abc",
+                "active": False,
+                "sale_price": "25.00",
+            }
+        }
+
+    monkeypatch.setattr(service, "_catalog", catalog)
+    row = service.products(PRINCIPAL, GRANT)["data"][0]
+    assert row["stock"] == stock and row["active"] is False
+    assert row["color"] == "Azul" and row["size"] == "M"
+    assert row["sale_price"] == "25.00" and row["catalog"] == proof
+    assert row["fulfilled_revenue"] is None
+    assert calls == [["variant-1"]]
+    assert [q.name for q in reader.calls] == ["head", "products"]

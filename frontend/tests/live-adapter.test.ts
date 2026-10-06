@@ -223,6 +223,51 @@ describe("original component real adapter", () => {
     expect(ticket("50.01", 2)).toBe("25.01");
     expect(ticket(null, 2)).toBeNull();
   });
+  it("maps certified current SKU stock and dimensions on product lists without source or detail calls", async () => {
+    const catalog = {
+      basis: "current_source_snapshot",
+      snapshot_as_of: "2026-10-05T03:00:00Z",
+      evidence_hash: "e".repeat(64),
+    };
+    for (const stock of ["0", "5.25", null]) {
+      const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+        Response.json(
+          envelope([
+            {
+              ...productDetail,
+              catalog,
+              stock,
+              color: "Azul",
+              size: "M",
+              color_hex: "#123abc",
+              active: false,
+              sale_price: "25.00",
+            },
+          ]),
+        ),
+      );
+      const [product] = await createLiveDataApi(metadata, fetcher).read(
+        "products",
+        context,
+      );
+      expect(product.stock).toBe(stock === null ? null : Number(stock));
+      expect(product.color).toBe("Azul");
+      expect(product.variants?.[0].size).toBe("M");
+      expect(product.active).toBe(false);
+      expect(product.salePrice).toBe("25.00");
+      expect(fetcher).toHaveBeenCalledTimes(1);
+    }
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(
+        Response.json(
+          envelope([{ ...productDetail, catalog: null, stock: "1" }]),
+        ),
+      );
+    await expect(
+      createLiveDataApi(metadata, fetcher).read("products", context),
+    ).rejects.toThrow();
+  });
   it("validates and maps full-period product share without replacing unknown with zero", async () => {
     for (const value of ["0.25", "0", null]) {
       const f = vi

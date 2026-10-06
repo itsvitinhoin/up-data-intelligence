@@ -147,7 +147,7 @@ export function productView(r: LiveProduct | LiveProductDetail): Product {
     views: null,
     cart: null,
     checkout: null,
-    stock: "stock" in r ? decimalQuantity(r.stock) : null,
+    stock: "stock" in r ? decimalQuantity(r.stock ?? null) : null,
     variants:
       "variants" in r && r.variants
         ? r.variants.map((v) => ({
@@ -163,7 +163,7 @@ export function productView(r: LiveProduct | LiveProductDetail): Product {
                 color: r.color ?? null,
                 size: r.size,
                 sku: r.sku,
-                stock: decimalQuantity(r.stock),
+                stock: decimalQuantity(r.stock ?? null),
                 hex: r.color_hex ?? null,
               },
             ]

@@ -59,6 +59,32 @@ function catalogDimensions(row: Record<string, unknown>) {
   if (!catalog && (color !== null || size !== null)) invalid();
   return { color, size, ...(row.catalog === undefined ? {} : { catalog }) };
 }
+/** Optional current SKU fields on a commercial product row need catalog proof. */
+export function parseProductCatalogFields(row: Record<string, unknown>) {
+  const dimensions = catalogDimensions(row);
+  const stock = decimal(row.stock ?? null),
+    active = flag(row.active ?? null),
+    salePrice = decimal(row.sale_price ?? null),
+    hex = nullableText(row.color_hex ?? null);
+  if (
+    (stock !== null && Number(stock) < 0) ||
+    (hex !== null && !/^#[a-fA-F0-9]{6}$/.test(hex)) ||
+    (!dimensions.catalog &&
+      (stock !== null || active !== null || salePrice !== null || hex !== null))
+  )
+    invalid();
+  return {
+    ...(row.variant_id === undefined
+      ? {}
+      : { variant_id: nullableText(row.variant_id) }),
+    ...(row.color === undefined ? {} : { color: dimensions.color }),
+    ...(row.size === undefined ? {} : { size: dimensions.size }),
+    ...(row.color_hex === undefined ? {} : { color_hex: hex }),
+    ...(row.stock === undefined ? {} : { stock }),
+    ...(row.active === undefined ? {} : { active }),
+    ...(row.sale_price === undefined ? {} : { sale_price: salePrice }),
+  };
+}
 const key = (v: unknown): string =>
   typeof v === "string" && /^[a-f0-9]{64}$/.test(v) ? v : invalid();
 export function parseOrderDetail(

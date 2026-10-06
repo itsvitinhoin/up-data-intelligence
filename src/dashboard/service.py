@@ -1007,6 +1007,18 @@ class DashboardService:
                     "reference": catalog.get(row.get("variant_id") or "", {}).get("reference"),
                     "image": catalog.get(row.get("variant_id") or "", {}).get("image"),
                     "catalog": catalog.get(row.get("variant_id") or "", {}).get("catalog"),
+                    **{
+                        field: catalog.get(row.get("variant_id") or "", {}).get(field)
+                        for field in (
+                            "variant_id",
+                            "color",
+                            "size",
+                            "color_hex",
+                            "stock",
+                            "active",
+                            "sale_price",
+                        )
+                    },
                     "requested_revenue": decimal_string(row.get("requested")),
                     "requested_share_observed": decimal_string(row.get("requested_share_observed")),
                     "fulfilled_revenue": decimal_string(row.get("fulfilled")),
