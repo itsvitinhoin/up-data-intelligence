@@ -462,7 +462,7 @@ describe("detail-only contact and safe diagnostics", () => {
     };
     const call: PrivateCaller = async () =>
       Response.json(
-        { data: contact, metadata: contactMetadata },
+        { data: contact, pagination: null, metadata: contactMetadata },
         {
           headers: {
             "Server-Timing":
@@ -483,6 +483,22 @@ describe("detail-only contact and safe diagnostics", () => {
     expect(timing).toContain("bff_serialization;dur=");
     expect(timing).not.toMatch(/forbidden|scope|synthetic/);
     expect((await res.json()).data).toEqual(contact);
+    const paginatedContact: PrivateCaller = async () =>
+      Response.json({
+        data: contact,
+        pagination: { next_cursor: "not-a-contact-list" },
+        metadata: contactMetadata,
+      });
+    expect(
+      (
+        await liveRead(
+          request("/api/dashboard/customers/x/contact?" + scope),
+          "customerContact",
+          "x",
+          paginatedContact,
+        )
+      ).status,
+    ).toBe(503);
     const outerLeak: PrivateCaller = async () =>
       Response.json({
         data: contact,

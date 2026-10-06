@@ -59,7 +59,12 @@ export function decodeContactEnvelope(value: unknown) {
   if (!value || typeof value !== "object" || Array.isArray(value))
     throw new ApiError(502, "Contato indisponível.");
   const row = value as Record<string, unknown>;
-  if (Object.keys(row).some((key) => !["data", "metadata"].includes(key)))
+  if (
+    Object.keys(row).some(
+      (key) => !["data", "pagination", "metadata"].includes(key),
+    ) ||
+    (row.pagination !== undefined && row.pagination !== null)
+  )
     throw new ApiError(502, "Contato indisponível.");
   return {
     data: parseCustomerContact(row.data),
