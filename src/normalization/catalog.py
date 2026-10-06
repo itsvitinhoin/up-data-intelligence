@@ -3,6 +3,7 @@
 from typing import Any
 from urllib.parse import urlsplit
 
+from src.connectors.upzero.catalog_attributes import dimensions
 from src.connectors.upzero.catalog_schema import RESOURCES
 from src.normalization.entities import typed
 from src.utils.data import identifier
@@ -18,23 +19,7 @@ def normalize_catalog(resource: str, source: dict[str, Any]) -> tuple[str, dict[
         identifier(source.get("product_id"), True)
         if type(source.get("active")) is not bool:
             raise ValueError("catalog_variant_active_required")
-        if not isinstance(source.get("attributes"), list):
-            raise ValueError("catalog_variant_attributes_required")
-        for code in ("color", "size"):
-            assigned = [
-                a
-                for a in source["attributes"]
-                if isinstance(a, dict)
-                and isinstance(a.get("attribute"), dict)
-                and a["attribute"].get("code") == code
-            ]
-            if len(assigned) > 1:
-                raise ValueError("catalog_attribute_ambiguous")
-            term = assigned[0].get("term") if assigned else None
-            if term is not None and not isinstance(term, dict):
-                raise ValueError("catalog_term_invalid")
-            data[code] = (term or {}).get("name")
-            data[code + "_code"] = (term or {}).get("code")
+        data.update(dimensions(source.get("attributes")))
     if resource == "attributes" and not isinstance(source.get("terms"), list):
         raise ValueError("catalog_terms_required")
     if resource == "inventory":

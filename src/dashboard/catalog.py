@@ -8,6 +8,7 @@ import json
 import re
 from typing import Any
 
+from src.connectors.upzero.catalog_attributes import dimensions
 from src.dashboard.contracts import ReadError, decimal_string
 from src.dashboard.queries import Query
 from src.dashboard.repository import Reader
@@ -184,9 +185,9 @@ SELECT c.catalog_as_of,TO_JSON_STRING(c) checkpoint,TO_JSON_STRING(r) run,
             return f"SELECT v.* FROM {table(self.project, 'up_core', 'catalog_' + resource + '_versions')} v JOIN {obs} o ON o.store_id=v.store_id AND o.entity_version_id=v.version_id AND o.resource='{resource}' WHERE o.store_id=@store AND o.run_id=@{resource}_run"
 
         sql = f"""WITH variants AS ({snapshot("variants")}), products AS ({snapshot("products")}), inventory AS ({snapshot("inventory")}), attributes AS ({snapshot("attributes")})
- SELECT v.store_id,v.variant_id,v.product_id,v.sku,v.color,v.color_code,v.size,v.active,v.price,p.name,p.code reference,
+ SELECT v.store_id,v.variant_id,v.product_id,v.sku,v.color,v.color_code,v.size,v.size_code,v.attributes,v.active,v.price,p.name,p.code reference,
  i.qty_available stock,
- (SELECT ARRAY_AGG(a.terms) FROM attributes a WHERE a.code='color') color_terms
+ (SELECT ARRAY_AGG(a.terms) FROM attributes a WHERE a.code IN ('color','cor')) color_terms
  FROM variants v LEFT JOIN products p ON p.store_id=v.store_id AND p.product_id=v.product_id
  LEFT JOIN inventory i ON i.store_id=v.store_id AND i.variant_id=v.variant_id
  WHERE ((@product IS NULL AND v.variant_id IN (SELECT JSON_VALUE(x) FROM UNNEST(JSON_QUERY_ARRAY(PARSE_JSON(@variants))) x)) OR (@product IS NOT NULL AND v.product_id=@product))
@@ -215,6 +216,19 @@ SELECT c.catalog_as_of,TO_JSON_STRING(c) checkpoint,TO_JSON_STRING(r) run,
                 or row["variant_id"] in result
             ):
                 raise ReadError(503, "catalog_variant_identity_ambiguous")
+            if row.get("attributes") is not None:
+                try:
+                    attributes = row["attributes"]
+                    explicit = dimensions(
+                        json.loads(attributes) if isinstance(attributes, str) else attributes
+                    )
+                    for field, value in explicit.items():
+                        if value is not None:
+                            if row.get(field) is not None and row[field] != value:
+                                raise ValueError("catalog_attribute_conflict")
+                            row[field] = value
+                except (ValueError, TypeError):
+                    raise ReadError(503, "catalog_attribute_evidence_invalid") from None
             stock = decimal_string(row.get("stock"))
             terms = row.get("color_terms") or []
             colors: list[Any] = []

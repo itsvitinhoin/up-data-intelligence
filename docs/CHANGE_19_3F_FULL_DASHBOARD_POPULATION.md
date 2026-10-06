@@ -173,3 +173,40 @@ zero and NULL remain distinct. The tooltip explicitly separates the count from
 paid monetary evidence. Paid revenue remains NULL. No backend/source semantics
 changed. Frontend 35 files / 360 tests, lint, typecheck and format passed.
 Final Preview publication and live verification remain pending.
+
+
+## Exact Portuguese catalog attribute evidence
+
+A bounded read-only audit of current MX catalog metadata found 3,120 variants,
+3,120 stored attribute arrays, and exact source attribute codes `cor`/`tamanho`.
+The English-only normalizer had projected zero non-NULL colors and sizes. This
+is a deterministic projection bug, not absence of source data.
+
+The pure source-code resolver now recognizes only the exact pairs
+`color`/`cor` and `size`/`tamanho`. Two aliases for the same dimension fail
+closed; unknown codes, translated display names and SKU text do not resolve
+attributes. Certified current catalog reads interpret the stored attribute
+arrays using the same resolver, so old snapshot versions need no manual CORE
+rewrite or source replay. Conflicting stored and explicit attributes fail
+closed. HEX lookup also recognizes the exact `cor` attribute code.
+
+The ProductDrawer stock caption explicitly identifies the selected SKU,
+separating its quantity from the family matrix. Current catalog attributes
+remain current evidence, never a reconstructed historical catalog.
+Focused catalog/ingestion/image suites: 54 passed; focused catalog/read suites:
+138 passed. Full Python: 2,580 passed. Ruff, formatting (363 files), and mypy
+(193 source files) passed. Frontend: 35 files / 361 tests passed, with lint,
+typecheck and formatting passing. Offline Manager B2B/Admin: 4 tests passed.
+The Preview API image update and final-host verification remain pending.
+
+
+## Observed product participation
+
+Products now expose `requested_share_observed` as a decimal string or NULL.
+Its denominator aggregates all observed requested gross line value in the
+selected publication-consistent period, before cursor/entity filtering. This
+adds no query round trip. Unknown amounts or a zero denominator preserve NULL.
+The presenter converts only this display ratio to a percentage; monetary
+transport remains decimal strings. Tooltip identifies the gross requested
+line basis, distinct from paid revenue. Tests cover decimal, zero, NULL,
+full-period SQL ordering and rejection of float transport.

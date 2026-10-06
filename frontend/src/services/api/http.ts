@@ -138,6 +138,7 @@ export type LiveOverview = OperationalLeads & {
   }[];
 };
 export type LiveProduct = {
+  requested_share_observed?: string | null;
   image?: string | null;
   reference?: string | null;
   catalog?: CatalogEvidence | null;
@@ -628,6 +629,9 @@ function parseProduct(value: unknown, scope: LiveScope): LiveProduct {
     sku: nullableText(row.sku),
     name: nullableText(row.name),
     requested_revenue: decimal(row.requested_revenue),
+    ...(row.requested_share_observed === undefined
+      ? {}
+      : { requested_share_observed: decimal(row.requested_share_observed) }),
     fulfilled_revenue: decimal(row.fulfilled_revenue),
     units_requested: decimal(row.units_requested),
     units_fulfilled: decimal(row.units_fulfilled),

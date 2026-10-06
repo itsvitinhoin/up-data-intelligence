@@ -1008,6 +1008,7 @@ class DashboardService:
                     "image": catalog.get(row.get("variant_id") or "", {}).get("image"),
                     "catalog": catalog.get(row.get("variant_id") or "", {}).get("catalog"),
                     "requested_revenue": decimal_string(row.get("requested")),
+                    "requested_share_observed": decimal_string(row.get("requested_share_observed")),
                     "fulfilled_revenue": decimal_string(row.get("fulfilled")),
                     "units_requested": decimal_string(row.get("units_requested")),
                     "units_fulfilled": decimal_string(row.get("units_fulfilled")),
@@ -1019,6 +1020,7 @@ class DashboardService:
             pagination=pagination,
             limitations=[
                 "product_identity_uses_exact_current_core_variant_sku",
+                "product_share_uses_observed_requested_line_gross_in_selected_period",
                 "current_core_at_publication_read_snapshot",
             ],
         )

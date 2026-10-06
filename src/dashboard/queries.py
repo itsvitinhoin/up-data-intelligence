@@ -457,8 +457,13 @@ WITH evidence AS (
  FROM {a("analytics_products_daily")} {history}
  WHERE {scope} AND order_date>=@from AND order_date<@to
  GROUP BY product_key,product_id,sku
+), denominator AS (
+ SELECT IF(COUNTIF(requested IS NULL)>0,NULL,SUM(requested)) requested_total
+ FROM grouped
 )
-SELECT g.*,e.buyers_unique,e.name,e.variant_id FROM grouped g LEFT JOIN evidence e USING(product_key) WHERE g.cursor_key>@after AND (@product IS NULL OR g.product_key=@product) ORDER BY g.cursor_key LIMIT @limit"""
+SELECT g.*,SAFE_DIVIDE(g.requested,t.requested_total) requested_share_observed,
+ e.buyers_unique,e.name,e.variant_id FROM grouped g CROSS JOIN denominator t
+ LEFT JOIN evidence e USING(product_key) WHERE g.cursor_key>@after AND (@product IS NULL OR g.product_key=@product) ORDER BY g.cursor_key LIMIT @limit"""
     elif name == "funnel_daily":
         sql = f"""/* dashboard:funnel_daily */
 SELECT event_date,observation_complete,sessions,product_views,add_to_cart,

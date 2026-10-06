@@ -246,6 +246,7 @@ def product(
             "sale_price": current.get("sale_price"),
             "image": profile.get("image") or current.get("image"),
             "requested_revenue": decimal_string(row.get("requested")),
+            "requested_share_observed": decimal_string(row.get("requested_share_observed")),
             "fulfilled_revenue": decimal_string(row.get("fulfilled")),
             "units_requested": decimal_string(row.get("units_requested")),
             "units_fulfilled": decimal_string(row.get("units_fulfilled")),

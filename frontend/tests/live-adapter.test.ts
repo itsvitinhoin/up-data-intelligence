@@ -223,6 +223,33 @@ describe("original component real adapter", () => {
     expect(ticket("50.01", 2)).toBe("25.01");
     expect(ticket(null, 2)).toBeNull();
   });
+  it("validates and maps full-period product share without replacing unknown with zero", async () => {
+    for (const value of ["0.25", "0", null]) {
+      const f = vi
+        .fn<typeof fetch>()
+        .mockResolvedValue(
+          Response.json(
+            envelope([{ ...productDetail, requested_share_observed: value }]),
+          ),
+        );
+      const [p] = await createLiveDataApi(metadata, f).read(
+        "products",
+        context,
+      );
+      expect(p.share).toBe(value === null ? null : Number(value) * 100);
+      expect(p.fulfilled).toBeNull();
+    }
+    const f = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(
+        Response.json(
+          envelope([{ ...productDetail, requested_share_observed: 0.25 }]),
+        ),
+      );
+    await expect(
+      createLiveDataApi(metadata, f).read("products", context),
+    ).rejects.toThrow();
+  });
   it("keeps missing geography customer evidence NULL without hiding the original map", () => {
     const view = geographyView({
       ...geography,

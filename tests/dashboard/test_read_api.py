@@ -539,6 +539,26 @@ def test_retention_cohort_immaturity_and_product_id(setup: tuple[DashboardServic
     assert products["data"][0]["buyers_unique"] is None
 
 
+@pytest.mark.parametrize("share", [Decimal("0.25"), Decimal("0"), None])
+def test_product_share_preserves_decimal_null_and_full_period_denominator(setup, share):
+    service, reader = setup
+    original = reader.query
+
+    def query(q, **kwargs):
+        rows = original(q, **kwargs)
+        if q.name == "products":
+            rows[0]["requested_share_observed"] = share
+            assert "FROM grouped" in q.sql
+            assert "COUNTIF(requested IS NULL)>0,NULL,SUM(requested)" in q.sql
+            assert "SAFE_DIVIDE(g.requested,t.requested_total)" in q.sql
+            assert q.sql.index("FROM grouped") < q.sql.index("g.cursor_key>@after")
+        return rows
+
+    reader.query = query
+    data = service.products(PRINCIPAL, GRANT, from_day="2026-09-01", to_day="2026-09-02")["data"]
+    assert data[0]["requested_share_observed"] == (None if share is None else format(share, "f"))
+
+
 def test_funnel_event_grain_and_geography_gate(setup: tuple[DashboardService, FakeReader]):
     service, reader = setup
     funnel = service.funnel(PRINCIPAL, GRANT, from_day="2026-09-01", to_day="2026-09-02")

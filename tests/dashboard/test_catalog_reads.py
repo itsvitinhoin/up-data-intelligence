@@ -202,3 +202,53 @@ def test_family_uses_canonical_parent_and_reuses_pinned_membership():
     fake.variants[0]["product_id"] = "foreign-parent"
     with pytest.raises(ReadError, match="catalog_variant_identity_ambiguous"):
         catalog.family("product-explicit")
+
+
+def test_portuguese_codes_resolve_from_certified_stored_attributes_without_reingestion():
+    fake = FakeReader()
+    row = fake.variants[0]
+    row.update(
+        color=None,
+        color_code=None,
+        size=None,
+        size_code=None,
+        attributes=json.dumps(
+            [
+                {"attribute": {"code": "cor"}, "term": {"name": "Azul", "code": "blue"}},
+                {"attribute": {"code": "tamanho"}, "term": {"name": "M", "code": "medium"}},
+            ]
+        ),
+    )
+    value = reader(fake).variants(["variant-explicit"])["variant-explicit"]
+    assert value["color"] == "Azul" and value["size"] == "M"
+    assert value["color_hex"] == "#123abc" and value["stock"] == "12.25"
+    assert value["catalog"]["basis"] == "current_source_snapshot"
+    assert "v.attributes" in fake.calls[-1].sql
+    assert "a.code IN ('color','cor')" in fake.calls[-1].sql
+    assert len(fake.calls) == 3  # Same read-only proof/projection calls; no source replay.
+
+
+@pytest.mark.parametrize("case", ["duplicate-alias", "conflict", "malformed"])
+def test_explicit_attribute_aliases_fail_closed_on_ambiguity(case):
+    fake = FakeReader()
+    attributes = [{"attribute": {"code": "cor"}, "term": {"name": "Azul", "code": "blue"}}]
+    if case == "duplicate-alias":
+        attributes.append({"attribute": {"code": "color"}, "term": {"name": "Azul"}})
+    if case == "conflict":
+        attributes[0]["term"]["name"] = "Vermelho"
+    fake.variants[0]["attributes"] = {} if case == "malformed" else attributes
+    with pytest.raises(ReadError, match="catalog_attribute_evidence_invalid"):
+        reader(fake).variants(["variant-explicit"])
+
+
+def test_unknown_source_attribute_code_does_not_infer_from_name_or_sku():
+    fake = FakeReader()
+    fake.variants[0].update(
+        color=None,
+        size=None,
+        color_code=None,
+        attributes=[{"attribute": {"code": "custom", "name": "Cor"}, "term": {"name": "Azul"}}],
+        sku="AZUL-M",
+    )
+    row = reader(fake).variants(["variant-explicit"])["variant-explicit"]
+    assert row["color"] is None and row["size"] is None and row["color_hex"] is None

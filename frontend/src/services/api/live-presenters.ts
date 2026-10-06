@@ -138,7 +138,10 @@ export function productView(r: LiveProduct | LiveProductDetail): Product {
     units: decimalQuantity(r.units_requested),
     orders: r.orders_observed,
     customers: r.buyers_unique,
-    share: null,
+    share:
+      r.requested_share_observed == null
+        ? null
+        : Number(r.requested_share_observed) * 100,
     sizes: null,
     abc: null,
     views: null,

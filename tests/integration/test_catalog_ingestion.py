@@ -226,6 +226,23 @@ def test_sku_does_not_create_color_or_size():
         normalize_catalog("products", {**PRODUCT, "product_id": "other"})
 
 
+def test_variant_accepts_exact_portuguese_codes_and_rejects_cross_alias_duplicates():
+    attributes = [
+        {"attribute": {"code": "cor"}, "term": {"name": "Azul", "code": "AZ"}},
+        {"attribute": {"code": "tamanho"}, "term": {"name": "M", "code": "M"}},
+    ]
+    row = normalize_catalog("variants", {**VARIANT, "attributes": attributes})[1]
+    assert (row["color"], row["color_code"], row["size"], row["size_code"]) == (
+        "Azul",
+        "AZ",
+        "M",
+        "M",
+    )
+    attributes.append({"attribute": {"code": "color"}, "term": {"name": "Azul"}})
+    with pytest.raises(ValueError, match="catalog_attribute_ambiguous"):
+        normalize_catalog("variants", {**VARIANT, "attributes": attributes})
+
+
 def test_unchanged_products_have_new_snapshot_membership_without_fake_versions(tmp_path):
     engine, repo = setup(tmp_path, lambda request: httpx.Response(200, json={"data": [PRODUCT]}))
     first = engine.run("products", {}, mode="incremental")

@@ -26,7 +26,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { Panel, Loading, Failure } from "@/components/ui-kit";
-import { money, date, number } from "@/lib/format";
+import { money, date, number, metric } from "@/lib/format";
 import type {
   Customer,
   Product,
@@ -128,6 +128,7 @@ export function ProductDrawer({
         <Panel title="Estoque e grade">
           <StockMatrix product={product} />
           <p>
+            {product.catalog ? "SKU selecionado: " : ""}
             {number(product.stock)} peças · {number(product.coverage)} dias de
             cobertura
           </p>
@@ -255,14 +256,21 @@ export const productColumns: ColumnDef<Product>[] = [
     accessorKey: "share",
     header: "Participação",
     cell: (i) => (
-      <div className="share">
+      <div
+        className="share"
+        title="Participação no valor solicitado bruto dos itens observados no período; não é receita paga."
+      >
         <span className="share-track">
           <i style={{ width: `${i.getValue<number>()}%` }} />
         </span>
         <span className="share-pct">
-          {i.getValue<number | null>() === null
-            ? "—"
-            : `${i.getValue<number>()}%`}
+          {metric(
+            i.getValue<number | null>() === null
+              ? null
+              : String(i.getValue<number>()),
+            "percent",
+            2,
+          )}
         </span>
       </div>
     ),
