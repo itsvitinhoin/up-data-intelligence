@@ -134,7 +134,9 @@ export const privateCall: PrivateCaller = async (
       ...(response.headers.get("Server-Timing") ?? "")
         .split(",")
         .map((v) => v.trim())
-        .filter((v) => /^(auth|bq);dur=\d+(\.\d+)?$/.test(v)),
+        .filter((v) =>
+          /^(auth|bq|serialization|api_total);dur=\d+(\.\d+)?$/.test(v),
+        ),
       `wif;dur=${(identityReady - started).toFixed(1)}`,
       `upstream;dur=${(performance.now() - identityReady).toFixed(1)}`,
     ].join(", "),
@@ -268,11 +270,13 @@ export async function authMutation(
     return authError(503, "authentication_unavailable");
   }
 }
+import { decodeContactEnvelope } from "@/services/api/contact-contract";
 const resources: Record<string, string> = {
   order: "orders",
   product: "products",
   customer: "customers",
   customerOrders: "customers",
+  customerContact: "customers",
   customer360: "customers",
   timeline: "customers",
   customerProducts: "customers",
@@ -285,6 +289,7 @@ const resources: Record<string, string> = {
 };
 const suffixes: Record<string, string> = {
   customerOrders: "/orders",
+  customerContact: "/contact",
   customer360: "/intelligence",
   timeline: "/timeline",
   customerProducts: "/products",
@@ -294,7 +299,7 @@ const suffixes: Record<string, string> = {
 };
 export async function liveRead(
   request: Request,
-  resource: ReadResource | "installation",
+  resource: ReadResource | "installation" | "customerContact",
   entity?: string,
   call: PrivateCaller = privateCall,
 ) {
@@ -350,8 +355,10 @@ export async function liveRead(
     const res = await call("read", `/v1/dashboard/${path}?${params}`, request);
     const error = await safeResult(res);
     if (error) return error;
-    const value: unknown = await res.json();
-    if (resource === "installation") parseInstallation(value);
+    let value: unknown = await res.json();
+    if (resource === "customerContact") {
+      value = decodeContactEnvelope(value);
+    } else if (resource === "installation") parseInstallation(value);
     else if (resource === "overview") decodeOverviewEnvelope(value);
     else decodeReadEnvelope(resource, value, entity);
     const upstreamTiming = res.headers.get("Server-Timing") ?? "";
@@ -359,10 +366,22 @@ export async function liveRead(
     const timing = upstreamTiming
       .split(",")
       .map((part) => part.trim())
-      .filter((part) => /^(auth|bq|wif|upstream);dur=\d+(\.\d+)?$/.test(part));
+      .filter((part) =>
+        /^(auth|bq|wif|upstream|serialization|api_total);dur=\d+(\.\d+)?$/.test(
+          part,
+        ),
+      );
+    const serializationStart = performance.now();
+    const body = JSON.stringify(value);
+    const serializationDuration = performance.now() - serializationStart;
     timing.push(`bff;dur=${(performance.now() - started).toFixed(1)}`);
-    return Response.json(value, {
-      headers: { ...secureHeaders, "Server-Timing": timing.join(", ") },
+    timing.push(`bff_serialization;dur=${serializationDuration.toFixed(1)}`);
+    return new Response(body, {
+      headers: {
+        ...secureHeaders,
+        "Content-Type": "application/json",
+        "Server-Timing": timing.join(", "),
+      },
     });
   } catch {
     return authError(503, "product_read_unavailable");

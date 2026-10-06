@@ -72,7 +72,7 @@ export function B2BReadBoundary({ children }: { children: ReactNode }) {
         description="Publicação real indisponível."
       />
     );
-  if (!result.data || result.data.source !== "real") return <Loading />;
+  if (!result.data || result.data.source !== "real") return <Loading page />;
   const metadata = result.data.overview.metadata;
   return (
     <div

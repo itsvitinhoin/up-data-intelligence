@@ -16,6 +16,10 @@ import {
   Plug,
   UserCog,
 } from "lucide-react";
+import { useAggregatePrefetch } from "@/dashboard/prefetch";
+import { Personalization } from "@/dashboard/personalization";
+import { useTemplate } from "@/dashboard/provider";
+import { managerNavigation } from "@/dashboard/navigation";
 import { navigation } from "@/config/navigation";
 import { defaultFilters } from "@/config/tenants";
 import {
@@ -56,6 +60,7 @@ export function Access({ children }: { children: React.ReactNode }) {
   const { session, scope, dataMode, tenants, sessionLoading, sessionError } =
     useWorkspace();
   const pathname = usePathname();
+  const template = useTemplate();
   if (sessionLoading)
     return <main className="workspace-screen">Conectando sua sessão…</main>;
   if (!session)
@@ -68,7 +73,16 @@ export function Access({ children }: { children: React.ReactNode }) {
   if (pathname === "/" || pathname === "/login") {
     if (session.role === "ADMIN") return <Redirect to="/admin" />;
     if (!scope) return <OperationPicker />;
-    return <Redirect to={"/" + scope.operation.toLowerCase()} />;
+    return (
+      <Redirect
+        to={
+          template.enabled
+            ? (template.preference.landing ??
+              "/" + scope.operation.toLowerCase())
+            : "/" + scope.operation.toLowerCase()
+        }
+      />
+    );
   }
   if (pathname.startsWith("/admin")) {
     if (session.role !== "ADMIN")
@@ -136,10 +150,16 @@ export function Access({ children }: { children: React.ReactNode }) {
 }
 function Navigation({ close }: { close?: () => void }) {
   const path = usePathname();
+  const template = useTemplate();
+  const prefetch = useAggregatePrefetch();
   const { scope, session, select, tenants } = useWorkspace();
   const [expanded, setExpanded] = useState<string[]>([
     ...(path.startsWith("/erp") ? ["ERP"] : []),
     ...(path.startsWith("/campaigns") ? ["Campanhas"] : []),
+    "Performance",
+    "Ecommerce",
+    "Clientes",
+    "Produtos",
   ]);
   const tenant = tenants.find((t) => t.id === scope?.tenant_id);
   const brand = tenant?.brands.find((b) =>
@@ -171,7 +191,10 @@ function Navigation({ close }: { close?: () => void }) {
         <div>
           <div className="nav-label">Workspace</div>
           <ul>
-            {navigation
+            {(template.enabled && scope
+              ? managerNavigation(scope.operation)
+              : navigation
+            )
               .filter(
                 (item) =>
                   (item.label !== "Configurações" ||
@@ -210,6 +233,12 @@ function Navigation({ close }: { close?: () => void }) {
                             <li key={href}>
                               <Link
                                 href={href}
+                                onMouseEnter={() =>
+                                  template.enabled && prefetch(href)
+                                }
+                                onFocus={() =>
+                                  template.enabled && prefetch(href)
+                                }
                                 onClick={() => follow(href)}
                                 aria-current={
                                   path === href ? "page" : undefined
@@ -226,6 +255,10 @@ function Navigation({ close }: { close?: () => void }) {
                     <Link
                       className="nav-item"
                       href={item.href}
+                      onMouseEnter={() =>
+                        template.enabled && prefetch(item.href)
+                      }
+                      onFocus={() => template.enabled && prefetch(item.href)}
                       onClick={() => follow(item.href)}
                       aria-current={path === item.href ? "page" : undefined}
                     >
@@ -482,6 +515,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
               currentRead?.source !== "demo" &&
               /^\/customers\/[^/]+$/.test(path)
             ) && <PeriodFilter />}
+          <Personalization />
           <PageExport />
           <Button
             variant="ghost"

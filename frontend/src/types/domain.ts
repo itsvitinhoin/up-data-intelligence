@@ -42,6 +42,7 @@ export interface Session {
   store_ids: string[];
 }
 export interface Filters {
+  compare?: boolean;
   days: number;
   from?: string;
   to?: string;

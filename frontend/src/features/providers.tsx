@@ -45,15 +45,18 @@ interface Workspace {
   setFilters: (filters: Filters) => void;
   refreshAccess: () => void;
 }
+import { TemplateProvider } from "@/dashboard/provider";
 const Context = createContext<Workspace | null>(null);
 export function Providers({
   children,
   dataMode = "demo",
   onboardingEnabled = false,
+  managerTemplate = false,
 }: {
   children: ReactNode;
   dataMode?: DashboardDataMode;
   onboardingEnabled?: boolean;
+  managerTemplate?: boolean;
 }) {
   const [client] = useState(
     () =>
@@ -259,7 +262,9 @@ export function Providers({
             },
           }}
         >
-          {children}
+          <TemplateProvider initial={managerTemplate}>
+            {children}
+          </TemplateProvider>
         </Context.Provider>
       </MotionConfig>
     </QueryClientProvider>

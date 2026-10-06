@@ -30,6 +30,7 @@ def response(
     cookie: str | None = None,
     timings: dict[str, int] | None = None,
 ) -> list[bytes]:
+    serialization_started = time.monotonic()
     body = json.dumps(data, default=str, separators=(",", ":")).encode()
     headers = [
         ("Content-Type", "application/json"),
@@ -38,10 +39,16 @@ def response(
         ("Content-Length", str(len(body))),
     ]
     if timings:
+        timings = {
+            **timings,
+            "serialization": int((time.monotonic() - serialization_started) * 1000),
+        }
         safe_timings = [
             f"{key};dur={value}"
             for key, value in timings.items()
-            if key in {"auth", "bq"} and type(value) is int and value >= 0
+            if key in {"auth", "bq", "serialization", "api_total"}
+            and type(value) is int
+            and value >= 0
         ]
         if safe_timings:
             headers.append(("Server-Timing", ", ".join(safe_timings)))
@@ -134,6 +141,7 @@ def create_read_app(
             reader = getattr(instance, "reader", None)
             if isinstance(reader, BigQueryReadSession):
                 timings["bq"] = reader.query_duration_ms
+            timings["api_total"] = int((time.monotonic() - auth_started) * 1000)
             return response(start, status, data, timings=timings)
         except (ReadError, AdminError) as exc:
             return response(start, exc.status, {"error": {"code": exc.code}})

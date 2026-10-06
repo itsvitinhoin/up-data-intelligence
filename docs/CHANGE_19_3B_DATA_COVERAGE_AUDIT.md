@@ -172,3 +172,14 @@ Latest Data Health: 16 rules, zero blocking findings, checked
 2026-10-05T07:00:10.073507Z. No business payload or secret value was read by this query.
 Earlier failed audit SQL statements did not mutate data; timestamp metadata uses
 lossless server values rather than pretty JSON CAS round-trips.
+
+## #19.3C continuation
+
+Stage 1 is successfully applied and reconciled (18 tables, 52 exact grants, four
+additive Meta fields, ten Jobs, post-plan No changes). Stage 2 remains unapplied.
+Controlled V2 slots/presenters preserve requested/fulfilled/paid, observed/confirmed
+and NULL semantics. Contact-only authenticated CORE projection is now prepared,
+with duplicate/store identity guards and no list/export/cache exposure. Lead cohort
+semantics still require a decision; see `CHANGE_19_3C_MANAGER_DASHBOARD_V2.md` for
+Option A/Option B and the read-only six-surface query audit. Catalog/creative tables
+remain unpopulated by this round. No new source enrichment or credentialed probe.

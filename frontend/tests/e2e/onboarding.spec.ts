@@ -46,8 +46,15 @@ test("Admin creates synthetic DRAFT brand; credential cleared; no dashboard quer
   await expect(
     page.getByRole("button", { name: "Ver Dashboard de Synthetic Brand" }),
   ).toBeDisabled();
-  await expect(page.getByText("Instalando", { exact: true })).toBeVisible();
-  await expect(page.getByText("Pendente", { exact: true })).toBeVisible();
+  // The compact card exposes lifecycle state; technical evidence lives in Health.
+  // This synthetic response has no certified installation progress yet.
+  await expect(page.getByText("INSTALLING", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("Calculando progresso…", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Saúde das Integrações", { exact: true }),
+  ).toBeVisible();
   expect(dashboard.every((path) => path.endsWith("/installation"))).toBe(true);
   await expect(page.locator('input[type="password"]')).toHaveCount(0);
 });

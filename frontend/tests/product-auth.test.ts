@@ -1,3 +1,4 @@
+import { metadata as contactMetadata } from "./fixtures/restoration";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { readFileSync } from "node:fs";
 import {
@@ -418,5 +419,100 @@ describe("authenticated product BFF", () => {
     expect(failed.status).toBe(503);
     expect(failed.headers.has("set-cookie")).toBe(false);
     expect(unknown).toHaveBeenCalledTimes(1);
+  });
+});
+describe("detail-only contact and safe diagnostics", () => {
+  it("does not call upstream without a session and never accepts browser technical store", async () => {
+    const call = vi.fn();
+    expect(
+      (
+        await liveRead(
+          new Request(
+            "https://web.example.test/api/dashboard/customers/x/contact?" +
+              scope,
+          ),
+          "customerContact",
+          "x",
+          call,
+        )
+      ).status,
+    ).toBe(401);
+    expect(
+      (
+        await liveRead(
+          request(
+            "/api/dashboard/customers/x/contact?" + scope + "&store_id=other",
+          ),
+          "customerContact",
+          "x",
+          call,
+        )
+      ).status,
+    ).toBe(400);
+    expect(call).not.toHaveBeenCalled();
+  });
+  it("validates the strict contact DTO and returns no-store numeric timings only", async () => {
+    const contact = {
+      basis: "current_core_profile",
+      observed_at: null,
+      cpf: null,
+      cnpj: null,
+      email: "synthetic@example.invalid",
+      phone: null,
+    };
+    const call: PrivateCaller = async () =>
+      Response.json(
+        { data: contact, metadata: contactMetadata },
+        {
+          headers: {
+            "Server-Timing":
+              "auth;dur=2, bq;dur=3, serialization;dur=1, api_total;dur=6, secret;desc=forbidden, scope;dur=1",
+          },
+        },
+      );
+    const res = await liveRead(
+      request("/api/dashboard/customers/x/contact?" + scope),
+      "customerContact",
+      "x",
+      call,
+    );
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Cache-Control")).toBe("private, no-store");
+    const timing = res.headers.get("Server-Timing")!;
+    expect(timing).toContain("serialization;dur=1");
+    expect(timing).toContain("bff_serialization;dur=");
+    expect(timing).not.toMatch(/forbidden|scope|synthetic/);
+    expect((await res.json()).data).toEqual(contact);
+    const outerLeak: PrivateCaller = async () =>
+      Response.json({
+        data: contact,
+        metadata: contactMetadata,
+        credential: "forbidden",
+      });
+    expect(
+      (
+        await liveRead(
+          request("/api/dashboard/customers/x/contact?" + scope),
+          "customerContact",
+          "x",
+          outerLeak,
+        )
+      ).status,
+    ).toBe(503);
+    const invalid: PrivateCaller = async () =>
+      Response.json({
+        data: { ...contact, access_token: "forbidden" },
+        metadata: contactMetadata,
+      });
+    expect(
+      (
+        await liveRead(
+          request("/api/dashboard/customers/x/contact?" + scope),
+          "customerContact",
+          "x",
+          invalid,
+        )
+      ).status,
+    ).toBe(503);
   });
 });

@@ -2332,3 +2332,23 @@ button:disabled {
 .brand-dashboard-access:has(.installation-status) {
   flex-wrap: wrap;
 }
+
+.manager-widgets {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+}
+.manager-widget--full {
+  grid-column: 1 / -1;
+}
+.manager-widget {
+  min-width: 0;
+}
+.manager-content > .page-head {
+  display: none;
+}
+@media (max-width: 900px) {
+  .manager-widget--half {
+    grid-column: 1 / -1;
+  }
+}

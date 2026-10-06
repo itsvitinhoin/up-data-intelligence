@@ -102,6 +102,7 @@ def dispatch(
         )
         return 200, service.installation(principal, grant)
     overview = re.fullmatch(r"/v1/stores/([^/]+)/overview", path)
+    customer_contact = re.fullmatch(r"/v1/customers/([^/]+)/contact", path)
     customer_orders = re.fullmatch(r"/v1/customers/([^/]+)/orders", path)
     customer = re.fullmatch(r"/v1/customers/([^/]+)", path)
     order = re.fullmatch(r"/v1/orders/([^/]+)", path)
@@ -110,6 +111,8 @@ def dispatch(
     resource: str
     if overview:
         resource, store = "overview", unquote(overview.group(1))
+    elif customer_contact:
+        resource, store = "customer_contact", _value(query, "store_id")
     elif customer_orders:
         resource, store = "customer_orders", _value(query, "store_id")
     elif customer:
@@ -193,6 +196,8 @@ def dispatch(
         result = service.creatives(
             principal, grant, from_day=_value(query, "from"), to_day=_value(query, "to")
         )
+    elif resource == "customer_contact":
+        result = service.customer_contact(principal, grant, unquote(customer_contact.group(1)))  # type: ignore[union-attr]
     elif resource == "customer":
         result = service.customer(principal, grant, unquote(customer.group(1)))  # type: ignore[union-attr]
     elif resource == "order":

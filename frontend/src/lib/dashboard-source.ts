@@ -1,3 +1,4 @@
+import { managerPage } from "@/dashboard/registry";
 import type { DashboardDataMode, Scope } from "@/types/domain";
 import type { ReadMetadata } from "@/services/api/http";
 export type DashboardPageState = {
@@ -14,6 +15,7 @@ export type DashboardPageState = {
 };
 export function isB2BReadPage(path: string) {
   return (
+    Boolean(path.startsWith("/b2b") && managerPage(path)) ||
     [
       "/b2b",
       "/b2b/commercial",
@@ -31,7 +33,8 @@ export function isB2BReadPage(path: string) {
       "/campaigns",
       "/campaigns/meta",
       "/customers",
-    ].includes(path) || /^\/(?:customers|campaigns)\/[^/]+$/.test(path)
+    ].includes(path) ||
+    /^\/(?:customers|campaigns)\/[^/]+$/.test(path)
   );
 }
 export function activePageState(

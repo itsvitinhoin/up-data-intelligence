@@ -452,6 +452,33 @@ class DashboardService:
             ],
         )
 
+    def customer_contact(
+        self, principal: Principal | None, grant: Grant, customer_id: str
+    ) -> dict[str, Any]:
+        """Authorized, on-demand contact only. Never part of list/commercial DTOs."""
+        self._scope(principal, grant)
+        if not customer_id or len(customer_id) > 200:
+            raise ReadError(400, "invalid_customer_id")
+        rows = self._rows("customer_contact", customer=customer_id)
+        if not rows:
+            raise ReadError(404, "customer_not_found")
+        if len(rows) != 1:
+            raise ReadError(503, "customer_contact_identity_ambiguous")
+        row = rows[0]
+        if row.get("store_id") != grant.store_id or row.get("customer_id") != customer_id:
+            raise ReadError(503, "customer_contact_identity_invalid")
+        contact: dict[str, Any] = {"basis": "current_core_profile", "observed_at": None}
+        for field in ("cpf", "cnpj", "email", "phone"):
+            value = row.get(field)
+            if value is not None and (not isinstance(value, str) or len(value) > 320):
+                raise ReadError(503, "customer_contact_invalid")
+            contact[field] = value
+        if row.get("observed_at") is not None:
+            contact["observed_at"] = _timestamp(row["observed_at"])
+        return self._response(
+            contact, limitations=["current_core_profile_not_historical_order_contact"]
+        )
+
     def customer_orders(
         self,
         principal: Principal | None,

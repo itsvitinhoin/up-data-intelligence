@@ -102,9 +102,11 @@ export function Choice({
 export function MetricCard({
   item,
   index = 0,
+  decorativeTrend = true,
 }: {
   item: Metric;
   index?: number;
+  decorativeTrend?: boolean;
 }) {
   return (
     <motion.div
@@ -158,18 +160,20 @@ export function MetricCard({
             />
           </div>
         )}
-        <svg className="spark" viewBox="0 0 220 38" aria-hidden="true">
-          <path
-            d={
-              index % 2
-                ? "M0 33 L20 31 L40 34 L60 20 L80 25 L100 15 L120 19 L140 8 L160 12 L180 5 L220 0"
-                : "M0 30 L20 28 L40 30 L60 18 L80 22 L100 14 L120 18 L140 6 L160 10 L180 5 L220 0"
-            }
-            fill="none"
-            stroke={item.value === null ? "var(--line-hi)" : "var(--up-hi)"}
-            strokeWidth="1.5"
-          />
-        </svg>
+        {decorativeTrend && (
+          <svg className="spark" viewBox="0 0 220 38" aria-hidden="true">
+            <path
+              d={
+                index % 2
+                  ? "M0 33 L20 31 L40 34 L60 20 L80 25 L100 15 L120 19 L140 8 L160 12 L180 5 L220 0"
+                  : "M0 30 L20 28 L40 30 L60 18 L80 22 L100 14 L120 18 L140 6 L160 10 L180 5 L220 0"
+              }
+              fill="none"
+              stroke={item.value === null ? "var(--line-hi)" : "var(--up-hi)"}
+              strokeWidth="1.5"
+            />
+          </svg>
+        )}
       </Card>
     </motion.div>
   );

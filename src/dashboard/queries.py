@@ -119,6 +119,13 @@ SELECT COUNT(DISTINCT customer_id) AS buyers,
  SUM(IF(purchase_number>=2,revenue_fulfilled,0))) AS recurring_fulfilled
 FROM {a("analytics_customer_purchase_sequence")} {history}
 WHERE {scope} AND order_date>=@from AND order_date<@to"""
+    elif name == "customer_contact":
+        params["customer"] = ("STRING", values.get("customer"))
+        sql = f"""/* dashboard:customer_contact */
+SELECT store_id,customer_id,cpf,cnpj,email,phone,observed_at
+FROM {c("customers")} {history}
+WHERE store_id=@store AND source_system='upzero' AND customer_id=@customer
+LIMIT 2"""
     elif name in {"customers", "customer"}:
         params.update(
             {

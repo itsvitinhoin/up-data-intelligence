@@ -1,4 +1,5 @@
 "use client";
+import { CustomerContactDialog } from "@/components/customer-contact";
 import { B2BReadBoundary } from "@/hooks/use-dashboard-read";
 
 import { recordColumns } from "@/lib/list-export";
@@ -299,7 +300,12 @@ function DemoCustomerDetailPage({ id }: { id: string }) {
         eyebrow="Customer 360"
         title={d.customer.name ?? "Cliente · identificação indisponível"}
         description={`${d.customer.city ?? "Cidade indisponível"} · ${d.customer.state ?? "UF indisponível"} / Histórico observado`}
-        action={<MediaBadge paid={d.customer.paid} />}
+        action={
+          <div className="flex gap-2">
+            <CustomerContactDialog id={id} />
+            <MediaBadge paid={d.customer.paid} />
+          </div>
+        }
       />
       <div className="profile-strip glass">
         <span className="brand-avatar">

@@ -31,6 +31,7 @@ export default async function RootLayout({
         <Providers
           dataMode={getDashboardDataMode()}
           onboardingEnabled={onboardingDevEnabled()}
+          managerTemplate={process.env.UP_DASHBOARD_TEMPLATE === "manager-v2"}
         >
           {children}
         </Providers>

@@ -24,6 +24,7 @@ export function usePeriodComparison<T>({
   available: boolean;
   reason?: string;
 }) {
+  available = available && filters.compare !== false;
   const previousFilters = previousPeriod(filters);
   const previous = useQuery({
     queryKey: [...queryKey, "previous-period", previousFilters],
@@ -37,11 +38,14 @@ export function usePeriodComparison<T>({
       : previous.isPending
         ? "loading"
         : "ready";
-  const limitation = !available
-    ? reason
-    : previous.isError
-      ? "Leitura do período anterior indisponível."
-      : undefined;
+  const limitation =
+    filters.compare === false
+      ? "Comparação desativada."
+      : !available
+        ? reason
+        : previous.isError
+          ? "Leitura do período anterior indisponível."
+          : undefined;
   function compare(select: (data: T) => Metric[]): Metric[] {
     if (current === undefined) return [];
     return compareMetrics(
