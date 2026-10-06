@@ -146,7 +146,8 @@ export function managerDemoRetail(c: RequestContext) {
       };
     }),
     paidRate: orders.length
-      ? orders.filter((o) => o.status !== "CANCELED").length / orders.length
+      ? (orders.filter((o) => o.status !== "CANCELED").length / orders.length) *
+        100
       : null,
     funnel: [
       { label: "Sessões", value: Number(values.sessions) },

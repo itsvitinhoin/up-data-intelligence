@@ -150,6 +150,10 @@ describe("#19.3D exact bindings and demo isolation", () => {
         Number(values.tiktok_spend),
     ).toBe(Number(values.total_media_spend));
     const retail = managerDemoRetail(context);
+    expect(retail.paidRate).toBe(
+      (orders.filter((o) => o.status !== "CANCELED").length / orders.length) *
+        100,
+    );
     expect(retail.series.reduce((s, r) => s + r.approved, 0)).toBe(
       Number(values.revenue_approved),
     );
