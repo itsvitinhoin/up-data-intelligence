@@ -50,7 +50,7 @@ class HistoryService:
                 )
                 return rows
 
-        _, published = available(
+        policy, published = available(
             Reader(),
             ledger.transport.config.project,
             config,
@@ -58,9 +58,15 @@ class HistoryService:
             self.clock(),
             "history-admission",
         )
-        if published is None:
+        if policy is None or published is None:
             raise AdminError("extension_certified_publication_required")
-        return asdict(published)
+        # Publication carries identity/window; coverage is separately certified by
+        # available(). Preserve those flags when passing evidence to the planner.
+        return {
+            **asdict(published),
+            "history_complete": policy.history_complete,
+            "facts_complete": policy.facts_complete,
+        }
 
     def prepare(
         self,
