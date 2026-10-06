@@ -1,4 +1,5 @@
 from dataclasses import replace
+from pathlib import Path
 
 import pytest
 
@@ -92,3 +93,13 @@ def test_versioned_mx_certificate_is_nonsecret_and_exact():
     assert len(rows) == 1 and rows[0].account.store_id == "mx-fashion"
     assert rows[0].account.api_version == "v26.0"
     assert rows[0].purchase_action_type == "offsite_conversion.fb_pixel_purchase"
+
+
+def test_build_upload_and_image_preserve_only_the_reviewed_reporting_json():
+    root = Path(__file__).resolve().parents[2]
+    entry = "!src/connectors/meta/approved_purchase_reporting.json"
+    for filename in (".gcloudignore", ".dockerignore"):
+        rules = (root / filename).read_text().splitlines()
+        assert entry in rules
+        assert "!src/**/*.json" not in rules
+        assert "!**/*.json" not in rules

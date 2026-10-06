@@ -10,6 +10,8 @@
 !src/
 !src/**/
 !src/**/*.py
+# Exact reviewed non-secret reporting definition; keep other JSON excluded.
+!src/connectors/meta/approved_purchase_reporting.json
 !sql/
 !sql/**/
 !sql/**/*.sql
