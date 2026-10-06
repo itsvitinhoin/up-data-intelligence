@@ -1,12 +1,14 @@
 import { parseMetadata } from "./http";
 import { ApiError } from "./access";
 export type CustomerContact = {
-  basis: "current_core_profile";
+  basis: "current_core_profile" | "order_snapshot";
   observed_at: string | null;
   cpf: string | null;
   cnpj: string | null;
   email: string | null;
   phone: string | null;
+  state?: string | null;
+  city?: string | null;
 };
 export function parseCustomerContact(value: unknown): CustomerContact {
   const fail = (): never => {
@@ -18,15 +20,29 @@ export function parseCustomerContact(value: unknown): CustomerContact {
   if (
     Object.keys(row).some(
       (key) =>
-        !["basis", "observed_at", "cpf", "cnpj", "email", "phone"].includes(
-          key,
-        ),
+        ![
+          "basis",
+          "observed_at",
+          "cpf",
+          "cnpj",
+          "email",
+          "phone",
+          "state",
+          "city",
+        ].includes(key),
     ) ||
-    row.basis !== "current_core_profile"
+    !["current_core_profile", "order_snapshot"].includes(String(row.basis))
   )
     return fail();
   for (const field of ["cpf", "cnpj", "email", "phone", "observed_at"])
     if (
+      row[field] !== null &&
+      (typeof row[field] !== "string" || (row[field] as string).length > 320)
+    )
+      return fail();
+  for (const field of ["state", "city"])
+    if (
+      row[field] !== undefined &&
       row[field] !== null &&
       (typeof row[field] !== "string" || (row[field] as string).length > 320)
     )

@@ -1,61 +1,69 @@
 import type { Metric } from "@/types/domain";
 import type { ReadMetadata, ReadResource } from "@/services/api/http";
 import { MetricRegistry } from "./registry";
-// Projection only: a semantic slot cannot borrow a different commercial state.
-const fields: Partial<Record<ReadResource, Record<string, string>>> = {
-  overview: {
-    new_customers: "new_customers_confirmed",
-    repurchasers: "recurring_buyers_observed",
-  },
-  acquisition: { new_customers: "confirmed_new_customers" },
-  retention: {
-    repurchasers: "recurring_buyers_observed",
-    recurring_customers: "recurring_buyers_observed",
-  },
-  performance: {
-    meta_spend: "meta_spend",
-    total_media_spend: "meta_spend",
-    roas_requested: "roas_requested",
-    cac: "cac_new_customer",
-  },
-};
+import { MetricBindings, readPath } from "./bindings";
+/** Explicit semantic mapping. Missing values never borrow another commercial state. */
 export function managerMetrics(
   ids: string[],
   resource: ReadResource,
   data: unknown,
   metadata?: ReadMetadata,
 ): Metric[] {
-  const row =
-    data && typeof data === "object" && !Array.isArray(data)
-      ? (data as Record<string, unknown>)
-      : {};
   return ids.map((id) => {
-    const definition = MetricRegistry[id];
-    if (!definition) throw new Error("Unregistered metric");
-    const field = fields[resource]?.[id];
-    // A platform-only spend is not certified total media spend. Paid metrics have no mapping.
-    const supported =
-      field &&
-      id !== "total_media_spend" &&
-      (!(id === "new_customers" || id === "cac") ||
-        metadata?.history_complete === true);
-    const raw = supported ? row[field] : null;
-    const value =
+    const definition = MetricRegistry[id],
+      binding = MetricBindings[id];
+    if (!definition || !binding) throw new Error("Unregistered metric binding");
+    const raw =
+      binding.resource === resource &&
+      binding.path &&
+      (!binding.history || metadata?.history_complete === true)
+        ? readPath(data, binding.path)
+        : null;
+    let value =
       typeof raw === "string" && /^-?\d+(?:\.\d+)?$/.test(raw)
         ? raw
-        : typeof raw === "number" && Number.isSafeInteger(raw)
+        : typeof raw === "number" && Number.isFinite(raw)
           ? String(raw)
           : null;
+    if (value !== null && binding.multiplier)
+      value = scaleDecimal(value, binding.multiplier);
     return {
       label: definition.label,
       value,
       format: definition.format,
-      hint:
-        value === null
-          ? "Fonte ainda não disponível / cobertura ainda não certificada. Pagamento não é inferido de atendimento; aquisição definitiva exige histórico completo."
-          : id === "repurchasers" || id === "recurring_customers"
-            ? "Compradores recorrentes observados no período; histórico parcial não comprova lifetime."
-            : "Métrica certificada pelo contrato da publicação selecionada.",
+      hint: binding.reason,
     };
   });
+}
+
+export function scaleDecimal(value: string, multiplier: number): string {
+  const negative = value.startsWith("-");
+  const [integer, fraction = ""] = value.replace("-", "").split(".");
+  const scaled = BigInt(integer + fraction) * BigInt(multiplier);
+  const base = 10n ** BigInt(fraction.length);
+  return `${negative ? "-" : ""}${scaled / base}${fraction.length ? "." + (scaled % base).toString().padStart(fraction.length, "0") : ""}`;
+}
+
+/** Rational decimal projection; avoids floating-point money conversion. */
+export function divideDecimal(
+  numerator: string,
+  denominator: string,
+  multiplier = 1,
+): string | null {
+  const parse = (v: string) => {
+    const [whole, fraction = ""] = v.split(".");
+    return {
+      value: BigInt(whole + fraction),
+      scale: 10n ** BigInt(fraction.length),
+    };
+  };
+  const a = parse(numerator),
+    b = parse(denominator);
+  if (b.value === 0n) return null;
+  const precision = 10n ** 12n;
+  const v =
+    (a.value * b.scale * BigInt(multiplier) * precision) / (b.value * a.scale);
+  const sign = v < 0n ? "-" : "",
+    abs = v < 0n ? -v : v;
+  return `${sign}${abs / precision}.${(abs % precision).toString().padStart(12, "0")}`;
 }

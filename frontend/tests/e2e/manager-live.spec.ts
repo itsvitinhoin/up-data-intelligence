@@ -180,7 +180,9 @@ test("manager B2B: controlled nav, unavailable semantics, widgets and detail reu
     },
   );
   expect(calls).toBe(0);
-  await page.getByRole("button", { name: "Ver contato", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Cadastro atual", exact: true })
+    .click();
   await expect(page.getByRole("dialog")).toContainText(
     "synthetic@example.invalid",
   );
@@ -249,5 +251,52 @@ test("unavailable funnel terminates in a failure, never an endless skeleton", as
   ).toBeVisible();
   await expect(
     page.getByRole("status", { name: "Carregando dados" }),
+  ).toHaveCount(0);
+});
+
+test("admin B2C review stays local and restores authenticated B2B", async ({
+  page,
+}) => {
+  await signIn(page, "ADMIN_UP");
+  await page
+    .getByRole("button", { name: /^Ver Dashboard de/ })
+    .first()
+    .click();
+  await page
+    .getByRole("button", { name: "Personalizar Dashboard", exact: true })
+    .click();
+  await page
+    .getByRole("combobox", { name: "Ambiente de avaliação", exact: true })
+    .click();
+  await page.getByRole("option", { name: "B2C Demo", exact: true }).click();
+  await expect(page.getByTestId("b2c-demo-banner")).toContainText(
+    "B2C · DADOS DEMONSTRATIVOS",
+  );
+  const apiCalls: string[] = [];
+  page.on("request", (r) => {
+    if (new URL(r.url()).pathname.startsWith("/api/"))
+      apiCalls.push(new URL(r.url()).pathname);
+  });
+  for (const path of [
+    "/b2c",
+    "/b2c/orders",
+    "/b2c/products",
+    "/b2c/performance",
+    "/b2c/performance/funnel",
+    "/b2c/performance/history",
+  ]) {
+    if (path !== "/b2c")
+      await page.locator(`nav a[href="${path}"]`).first().click();
+    await expect(page).toHaveURL(path);
+    await expect(page.getByTestId("b2c-demo-banner")).toBeVisible();
+  }
+  expect(apiCalls).toEqual([]);
+  await page
+    .getByRole("button", { name: "Voltar ao B2B Live — MX", exact: true })
+    .click();
+  await expect(page).toHaveURL(/\/b2b$/);
+  await expect(page.getByTestId("b2c-demo-banner")).toHaveCount(0);
+  await expect(
+    page.getByText("Dados demonstrativos", { exact: true }),
   ).toHaveCount(0);
 });

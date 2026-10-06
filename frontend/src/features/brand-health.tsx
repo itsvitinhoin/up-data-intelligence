@@ -62,6 +62,84 @@ export function BrandHealth({ summary }: { summary: BrandSummary }) {
   return (
     <>
       <HistoryProgress summary={summary} />
+      {session?.role === "ADMIN" && (
+        <Panel
+          title="Cobertura de Dados"
+          subtitle="Evidência durável por recurso. Registro em execução não é snapshot certificado; ausência de linha não prova ausência na fonte."
+        >
+          <div className="table-scroll">
+            <table className="list">
+              <thead>
+                <tr>
+                  <th>Recurso</th>
+                  <th>Fonte disponível</th>
+                  <th>Ingerido</th>
+                  <th>Canônico</th>
+                  <th>Publicado</th>
+                  <th>Dashboard conectado</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {health.sources.flatMap((s) =>
+                  s.resources.map((r) => {
+                    const catalog = [
+                      "products",
+                      "variants",
+                      "attributes",
+                      "inventory",
+                    ].includes(r.resource);
+                    const complete = r.ledger_status === "completed";
+                    const certified = complete && r.failed_records === 0;
+                    return (
+                      <tr key={s.provider + "/" + r.resource}>
+                        <td>{resourceNames[r.resource] ?? r.resource}</td>
+                        <td>Contrato {s.provider}</td>
+                        <td>
+                          {r.records_processed === null
+                            ? "Não comprovado"
+                            : `${r.records_processed} observados`}
+                        </td>
+                        <td>
+                          {certified
+                            ? "Ledger completo sem falhas"
+                            : "Aguardando certificação"}
+                        </td>
+                        <td>
+                          {catalog
+                            ? "Snapshot atual; não histórico"
+                            : health.health_evidence_current &&
+                                s.coverage_certified
+                              ? "Cutoff certificado"
+                              : "Cobertura não comprovada"}
+                        </td>
+                        <td>
+                          {[
+                            "customers",
+                            "orders",
+                            "analytics_facts",
+                            "products",
+                            "variants",
+                            "inventory",
+                            "attributes",
+                            "meta_live_campaigns",
+                            "meta_live_insights_daily",
+                            "meta_creative_insights_daily",
+                          ].includes(r.resource)
+                            ? "Read model disponível; depende de evidência certificada"
+                            : "Catálogo auxiliar"}
+                        </td>
+                        <td>{r.ledger_status}</td>
+                      </tr>
+                    );
+                  }),
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Panel>
+      )}
+
       <div
         className="brand-admin-actions"
         role="group"

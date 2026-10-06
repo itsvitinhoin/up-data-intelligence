@@ -45,17 +45,17 @@ const denied = new Set(
   ),
 );
 const monetary = new Set(
-  "spend observed_spend meta_spend observed_meta_spend ctr cpc cpm roas_requested roas_fulfilled cac_new_customer fulfillment_rate requested_total fulfilled_total value ltv_observed total_requested_revenue total_fulfilled_revenue first_purchase_requested_revenue first_purchase_fulfilled_revenue requested_revenue fulfilled_revenue requested_revenue_influenced fulfilled_revenue_influenced".split(
+  "landing_page_views spend observed_spend meta_spend observed_meta_spend ctr cpc cpm roas_requested roas_fulfilled cac_new_customer fulfillment_rate requested_total fulfilled_total value ltv_observed total_requested_revenue total_fulfilled_revenue first_purchase_requested_revenue first_purchase_fulfilled_revenue requested_revenue fulfilled_revenue requested_revenue_influenced fulfilled_revenue_influenced".split(
     " ",
   ),
 );
 const counts = new Set(
-  "impressions clicks influenced_orders influenced_customers new_customers_influenced purchase_count total_orders orders_count orders_influenced campaign_count paid_touch_count total_events total_sessions total_products_viewed total_cart_events total_checkout_events influenced_orders purchase_number".split(
+  "link_clicks reach_campaign_day_sum impressions clicks influenced_orders influenced_customers new_customers_influenced purchase_count total_orders orders_count orders_influenced campaign_count paid_touch_count total_events total_sessions total_products_viewed total_cart_events total_checkout_events influenced_orders purchase_number".split(
     " ",
   ),
 );
 const flags = new Set(
-  "paid_media_influenced acquisition_influenced repeat_purchase_influenced has_repurchase history_complete facts_complete is_new_customer previous_purchase_exists".split(
+  "action_types_complete paid_media_influenced acquisition_influenced repeat_purchase_influenced has_repurchase history_complete facts_complete is_new_customer previous_purchase_exists".split(
     " ",
   ),
 );

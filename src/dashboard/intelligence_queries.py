@@ -167,3 +167,23 @@ def campaign_customers_period(project: str) -> str:
  FROM `{project}.up_analytics.analytics_campaign_customer_performance` AS p FOR SYSTEM_TIME AS OF @snapshot
  JOIN grouped o ON o.campaign_id=p.campaign_id AND o.customer_id=p.customer_id
  WHERE p.store_id=@store AND p.policy_hash=@policy AND p.generation=@generation AND p.influence_scope='LIFETIME'"""
+
+
+def meta_period_evidence(project: str) -> str:
+    """Pinned Meta campaign/day evidence; reach is explicitly non-additive."""
+    return f"""WITH selected AS (
+ SELECT date_start,campaign_id,adset_id,ad_id,impressions,reach,link_clicks,landing_page_views,actions
+ FROM `{project}.up_core.meta_live_insights_daily` FOR SYSTEM_TIME AS OF @meta_snapshot
+ WHERE store_id=@store AND account_id=@account AND configuration_hash=@configuration
+ AND level='campaign' AND date_start>=@from AND date_stop<@to
+), aggregated AS (
+ SELECT COUNT(*) evidence_rows,COUNTIF(actions IS NULL) action_rows_unavailable,
+ COUNT(*)-COUNT(DISTINCT TO_JSON_STRING(STRUCT(date_start,campaign_id,adset_id,ad_id))) duplicate_grains,
+ IF(COUNTIF(link_clicks IS NULL)>0,NULL,COALESCE(SUM(link_clicks),0)) link_clicks,
+ IF(COUNTIF(landing_page_views IS NULL)>0,NULL,COALESCE(SUM(landing_page_views),0)) landing_page_views,
+ IF(COUNTIF(reach IS NULL)>0,NULL,COALESCE(SUM(reach),0)) reach_campaign_day_sum
+ FROM selected
+) SELECT *,ARRAY(SELECT DISTINCT JSON_VALUE(action,'$.action_type')
+ FROM selected,UNNEST(JSON_QUERY_ARRAY(actions)) action
+ WHERE JSON_VALUE(action,'$.action_type') IS NOT NULL ORDER BY 1 LIMIT 101) action_types
+ FROM aggregated"""

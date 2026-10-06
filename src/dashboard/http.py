@@ -152,6 +152,8 @@ def dispatch(
         allowed.update({"from", "to"})
     if resource in {"orders", "customers", "products", "customer_orders"}:
         allowed.update({"page_size", "cursor"})
+    if resource == "customer_contact":
+        allowed.add("order_id")
     if resource == "orders":
         allowed.update({"status", "first_purchase"})
     if set(query) - allowed:
@@ -197,7 +199,10 @@ def dispatch(
             principal, grant, from_day=_value(query, "from"), to_day=_value(query, "to")
         )
     elif resource == "customer_contact":
-        result = service.customer_contact(principal, grant, unquote(customer_contact.group(1)))  # type: ignore[union-attr]
+        assert customer_contact is not None
+        result = service.customer_contact(
+            principal, grant, unquote(customer_contact.group(1)), order_id=_value(query, "order_id")
+        )
     elif resource == "customer":
         result = service.customer(principal, grant, unquote(customer.group(1)))  # type: ignore[union-attr]
     elif resource == "order":

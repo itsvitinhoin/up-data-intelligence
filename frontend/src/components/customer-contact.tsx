@@ -13,7 +13,13 @@ import {
   parseCustomerContact,
   type CustomerContact,
 } from "@/services/api/contact-contract";
-export function CustomerContactDialog({ id }: { id: string }) {
+export function CustomerContactDialog({
+  id,
+  orderId,
+}: {
+  id: string;
+  orderId?: string;
+}) {
   const { scope, dataMode } = useWorkspace();
   if (dataMode !== "live" || !scope) return null;
   return (
@@ -26,10 +32,11 @@ export function CustomerContactDialog({ id }: { id: string }) {
         scope.operation,
       ])}
       id={id}
+      orderId={orderId}
     />
   );
 }
-function PrivateContact({ id }: { id: string }) {
+function PrivateContact({ id, orderId }: { id: string; orderId?: string }) {
   const { scope, dataMode } = useWorkspace(),
     [open, setOpen] = useState(false),
     [contact, setContact] = useState<CustomerContact | null>(null),
@@ -59,6 +66,7 @@ function PrivateContact({ id }: { id: string }) {
         workspace_operation_id: scope.workspace_operation_id ?? scope.store_id,
         operation: scope.operation,
       });
+      if (orderId) params.set("order_id", orderId);
       const res = await fetch(
         `/api/dashboard/customers/${encodeURIComponent(id)}/contact?${params}`,
         { cache: "no-store", signal: controller.signal },
@@ -78,12 +86,16 @@ function PrivateContact({ id }: { id: string }) {
   return (
     <Dialog open={open} onOpenChange={(value) => void change(value)}>
       <DialogTrigger asChild>
-        <Button variant="outline">Ver contato</Button>
+        <Button variant="outline">
+          {orderId ? "Dados do pedido" : "Cadastro atual"}
+        </Button>
       </DialogTrigger>
       <DialogContent className="no-print" data-html2canvas-ignore="true">
         <DialogTitle>Contato do cliente</DialogTitle>
         <DialogDescription>
-          Perfil CORE atual observado. Não é um snapshot histórico do pedido.
+          {orderId
+            ? "Contato capturado no pedido; não representa o cadastro atual."
+            : "Perfil CORE atual observado; não representa o contato histórico do pedido."}{" "}
           Disponível apenas neste detalhe autorizado.
         </DialogDescription>
         {loading ? (
@@ -98,6 +110,8 @@ function PrivateContact({ id }: { id: string }) {
                 ["CPF", contact.cpf],
                 ["E-mail", contact.email],
                 ["Telefone", contact.phone],
+                ["Estado", contact.state],
+                ["Cidade", contact.city],
               ] as const
             ).map(([label, value]) => (
               <div key={label}>

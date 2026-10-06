@@ -60,8 +60,16 @@ describe("controlled manager templates", () => {
       cards.find((card) => card.label === "Novos clientes adquiridos")?.value,
     ).toBeNull();
     expect(
-      cards.find((card) => card.label === "Clientes que recompraram")?.value,
+      managerMetrics(
+        ["repurchasers"],
+        "retention",
+        { recurring_buyers_observed: 3 },
+        overviewMetadata,
+      )[0].value,
     ).toBe("3");
+    expect(
+      cards.find((card) => card.label === "Clientes que recompraram")?.value,
+    ).toBeNull();
     expect(
       managerMetrics(
         ["meta_spend", "total_media_spend", "roas_paid"],

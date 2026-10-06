@@ -1,4 +1,5 @@
 import { periodDays } from "@/lib/period";
+import { managerDemoRetail } from "./manager-v2";
 import { retailFor } from "./retail";
 import { erpFor } from "./erp";
 import { retentionSummaryFor } from "./retention-summary";
@@ -71,7 +72,8 @@ export const demoApi: DataApi = {
     let result: unknown;
     switch (resource) {
       case "retail":
-        result = retailFor(c);
+        result =
+          c.scope.operation === "B2C" ? managerDemoRetail(c) : retailFor(c);
         break;
       case "erp":
         result = erpFor(c);

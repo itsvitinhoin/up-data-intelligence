@@ -322,6 +322,7 @@ export async function liveRead(
             "cursor",
             "status",
             "first_purchase",
+            ...(resource === "customerContact" ? ["order_id"] : []),
           ].includes(k) || params.getAll(k).length !== 1,
       )
     )

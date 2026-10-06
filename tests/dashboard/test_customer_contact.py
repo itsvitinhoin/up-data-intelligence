@@ -112,3 +112,39 @@ def test_contact_sql_does_not_interpolate_customer_or_store():
     assert "evil'" not in query.sql
     assert "store_id=@store" in query.sql and "customer_id=@customer" in query.sql
     assert "LIMIT 2" in query.sql and "payload" not in query.sql
+
+
+def test_order_snapshot_is_correlated_and_never_falls_back_to_current_profile(setup):
+    service, reader = setup
+    reader.override["order_contact"] = [{**row(), "email": None, "city": "Cidade Sintética"}]
+    reader.override["customer_contact"] = [row()]
+    result = service.customer_contact(PRINCIPAL, GRANT, "synthetic", order_id="order-synthetic")
+    assert result["data"]["basis"] == "order_snapshot"
+    assert result["data"]["email"] is None
+    assert result["data"]["city"] == "Cidade Sintética"
+    assert [q.name for q in reader.calls] == ["head", "order_contact"]
+    q = reader.calls[-1]
+    assert q.parameters["order"] == ("STRING", "order-synthetic")
+    assert "order-synthetic" not in q.sql
+    assert "customer_id=@customer" in q.sql and "store_id=@store" in q.sql
+    reader.override["order_contact"] = []
+    with pytest.raises(ReadError, match="order_not_found"):
+        service.customer_contact(PRINCIPAL, GRANT, "synthetic", order_id="foreign-order")
+
+
+def test_snapshot_foreign_customer_or_store_fails_closed(setup):
+    service, reader = setup
+    for field in ("store_id", "customer_id"):
+        reader.override["order_contact"] = [{**row(), field: "foreign"}]
+        with pytest.raises(ReadError, match="customer_contact_identity_invalid"):
+            service.customer_contact(PRINCIPAL, GRANT, "synthetic", order_id="order")
+
+
+def test_order_snapshot_uses_official_profiles_without_current_profile_fallback():
+    sql = build(PROJECT, "order_contact", customer="synthetic", order="order-test").sql
+    assert "$.wholesale_profile.cnpj" in sql
+    assert "$.retail_profile.cpf" in sql
+    assert "CASE JSON_VALUE(customer_snapshot,'$.customer_type')" in sql
+    assert "$.wholesale_profile.address_state" in sql
+    assert "$.retail_profile.address_city" in sql
+    assert "up_core.customers" not in sql

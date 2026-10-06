@@ -43,5 +43,10 @@ test("B2C V2, retained V1 and session personalization", async ({ page }) => {
   await page.locator('nav a[href="/b2c/performance"]').first().click();
   await page.getByRole("combobox", { name: "Plataforma" }).click();
   await page.getByRole("option", { name: "Google", exact: true }).click();
-  await expect(page.getByText(/Google: Modo demonstrativo/)).toBeVisible();
+  await expect(
+    page.getByText("Investimento Google", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByTestId("b2c-demo-banner")).toContainText(
+    "B2C · DADOS DEMONSTRATIVOS",
+  );
 });

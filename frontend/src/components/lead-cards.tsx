@@ -9,20 +9,20 @@ export function LeadCards() {
       label: "Leads",
       value: data.leads === null ? null : String(data.leads),
       format: "number",
-      hint: "Cadastros únicos da marca no período, de todas as origens. Base demonstrativa; independe de canal e coleção.",
+      hint: "Eventos register_submitted realizados no período, deduplicados pela identidade canônica do evento. Não é contagem de pessoas lifetime.",
     },
     {
       label: "Leads aprovados",
       value: data.approved === null ? null : String(data.approved),
       format: "number",
-      hint: "Dos leads cadastrados no período, quantos foram aprovados até o fim do recorte.",
+      hint: "Aprovações register_approved realizadas no período, incluindo cadastros de períodos anteriores.",
     },
     {
-      label: "Qualificação de leads",
+      label: "Taxa de aprovação / qualificação",
       value:
         data.qualificationRate === null ? null : String(data.qualificationRate),
       format: "percent",
-      hint: "Leads aprovados / leads cadastrados no período × 100.",
+      hint: "Aprovações / cadastros no período × 100. Pode exceder 100% por backlog.",
     },
     {
       label: "Taxa de conversão",

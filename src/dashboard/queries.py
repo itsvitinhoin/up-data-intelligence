@@ -26,6 +26,7 @@ def table(project: str, dataset: str, name: str) -> str:
         "customers",
         "orders",
         "order_items",
+        "analytics_events",
     }:
         raise ValueError("dashboard_table_not_allowed")
     return f"`{project}.{dataset}.{name}`"
@@ -97,6 +98,58 @@ WHERE h.record_kind='HEAD' AND h.store_id=@store AND h.policy_hash=@policy"""
         params.update(
             {"from": ("DATE", values.get("from_day")), "to": ("DATE", values.get("to_day"))}
         )
+    if name == "funnel_extra":
+        params.update(
+            {
+                "from": ("DATE", values.get("from_day")),
+                "to": ("DATE", values.get("to_day")),
+                "timezone": ("STRING", values.get("timezone")),
+                "as_of": ("TIMESTAMP", values.get("as_of")),
+            }
+        )
+        sql = f"""SELECT COUNT(DISTINCT fact_id) purchase_item,COUNTIF(fact_id IS NULL OR fact_id='') invalid_identity
+ FROM {c("analytics_events")} {history} WHERE store_id=@store AND source_system='upzero'
+ AND event_name='purchase_item' AND occurred_at<@as_of AND DATE(occurred_at,@timezone)>=@from AND DATE(occurred_at,@timezone)<@to"""
+        return Query(name, sql, params)
+    if name == "operational_leads":
+        params.update(
+            {
+                "from": ("DATE", values.get("from_day")),
+                "to": ("DATE", values.get("to_day")),
+                "timezone": ("STRING", values.get("timezone")),
+                "as_of": ("TIMESTAMP", values.get("as_of")),
+            }
+        )
+        sql = f"""WITH events AS (
+ SELECT fact_id,event_name,occurred_at,order_id
+ FROM {c("analytics_events")} {history}
+ WHERE store_id=@store AND source_system='upzero' AND occurred_at<@as_of
+ AND DATE(occurred_at,@timezone)>=@from AND DATE(occurred_at,@timezone)<@to
+ AND event_name IN ('register_submitted','register_approved')
+), identities AS (
+ SELECT fact_id,ANY_VALUE(event_name) event_name,ANY_VALUE(occurred_at) approved_at,ANY_VALUE(order_id) order_id,
+ COUNT(DISTINCT TO_JSON_STRING(STRUCT(event_name,occurred_at,order_id))) signatures
+ FROM events WHERE fact_id IS NOT NULL AND fact_id!='' GROUP BY fact_id
+), order_identity AS (
+ SELECT order_id,COUNT(*) matches,ANY_VALUE(customer_id) customer_id
+ FROM {c("orders")} {history} WHERE store_id=@store AND source_system='upzero'
+ GROUP BY order_id
+), resolved AS (
+ SELECT i.fact_id,i.event_name,i.approved_at,i.order_id,i.signatures,
+ o.customer_id,IFNULL(o.matches,0) order_matches,COUNT(p.order_id)>0 converted
+ FROM identities i LEFT JOIN order_identity o ON o.order_id=i.order_id
+ LEFT JOIN {a("analytics_customer_purchase_sequence")} AS p {history}
+ ON p.store_id=@store AND p.policy_hash=@policy AND p.customer_id=o.customer_id
+ AND p.order_at>=i.approved_at AND p.order_at<@as_of AND p.order_at<TIMESTAMP(@to,@timezone)
+ GROUP BY i.fact_id,i.event_name,i.approved_at,i.order_id,i.signatures,o.customer_id,o.matches
+) SELECT COUNTIF(event_name='register_submitted') generated,
+ COUNTIF(event_name='register_approved') approved,
+ COUNTIF(signatures>1) conflicts,
+ COUNTIF(event_name='register_approved' AND (order_matches!=1 OR customer_id IS NULL)) unresolved_approved,
+ COUNTIF(event_name='register_approved' AND order_matches=1 AND customer_id IS NOT NULL AND converted) converted,
+ (SELECT COUNTIF(fact_id IS NULL OR fact_id='') FROM events) invalid_identity
+ FROM resolved"""
+        return Query(name, "/* dashboard:operational_leads */\n" + sql, params)
     if name == "store_daily":
         sql = f"""/* dashboard:store_daily */
 SELECT order_date,currency,reporting_timezone,history_complete,observation_complete,
@@ -111,18 +164,47 @@ ORDER BY order_date LIMIT 367"""
             {"from": ("DATE", values.get("from_day")), "to": ("DATE", values.get("to_day"))}
         )
         sql = f"""/* dashboard:customer_period */
+WITH numbered AS (
+ SELECT *,LAG(order_at) OVER(PARTITION BY customer_id ORDER BY purchase_number) previous_at
+ FROM {a("analytics_customer_purchase_sequence")} {history} WHERE {scope}
+), selected AS (
+ SELECT *,IF(purchase_number>=2,TIMESTAMP_DIFF(order_at,previous_at,MICROSECOND)/86400000000.0,NULL) gap_days
+ FROM numbered WHERE order_date>=@from AND order_date<@to
+), with_median AS (
+ SELECT *,PERCENTILE_CONT(gap_days,0.5) OVER() gap_median FROM selected
+)
 SELECT COUNT(DISTINCT customer_id) AS buyers,
  COUNT(DISTINCT IF(purchase_number>=2,customer_id,NULL)) AS recurring_buyers,
- COUNT(*) AS qualifying_orders,
- COUNTIF(purchase_number>=2) AS recurring_orders,
+ COUNT(*) AS qualifying_orders,COUNTIF(purchase_number>=2) AS recurring_orders,
  IF(COUNTIF(purchase_number>=2 AND revenue_fulfilled IS NULL)>0,NULL,
- SUM(IF(purchase_number>=2,revenue_fulfilled,0))) AS recurring_fulfilled
-FROM {a("analytics_customer_purchase_sequence")} {history}
-WHERE {scope} AND order_date>=@from AND order_date<@to"""
+ SUM(IF(purchase_number>=2,revenue_fulfilled,0))) AS recurring_fulfilled,
+ AVG(gap_days) repeat_mean_days,ANY_VALUE(gap_median) repeat_median_days,
+ ARRAY(SELECT AS STRUCT CAST(DATE_TRUNC(order_date,MONTH) AS STRING) month,
+ COUNT(DISTINCT customer_id) buyers,
+ COUNT(DISTINCT IF(purchase_number>=2,customer_id,NULL)) recurring_buyers,
+ COUNT(*) qualifying_orders
+ FROM selected GROUP BY month ORDER BY month) monthly
+ FROM with_median"""
+    elif name == "order_contact":
+        params.update(
+            order=("STRING", values.get("order")), customer=("STRING", values.get("customer"))
+        )
+        sql = f"""SELECT store_id,customer_id,observed_at,
+ JSON_VALUE(customer_snapshot,'$.retail_profile.cpf') cpf,
+ JSON_VALUE(customer_snapshot,'$.wholesale_profile.cnpj') cnpj,
+ JSON_VALUE(customer_snapshot,'$.email') email,JSON_VALUE(customer_snapshot,'$.phone') phone,
+ CASE JSON_VALUE(customer_snapshot,'$.customer_type')
+ WHEN 'WHOLESALE' THEN JSON_VALUE(customer_snapshot,'$.wholesale_profile.address_state')
+ WHEN 'RETAIL' THEN JSON_VALUE(customer_snapshot,'$.retail_profile.address_state') END state,
+ CASE JSON_VALUE(customer_snapshot,'$.customer_type')
+ WHEN 'WHOLESALE' THEN JSON_VALUE(customer_snapshot,'$.wholesale_profile.address_city')
+ WHEN 'RETAIL' THEN JSON_VALUE(customer_snapshot,'$.retail_profile.address_city') END city
+ FROM {c("orders")} {history}
+ WHERE store_id=@store AND source_system='upzero' AND order_id=@order AND customer_id=@customer LIMIT 2"""
     elif name == "customer_contact":
         params["customer"] = ("STRING", values.get("customer"))
         sql = f"""/* dashboard:customer_contact */
-SELECT store_id,customer_id,cpf,cnpj,email,phone,observed_at
+SELECT store_id,customer_id,cpf,cnpj,email,phone,state,city,observed_at
 FROM {c("customers")} {history}
 WHERE store_id=@store AND source_system='upzero' AND customer_id=@customer
 LIMIT 2"""

@@ -44,7 +44,11 @@ interface Workspace {
   select: (scope: Scope, window?: InstallationCoverage) => void;
   setFilters: (filters: Filters) => void;
   refreshAccess: () => void;
+  demoReview: boolean;
+  reviewB2C: () => void;
+  returnToLive: () => void;
 }
+import { useRouter } from "next/navigation";
 import { TemplateProvider } from "@/dashboard/provider";
 const Context = createContext<Workspace | null>(null);
 export function Providers({
@@ -52,12 +56,17 @@ export function Providers({
   dataMode = "demo",
   onboardingEnabled = false,
   managerTemplate = false,
+  reviewFixture = false,
+  onExitReview,
 }: {
   children: ReactNode;
   dataMode?: DashboardDataMode;
   onboardingEnabled?: boolean;
   managerTemplate?: boolean;
+  reviewFixture?: boolean;
+  onExitReview?: () => void;
 }) {
+  const router = useRouter();
   const [client] = useState(
     () =>
       new QueryClient({
@@ -66,11 +75,18 @@ export function Providers({
         },
       }),
   );
-  const [session, setSession] = useState<Session | null>(null);
+  const [review, setReview] = useState(false);
+  const [session, setSession] = useState<Session | null>(() =>
+    reviewFixture ? sessionFor("up-admin") : null,
+  );
   const [liveTenants, setLiveTenants] = useState<Tenant[]>([]);
   const [sessionLoading, setSessionLoading] = useState(dataMode === "live");
   const [sessionError, setSessionError] = useState<string | null>(null);
-  const [scope, setScope] = useState<Scope | null>(null);
+  const [scope, setScope] = useState<Scope | null>(() =>
+    reviewFixture
+      ? { tenant_id: "demo-up", store_id: "mx-fashion-b2c", operation: "B2C" }
+      : null,
+  );
   const installSession = useCallback(async (response: Response) => {
     try {
       if (!response.ok) {
@@ -154,6 +170,17 @@ export function Providers({
         <Context.Provider
           value={{
             session,
+            demoReview: reviewFixture,
+            reviewB2C: () => {
+              if (session?.role === "ADMIN" && !reviewFixture) {
+                clear();
+                setReview(true);
+              }
+            },
+            returnToLive: () => {
+              clear();
+              onExitReview?.();
+            },
             tenants:
               dataMode === "live"
                 ? liveTenants
@@ -263,7 +290,43 @@ export function Providers({
           }}
         >
           <TemplateProvider initial={managerTemplate}>
-            {children}
+            {review ? (
+              <Providers
+                dataMode="demo"
+                managerTemplate
+                reviewFixture
+                onExitReview={() => {
+                  clear();
+                  setReview(false);
+                }}
+              >
+                {children}
+              </Providers>
+            ) : (
+              <>
+                {dataMode === "demo" && scope?.operation === "B2C" && (
+                  <div
+                    role="status"
+                    className="card glass"
+                    data-testid="b2c-demo-banner"
+                  >
+                    B2C · DADOS DEMONSTRATIVOS{" "}
+                    {reviewFixture && (
+                      <button
+                        className="no-print"
+                        onClick={() => {
+                          onExitReview?.();
+                          router.push("/b2b");
+                        }}
+                      >
+                        Voltar ao B2B Live — MX
+                      </button>
+                    )}
+                  </div>
+                )}
+                {children}
+              </>
+            )}
           </TemplateProvider>
         </Context.Provider>
       </MotionConfig>

@@ -22,7 +22,7 @@ locals {
   ])
   completion_extensions = toset(["installation_extension_plans", "installation_extension_work_units"])
   completion_read_permissions = merge(
-    { for table in setunion(local.completion_catalog_reads, toset(["meta_account_bindings", "meta_live_ads", "meta_creative_insights_daily"])) : "product-read/${table}" => {
+    { for table in setunion(local.completion_catalog_reads, toset(["meta_account_bindings", "meta_live_ads", "meta_creative_insights_daily", "analytics_events", "meta_live_insights_daily"])) : "product-read/${table}" => {
       table = table, member = "serviceAccount:${local.product_enabled ? google_service_account.product["read"].email : "disabled"}", write = false
     } },
     { for table in toset(["installation_plans", "installation_work_units", "sync_checkpoints", "sync_runs", "analytics_publications", "analytics_store_daily", "analytics_funnel_daily"]) : "product-admin/${table}" => {

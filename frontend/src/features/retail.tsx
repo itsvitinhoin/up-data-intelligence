@@ -1,5 +1,6 @@
 "use client";
 import dynamic from "next/dynamic";
+import { useWorkspace } from "./providers";
 import { useResource } from "@/hooks/use-resource";
 import {
   Panel,
@@ -19,6 +20,7 @@ const Gauge = dynamic(
   { ssr: false },
 );
 export function RetailOverview() {
+  const { dataMode } = useWorkspace();
   const q = useResource("retail");
   if (q.isPending) return <Loading />;
   if (q.isError) return <Failure retry={() => void q.refetch()} />;
@@ -32,7 +34,11 @@ export function RetailOverview() {
       <section className="row-a">
         <Panel
           title="Faturamento por período"
-          subtitle="Captado × aprovado · aprovado aguarda fonte financeira"
+          subtitle={
+            dataMode === "demo"
+              ? "Captado × aprovado · B2C DADOS DEMONSTRATIVOS"
+              : "Captado × aprovado · aprovado aguarda fonte financeira"
+          }
         >
           <Revenue data={q.data.series} />
         </Panel>

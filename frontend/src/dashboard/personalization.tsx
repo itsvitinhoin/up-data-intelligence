@@ -1,4 +1,5 @@
 "use client";
+import { useRouter } from "next/navigation";
 import { usePathname } from "next/navigation";
 import { SlidersHorizontal, ArrowUp, ArrowDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -17,7 +18,9 @@ import { validatedPagePreference } from "./preferences";
 export function Personalization() {
   const path = usePathname(),
     state = useTemplate(),
-    { scope, session } = useWorkspace();
+    { scope, session, dataMode, demoReview, reviewB2C, returnToLive } =
+      useWorkspace();
+  const router = useRouter();
   const page = managerPage(path),
     pref = validatedPagePreference(
       page?.path ?? path,
@@ -53,6 +56,25 @@ export function Personalization() {
               { value: "v2", label: `Gestão ${scope?.operation} · V2` },
             ]}
             onChange={(value) => state.setEnabled(value === "v2")}
+          />
+        )}
+        {session?.role === "ADMIN" && (dataMode === "live" || demoReview) && (
+          <Choice
+            label="Ambiente de avaliação"
+            value={demoReview ? "demo-b2c" : "live-b2b"}
+            options={[
+              { value: "live-b2b", label: "B2B Live — MX" },
+              { value: "demo-b2c", label: "B2C Demo" },
+            ]}
+            onChange={(value) => {
+              if (value === "demo-b2c") {
+                reviewB2C();
+                router.push("/b2c");
+              } else {
+                returnToLive();
+                router.push("/b2b");
+              }
+            }}
           />
         )}
         {state.enabled && (

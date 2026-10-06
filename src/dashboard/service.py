@@ -289,6 +289,22 @@ class DashboardService:
             raise ReadError(503, "analytics_policy_mismatch")
         return rows
 
+    def _operational_leads(self, start: str, end: str) -> dict[str, Any]:
+        if not self.catalog_enabled:
+            return {}
+        from src.dashboard.leads import operational_counts
+
+        rows = self._rows(
+            "operational_leads",
+            from_day=start,
+            to_day=end,
+            as_of=self.publication.as_of,
+            timezone=self.policy.reporting_timezone,
+        )
+        if len(rows) != 1:
+            raise ReadError(503, "lead_summary_missing_or_duplicate")
+        return operational_counts(rows[0], facts_complete=self.policy.facts_complete)
+
     def overview(
         self,
         principal: Principal | None,
@@ -312,9 +328,12 @@ class DashboardService:
             and Decimal(requested) >= Decimal(fulfilled)
             else None
         )
+        leads = self._operational_leads(start, end)
         data = {
+            **leads,
             "requested_revenue": requested,
             "fulfilled_revenue": fulfilled,
+            "average_requested_ticket": _ratio(requested, _sum_count(rows, "orders_generated")),
             "fulfillment_rate": _ratio(fulfilled, requested),
             "fulfillment_gap": gap,
             "cancelled_requested_revenue": _sum_money(rows, "revenue_cancelled"),
@@ -329,12 +348,22 @@ class DashboardService:
             "ltv_complete": None,
             "cac": None,
             "revenue_paid": None,
+            "monthly_customers": [
+                {
+                    "month": str(r["month"]),
+                    "buyers_observed": integer(r.get("buyers")),
+                    "recurring_buyers_observed": integer(r.get("recurring_buyers")),
+                    "qualifying_orders": integer(r.get("qualifying_orders")),
+                }
+                for r in population[0].get("monthly", [])
+            ],
             "series": [
                 {
                     "date": _date(row["order_date"]),
                     "requested": decimal_string(row.get("revenue_generated")),
                     "fulfilled": decimal_string(row.get("revenue_fulfilled")),
                     "orders": integer(row.get("orders_generated")),
+                    "cancelled_requested": decimal_string(row.get("revenue_cancelled")),
                     "new_customers_confirmed": integer(row.get("new_customers"))
                     if self.policy.history_complete
                     else None,
@@ -345,8 +374,10 @@ class DashboardService:
         return self._response(
             data,
             limitations=[
-                "leads_not_in_analytics_v1",
-                "paid_media_not_materialized",
+                *leads.get("lead_coverage", {}).get(
+                    "limitations", ["operational_registration_read_not_enabled"]
+                ),
+                "paid_media_has_separate_intelligence_publication",
                 "payment_not_certified",
                 "ltv_requires_complete_history",
             ],
@@ -453,13 +484,27 @@ class DashboardService:
         )
 
     def customer_contact(
-        self, principal: Principal | None, grant: Grant, customer_id: str
+        self,
+        principal: Principal | None,
+        grant: Grant,
+        customer_id: str,
+        *,
+        order_id: str | None = None,
     ) -> dict[str, Any]:
         """Authorized, on-demand contact only. Never part of list/commercial DTOs."""
         self._scope(principal, grant)
         if not customer_id or len(customer_id) > 200:
             raise ReadError(400, "invalid_customer_id")
-        rows = self._rows("customer_contact", customer=customer_id)
+        basis = "current_core_profile"
+        if order_id:
+            if len(order_id) > 200:
+                raise ReadError(400, "invalid_order_id")
+            rows = self._rows("order_contact", customer=customer_id, order=order_id)
+            if not rows:
+                raise ReadError(404, "order_not_found")
+            basis = "order_snapshot"
+        else:
+            rows = self._rows("customer_contact", customer=customer_id)
         if not rows:
             raise ReadError(404, "customer_not_found")
         if len(rows) != 1:
@@ -467,8 +512,8 @@ class DashboardService:
         row = rows[0]
         if row.get("store_id") != grant.store_id or row.get("customer_id") != customer_id:
             raise ReadError(503, "customer_contact_identity_invalid")
-        contact: dict[str, Any] = {"basis": "current_core_profile", "observed_at": None}
-        for field in ("cpf", "cnpj", "email", "phone"):
+        contact: dict[str, Any] = {"basis": basis, "observed_at": None}
+        for field in ("cpf", "cnpj", "email", "phone", "state", "city"):
             value = row.get(field)
             if value is not None and (not isinstance(value, str) or len(value) > 320):
                 raise ReadError(503, "customer_contact_invalid")
@@ -476,7 +521,10 @@ class DashboardService:
         if row.get("observed_at") is not None:
             contact["observed_at"] = _timestamp(row["observed_at"])
         return self._response(
-            contact, limitations=["current_core_profile_not_historical_order_contact"]
+            contact,
+            limitations=["current_core_profile_not_historical_order_contact"]
+            if basis == "current_core_profile"
+            else ["order_snapshot_contact"],
         )
 
     def customer_orders(
@@ -576,12 +624,15 @@ class DashboardService:
         if len(population) != 1 or len(first) != 1 or first[0].get("invalid_first_orders") != 0:
             raise ReadError(503, "invalid_first_purchase_sequence")
         row = first[0]
+        leads = self._operational_leads(start, end)
         return self._response(
             {
+                **leads,
                 "buyers_observed": integer(population[0].get("buyers")),
                 "first_purchase_customers_observed": integer(row.get("customers")),
                 "first_purchase_orders_observed": integer(row.get("orders")),
                 "requested_first_purchase_observed": decimal_string(row.get("requested")),
+                "ticket_first_purchase_observed": _ratio(row.get("requested"), row.get("orders")),
                 "fulfilled_first_purchase_observed": decimal_string(row.get("fulfilled")),
                 "confirmed_new_customers": integer(row.get("customers"))
                 if self.policy.history_complete
@@ -589,8 +640,9 @@ class DashboardService:
             },
             limitations=[
                 "first_purchase_is_observed_not_confirmed",
-                "leads_not_in_analytics_v1",
-                "approval_to_purchase_not_certified",
+                *leads.get("lead_coverage", {}).get(
+                    "limitations", ["operational_registration_read_not_enabled"]
+                ),
             ],
         )
 
@@ -696,6 +748,12 @@ class DashboardService:
             "retention_ticket_observed": _ratio(
                 population[0].get("recurring_fulfilled"), population[0].get("recurring_orders")
             ),
+            "repeat_mean_days_observed": _float(population[0].get("repeat_mean_days")),
+            "repeat_median_days_observed": _float(population[0].get("repeat_median_days")),
+            "recurring_fulfilled_observed": decimal_string(
+                population[0].get("recurring_fulfilled")
+            ),
+            "recurring_orders_observed": integer(population[0].get("recurring_orders")),
             "frequency_observed": _ratio(
                 population[0].get("qualifying_orders"), population[0].get("buyers")
             ),
@@ -797,9 +855,27 @@ class DashboardService:
             "events_without_session",
         )
         totals = {field: _sum_count(rows, field) for field in fields}
+        if self.catalog_enabled:
+            extra = self._rows(
+                "funnel_extra",
+                from_day=start,
+                to_day=end,
+                as_of=self.publication.as_of,
+                timezone=self.policy.reporting_timezone,
+            )
+            if len(extra) != 1:
+                raise ReadError(503, "funnel_extra_invalid")
+            totals["purchase_item"] = (
+                integer(extra[0].get("purchase_item"))
+                if self.policy.facts_complete and extra[0].get("invalid_identity") == 0
+                else None
+            )
         return self._response(
             {
                 "totals": totals,
+                "session_to_purchase_rate": _ratio(
+                    totals["sessions_with_purchase"], totals["sessions"]
+                ),
                 "session_to_cart_rate": _ratio(totals["sessions_with_cart"], totals["sessions"]),
                 "cart_to_checkout_rate": _ratio(
                     totals["sessions_cart_then_checkout"], totals["sessions_with_cart"]

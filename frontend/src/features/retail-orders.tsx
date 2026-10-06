@@ -50,7 +50,7 @@ const exports: ExportColumn<Order>[] = [
   { header: "Status comercial", value: (r) => r.status },
 ];
 export function RetailOrdersPage() {
-  const { filters } = useWorkspace();
+  const { filters, dataMode } = useWorkspace();
   const current = useResource("orders"),
     all = useResource("order_history"),
     retail = useResource("retail");
@@ -59,7 +59,10 @@ export function RetailOrdersPage() {
       ? {
           ...m,
           label: "% de Faturamento Pago",
-          hint: "Valor com pagamento confirmado / faturamento captado × 100. Fonte financeira não conectada.",
+          hint:
+            dataMode === "demo"
+              ? "B2C · DADOS DEMONSTRATIVOS · pagamento simulado no cenário sintético."
+              : "Valor com pagamento confirmado / faturamento captado × 100. Fonte financeira não conectada.",
         }
       : m,
   );
@@ -86,8 +89,10 @@ export function RetailOrdersPage() {
       />
       <FiltersBar />
       <Notice>
-        Pagamento e faturamento aprovado aguardam a fonte financeira. O
-        histórico completo abaixo ignora somente o período e os filtros
+        {dataMode === "demo"
+          ? "B2C · DADOS DEMONSTRATIVOS · pagamento simulado. "
+          : "Pagamento e faturamento aprovado aguardam a fonte financeira. "}{" "}
+        O histórico completo abaixo ignora somente o período e os filtros
         comerciais do topo, mantendo a marca e operação autorizadas.
       </Notice>
       {retail.isPending ? (

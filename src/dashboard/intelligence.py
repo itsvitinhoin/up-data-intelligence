@@ -367,6 +367,42 @@ class IntelligenceDashboardService(DashboardService):
                     if isinstance(data[field], float):
                         raise ReadError(503, "invalid_numeric_value")
                     data[field] = format(Decimal(str(data[field])), "f")
+            if self.catalog_enabled and h["meta_complete"]:
+                import re
+
+                from src.dashboard.contracts import decimal_string, integer
+                from src.dashboard.intelligence_queries import meta_period_evidence
+
+                extra = self._iq(
+                    "meta_period_evidence",
+                    meta_period_evidence(self.project),
+                    {
+                        "store": ("STRING", grant.store_id),
+                        "account": ("STRING", h["meta_account_id"]),
+                        "configuration": ("STRING", h["meta_configuration_hash"]),
+                        "meta_snapshot": ("TIMESTAMP", h["source_snapshot_at"]),
+                        "from": ("DATE", start),
+                        "to": ("DATE", end),
+                    },
+                )
+                if len(extra) != 1 or extra[0].get("duplicate_grains") != 0:
+                    raise ReadError(503, "meta_period_grain_invalid")
+                names = extra[0].get("action_types")
+                if (
+                    not isinstance(names, list)
+                    or len(names) > 100
+                    or any(
+                        not isinstance(n, str) or not re.fullmatch(r"[a-zA-Z0-9_.:]{1,128}", n)
+                        for n in names
+                    )
+                ):
+                    raise ReadError(503, "meta_action_types_invalid")
+                for field in ("link_clicks", "reach_campaign_day_sum"):
+                    data[field] = integer(extra[0].get(field))
+                data["landing_page_views"] = decimal_string(extra[0].get("landing_page_views"))
+                data["action_types"] = names
+                data["action_types_complete"] = extra[0].get("action_rows_unavailable") == 0
+                data["reach_basis"] = "sum_campaign_day_not_unique_period_reach"
             return self._envelope(data)
         models = {
             "timeline": "analytics_customer_timeline",

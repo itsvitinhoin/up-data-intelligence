@@ -1,4 +1,5 @@
 "use client";
+import { CustomerContactDialog } from "@/components/customer-contact";
 import { useWorkspace } from "@/features/providers";
 import type { ExportColumn } from "@/lib/erp-export";
 import type { OrderDetail } from "@/types/domain";
@@ -69,18 +70,29 @@ export function OrderDialog({
                 ) : (
                   <p className="muted">Cliente indisponível</p>
                 )}
-                <dl className="detail-list">
-                  {[
-                    ["CNPJ", q.data.customer?.cnpj],
-                    ["E-mail", q.data.customer?.email],
-                    ["Telefone", q.data.customer?.phone],
-                  ].map(([label, value]) => (
-                    <div key={label}>
-                      <dt>{label}</dt>
-                      <dd>{value ?? "Não informado"}</dd>
-                    </div>
-                  ))}
-                </dl>
+                {dataMode === "live" && q.data.order.customer_id && (
+                  <div className="flex gap-2">
+                    <CustomerContactDialog
+                      id={q.data.order.customer_id}
+                      orderId={id}
+                    />
+                    <CustomerContactDialog id={q.data.order.customer_id} />
+                  </div>
+                )}
+                {dataMode === "demo" && (
+                  <dl className="detail-list">
+                    {[
+                      ["CNPJ", q.data.customer?.cnpj],
+                      ["E-mail", q.data.customer?.email],
+                      ["Telefone", q.data.customer?.phone],
+                    ].map(([label, value]) => (
+                      <div key={label}>
+                        <dt>{label}</dt>
+                        <dd>{value ?? "Não informado"}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                )}
               </section>
             )}
             <section aria-label="Produtos do pedido">

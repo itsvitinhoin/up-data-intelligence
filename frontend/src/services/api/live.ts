@@ -294,15 +294,25 @@ export function createLiveDataApi(
         case "geography":
           result = geographyView((await request("geography", c, m)).data);
           break;
-        case "leads":
+        case "leads": {
+          const leads = (await request("acquisition", c, m)).data;
           result = {
-            leads: null,
-            approved: null,
-            converted: null,
-            qualificationRate: null,
-            conversionRate: null,
+            leads: leads.leads_generated ?? null,
+            approved: leads.leads_approved ?? null,
+            converted: leads.approved_converted ?? null,
+            qualificationRate:
+              leads.lead_qualification_rate === undefined ||
+              leads.lead_qualification_rate === null
+                ? null
+                : Number(leads.lead_qualification_rate),
+            conversionRate:
+              leads.approved_conversion_rate === undefined ||
+              leads.approved_conversion_rate === null
+                ? null
+                : Number(leads.approved_conversion_rate),
           };
           break;
+        }
         case "lifecycle":
           result = lifecycleView((await request("retention", c, m)).data);
           break;

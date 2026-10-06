@@ -15,7 +15,7 @@ function context(): RequestContext {
   };
 }
 describe("retail and brand integration boundaries", () => {
-  it("keeps financial confirmation separate from commercial fulfillment and paid-media influence", async () => {
+  it("uses explicit synthetic payment in B2C demo, never commercial fulfillment", async () => {
     const d = await demoApi.read("retail", context());
     expect(d.overview.map((m) => m.label)).toEqual([
       "Faturamento Captado",
@@ -29,9 +29,9 @@ describe("retail and brand integration boundaries", () => {
     ]);
     expect(
       d.overview.find((m) => m.label === "Faturamento Aprovado")?.value,
-    ).toBeNull();
-    expect(d.paidRate).toBeNull();
-    expect(d.series.every((s) => s.approved === null)).toBe(true);
+    ).not.toBeNull();
+    expect(d.paidRate).not.toBeNull();
+    expect(d.series.every((s) => s.approved !== null)).toBe(true);
     expect(d.performance).toHaveLength(9);
     for (const label of [
       "Investimento de Mídia Total",
@@ -39,7 +39,9 @@ describe("retail and brand integration boundaries", () => {
       "ROAS Aprovado",
       "Custo por Sessão",
     ])
-      expect(d.performance.find((m) => m.label === label)?.value).toBeNull();
+      expect(
+        d.performance.find((m) => m.label === label)?.value,
+      ).not.toBeNull();
   });
   it("scopes retail sessions and product sales to period and keeps stock independent", async () => {
     const c = context();

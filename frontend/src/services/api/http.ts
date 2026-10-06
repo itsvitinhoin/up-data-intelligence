@@ -82,17 +82,26 @@ export type LiveOrder = {
   requested_items_qty: number | null;
   fulfilled_items_qty: number | null;
 };
-export type LiveAcquisition = {
+export type OperationalLeads = {
+  leads_generated?: number | null;
+  leads_approved?: number | null;
+  lead_qualification_rate?: string | null;
+  approved_conversion_rate?: string | null;
+  approved_converted?: number | null;
+};
+export type LiveAcquisition = OperationalLeads & {
   buyers_observed: number | null;
   first_purchase_customers_observed: number | null;
   first_purchase_orders_observed: number | null;
   requested_first_purchase_observed: string | null;
+  ticket_first_purchase_observed?: string | null;
   fulfilled_first_purchase_observed: string | null;
   confirmed_new_customers: number | null;
 };
-export type LiveOverview = {
+export type LiveOverview = OperationalLeads & {
   requested_revenue: string | null;
   fulfilled_revenue: string | null;
+  average_requested_ticket?: string | null;
   fulfillment_rate: string | null;
   fulfillment_gap: string | null;
   cancelled_requested_revenue: string | null;
@@ -105,8 +114,15 @@ export type LiveOverview = {
   ltv_complete: string | null;
   cac: string | null;
   revenue_paid: string | null;
+  monthly_customers?: {
+    month: string;
+    buyers_observed: number | null;
+    recurring_buyers_observed: number | null;
+    qualifying_orders: number | null;
+  }[];
   series: {
     date: string;
+    cancelled_requested?: string | null;
     requested: string | null;
     fulfilled: string | null;
     orders: number | null;
@@ -140,6 +156,10 @@ export type LiveCustomerDetail = {
   };
 };
 export type LiveRetention = {
+  recurring_fulfilled_observed?: string | null;
+  recurring_orders_observed?: number | null;
+  repeat_mean_days_observed?: number | null;
+  repeat_median_days_observed?: number | null;
   purchase_stages?: {
     stage: number;
     buyers_observed: number;
@@ -180,6 +200,7 @@ export type LiveRetention = {
   }[];
 };
 export type LiveFunnel = {
+  session_to_purchase_rate?: string | null;
   totals: Record<string, number | null>;
   session_to_cart_rate: string | null;
   cart_to_checkout_rate: string | null;
@@ -345,11 +366,22 @@ function parseOrder(
     fulfilled_items_qty: count(row.fulfilled_items_qty),
   };
 }
+function parseLeads(row: Record<string, unknown>): OperationalLeads {
+  return {
+    leads_generated: count(row.leads_generated ?? null),
+    leads_approved: count(row.leads_approved ?? null),
+    lead_qualification_rate: decimal(row.lead_qualification_rate ?? null),
+    approved_conversion_rate: decimal(row.approved_conversion_rate ?? null),
+    approved_converted: count(row.approved_converted ?? null),
+  };
+}
 function parseOverview(value: unknown): LiveOverview {
   const row = object(value);
   return {
+    ...parseLeads(row),
     requested_revenue: decimal(row.requested_revenue),
     fulfilled_revenue: decimal(row.fulfilled_revenue),
+    average_requested_ticket: decimal(row.average_requested_ticket ?? null),
     fulfillment_rate: decimal(row.fulfillment_rate),
     fulfillment_gap: decimal(row.fulfillment_gap),
     cancelled_requested_revenue: decimal(row.cancelled_requested_revenue),
@@ -362,10 +394,20 @@ function parseOverview(value: unknown): LiveOverview {
     ltv_complete: decimal(row.ltv_complete),
     cac: decimal(row.cac),
     revenue_paid: decimal(row.revenue_paid),
+    monthly_customers: array(row.monthly_customers ?? []).map((item) => {
+      const r = object(item);
+      return {
+        month: text(r.month),
+        buyers_observed: count(r.buyers_observed),
+        recurring_buyers_observed: count(r.recurring_buyers_observed),
+        qualifying_orders: count(r.qualifying_orders),
+      };
+    }),
     series: array(row.series).map((item) => {
       const point = object(item);
       return {
         date: text(point.date),
+        cancelled_requested: decimal(point.cancelled_requested ?? null),
         requested: decimal(point.requested),
         fulfilled: decimal(point.fulfilled),
         orders: count(point.orders),
@@ -377,6 +419,7 @@ function parseOverview(value: unknown): LiveOverview {
 function parseAcquisition(value: unknown): LiveAcquisition {
   const row = object(value);
   return {
+    ...parseLeads(row),
     buyers_observed: count(row.buyers_observed),
     first_purchase_customers_observed: count(
       row.first_purchase_customers_observed,
@@ -384,6 +427,9 @@ function parseAcquisition(value: unknown): LiveAcquisition {
     first_purchase_orders_observed: count(row.first_purchase_orders_observed),
     requested_first_purchase_observed: decimal(
       row.requested_first_purchase_observed,
+    ),
+    ticket_first_purchase_observed: decimal(
+      row.ticket_first_purchase_observed ?? null,
     ),
     fulfilled_first_purchase_observed: decimal(
       row.fulfilled_first_purchase_observed,
@@ -562,9 +608,25 @@ function nullableNumber(value: unknown): number | null {
   if (typeof value !== "number" || !Number.isFinite(value)) throw invalid();
   return value;
 }
+function finiteOrNull(v: unknown): number | null {
+  if (v === null) return null;
+  if (typeof v !== "number" || !Number.isFinite(v) || v < 0)
+    throw new ApiError(502, "Intervalo observado inválido.");
+  return v;
+}
 function parseRetention(value: unknown): LiveRetention {
   const row = object(value);
   return {
+    repeat_mean_days_observed: finiteOrNull(
+      row.repeat_mean_days_observed ?? null,
+    ),
+    repeat_median_days_observed: finiteOrNull(
+      row.repeat_median_days_observed ?? null,
+    ),
+    recurring_fulfilled_observed: decimal(
+      row.recurring_fulfilled_observed ?? null,
+    ),
+    recurring_orders_observed: count(row.recurring_orders_observed ?? null),
     ...(row.purchase_stages === undefined
       ? {}
       : {
@@ -654,9 +716,11 @@ function parseFunnel(value: unknown): LiveFunnel {
   const row = object(value),
     totals = object(row.totals);
   return {
-    totals: Object.fromEntries(
-      funnelFields.map((field) => [field, count(totals[field])]),
-    ),
+    totals: Object.fromEntries([
+      ...funnelFields.map((field) => [field, count(totals[field])]),
+      ["purchase_item", count(totals.purchase_item ?? null)],
+    ]),
+    session_to_purchase_rate: decimal(row.session_to_purchase_rate ?? null),
     session_to_cart_rate: decimal(row.session_to_cart_rate),
     cart_to_checkout_rate: decimal(row.cart_to_checkout_rate),
     checkout_to_purchase_rate: decimal(row.checkout_to_purchase_rate),
