@@ -99,6 +99,11 @@ export type LiveAcquisition = OperationalLeads & {
   confirmed_new_customers: number | null;
 };
 export type LiveOverview = OperationalLeads & {
+  requested_pieces?: number | null;
+  fulfilled_pieces?: number | null;
+  requested_pieces_per_order?: string | null;
+  retention_ticket_observed?: string | null;
+  repeat_mean_days_observed?: number | null;
   requested_revenue: string | null;
   fulfilled_revenue: string | null;
   average_requested_ticket?: string | null;
@@ -378,6 +383,13 @@ function parseLeads(row: Record<string, unknown>): OperationalLeads {
 function parseOverview(value: unknown): LiveOverview {
   const row = object(value);
   return {
+    requested_pieces: count(row.requested_pieces ?? null),
+    fulfilled_pieces: count(row.fulfilled_pieces ?? null),
+    requested_pieces_per_order: decimal(row.requested_pieces_per_order ?? null),
+    retention_ticket_observed: decimal(row.retention_ticket_observed ?? null),
+    repeat_mean_days_observed: finiteOrNull(
+      row.repeat_mean_days_observed ?? null,
+    ),
     ...parseLeads(row),
     requested_revenue: decimal(row.requested_revenue),
     fulfilled_revenue: decimal(row.fulfilled_revenue),

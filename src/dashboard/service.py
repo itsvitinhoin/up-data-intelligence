@@ -328,8 +328,36 @@ class DashboardService:
             and Decimal(requested) >= Decimal(fulfilled)
             else None
         )
+        quantities: dict[str, Any] = {}
+        if self.catalog_enabled:
+            summary = self._rows(
+                "order_quantity_summary",
+                from_day=start,
+                to_day=end,
+                as_of=self.publication.as_of,
+                timezone=self.policy.reporting_timezone,
+            )
+            if (
+                len(summary) != 1
+                or summary[0].get("duplicate_orders") != 0
+                or summary[0].get("invalid_identity") != 0
+                or summary[0].get("orders") != _sum_count(rows, "orders_generated")
+            ):
+                raise ReadError(503, "order_quantity_summary_not_reconciled")
+            quantities = {
+                "requested_pieces": integer(summary[0].get("requested_pieces")),
+                "fulfilled_pieces": integer(summary[0].get("fulfilled_pieces")),
+                "requested_pieces_per_order": _ratio(
+                    summary[0].get("requested_pieces"), summary[0].get("orders")
+                ),
+            }
         leads = self._operational_leads(start, end)
         data = {
+            **quantities,
+            "retention_ticket_observed": _ratio(
+                population[0].get("recurring_fulfilled"), population[0].get("recurring_orders")
+            ),
+            "repeat_mean_days_observed": _float(population[0].get("repeat_mean_days")),
             **leads,
             "requested_revenue": requested,
             "fulfilled_revenue": fulfilled,

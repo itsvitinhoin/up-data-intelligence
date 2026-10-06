@@ -50,3 +50,30 @@ def test_purchase_item_is_its_own_event_not_purchase_alias():
     assert "COUNT(DISTINCT fact_id)" in q.sql
     assert "synthetic'" not in q.sql
     assert "DATE(occurred_at,@timezone)<@to" in q.sql
+
+
+def test_order_quantity_read_is_exact_scoped_and_snapshot_pinned():
+    q = build(
+        "up-data-intelligence-dev",
+        "order_quantity_summary",
+        store="synthetic'",
+        from_day="2026-09-01",
+        to_day="2026-09-03",
+        as_of="2026-09-03T03:00:00Z",
+        timezone="America/Sao_Paulo",
+        snapshot_at="2026-09-03T08:00:00Z",
+    )
+    assert "synthetic'" not in q.sql
+    for guard in (
+        "store_id=@store",
+        "source_system='upzero'",
+        "FOR SYSTEM_TIME AS OF @snapshot_at",
+        "created_at<@as_of",
+        "DATE(created_at,@timezone)>=@from",
+        "DATE(created_at,@timezone)<@to",
+        "COUNT(DISTINCT order_id)",
+        "requested_items_qty IS NULL",
+        "fulfilled_items_qty IS NULL",
+    ):
+        assert guard in q.sql
+    assert "paid" not in q.sql

@@ -34,6 +34,7 @@ import {
   managerDemoValues,
 } from "@/services/demo/manager-v2";
 import { useRequestContext } from "@/hooks/use-resource";
+import { percentOfRatio } from "@/services/api/overview-presenter";
 const bodies: Record<string, ComponentType> = {
   overview: dynamic(() =>
     import("@/features/overview").then((m) => m.OverviewPage),
@@ -723,9 +724,18 @@ function ReadFunnel({
     ["Connect Rate", null],
     ["Taxa de cadastro", null],
     ["Taxa de aprovação", leads.data?.data.lead_qualification_rate ?? null],
-    ["Taxa de carrinho", d.session_to_cart_rate],
-    ["Taxa de checkout", d.cart_to_checkout_rate],
-    ["Checkout → compra observada", d.checkout_to_purchase_rate],
+    [
+      "Sessões com carrinho / sessões (%)",
+      percentOfRatio(d.session_to_cart_rate),
+    ],
+    [
+      "Sessões carrinho → checkout (%)",
+      percentOfRatio(d.cart_to_checkout_rate),
+    ],
+    [
+      "Sessões checkout → compra observada (%)",
+      percentOfRatio(d.checkout_to_purchase_rate),
+    ],
     ["Taxa de pagamento", null],
   ] as const;
   return (
@@ -749,7 +759,7 @@ function ReadFunnel({
       </Panel>
       <Panel
         title="Transições do funil"
-        subtitle="Checkout → compra é evento observado; não confirma pagamento."
+        subtitle="Taxas calculadas pelas sequências de sessões certificadas; as etapas acima contam eventos. Compra observada não confirma pagamento."
       >
         <DataTable
           pageSize={12}
@@ -800,7 +810,10 @@ function ReadProgression({
                 <div className="progression-count num">
                   {row?.buyers_observed ?? "—"}
                 </div>
-                <p>{row?.share_observed ?? "—"}% da base observada</p>
+                <p>
+                  {percentOfRatio(row?.share_observed ?? null) ?? "—"}% da base
+                  observada
+                </p>
               </section>
             );
           })}

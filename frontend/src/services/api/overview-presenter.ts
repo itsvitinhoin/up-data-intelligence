@@ -138,7 +138,12 @@ export function presentLiveOverview(
           "number",
           "Pedidos observados no período.",
         ),
-        card("Pedidos Atendidos", null, "number", unknown),
+        card(
+          "Pedidos Atendidos",
+          null,
+          "number",
+          "Definição de pedido atendido ainda não certificada; quantidade atendida não confirma pagamento.",
+        ),
         card(
           "Pedidos Cancelados",
           v.orders_cancelled,
@@ -158,9 +163,24 @@ export function presentLiveOverview(
           "currency",
           "Faturamento atendido dividido pelos pedidos solicitados; não é ticket pago.",
         ),
-        card("Peças Solicitadas", null, "number", unknown),
-        card("Peças Atendidas", null, "number", unknown),
-        card("Peças por Pedido", null, "decimal", unknown),
+        card(
+          "Peças Solicitadas",
+          v.requested_pieces ?? null,
+          "number",
+          "Quantidade solicitada nos snapshots canônicos dos pedidos do período.",
+        ),
+        card(
+          "Peças Atendidas",
+          v.fulfilled_pieces ?? null,
+          "number",
+          "Quantidade atendida; não confirma pagamento.",
+        ),
+        card(
+          "Peças por Pedido",
+          v.requested_pieces_per_order ?? null,
+          "decimal",
+          "Peças solicitadas divididas pelos pedidos observados do período.",
+        ),
       ],
       customers: [
         card("Clientes Compradores", v.buyers_observed, "number", observed),
@@ -181,8 +201,8 @@ export function presentLiveOverview(
           ),
           secondary: {
             label: "Ticket Médio de Retenção",
-            value: null,
-            hint: unknown,
+            value: v.retention_ticket_observed ?? null,
+            hint: observed,
           },
         },
         card(
@@ -202,7 +222,12 @@ export function presentLiveOverview(
           history,
         ),
         card("Dias para primeira compra", null, "days", unknown),
-        card("Dias para compras recorrentes", null, "days", unknown),
+        card(
+          "Dias para compras recorrentes",
+          v.repeat_mean_days_observed ?? null,
+          "days",
+          observed,
+        ),
       ],
       series: v.series.map((point) => ({
         date: point.date,

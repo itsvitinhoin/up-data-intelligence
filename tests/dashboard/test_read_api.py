@@ -94,6 +94,16 @@ class FakeReader:
             return self.override[query.name]
         if query.name == "head":
             return [head(self.policy)]
+        if query.name == "order_quantity_summary":
+            return [
+                {
+                    "orders": 2,
+                    "duplicate_orders": 0,
+                    "invalid_identity": 0,
+                    "requested_pieces": 11,
+                    "fulfilled_pieces": 7,
+                }
+            ]
         if query.name == "store_daily":
             return [
                 {
@@ -985,3 +995,57 @@ def test_read_diagnostics_do_not_change_query_budget_or_cache_policy():
     assert all(
         call.kwargs["job_config"].use_query_cache is False for call in client.query.call_args_list
     )
+
+
+def test_overview_quantity_and_retention_fields_use_existing_evidence(setup):
+    service, reader = setup
+    service.catalog_enabled = True
+    reader.override["operational_leads"] = [
+        {
+            "generated": 0,
+            "approved": 0,
+            "converted": 0,
+            "conflicts": 0,
+            "invalid_identity": 0,
+            "unresolved_approved": 0,
+        }
+    ]
+    data = service.overview(PRINCIPAL, GRANT, from_day="2026-09-01", to_day="2026-09-02")["data"]
+    assert data["requested_pieces"] == 11
+    assert data["fulfilled_pieces"] == 7
+    assert data["requested_pieces_per_order"] == "5.5"
+    assert data["retention_ticket_observed"] == "50.25"
+    assert data["repeat_mean_days_observed"] is None
+    assert data["revenue_paid"] is None and data["ltv_complete"] is None
+    reader.override["order_quantity_summary"] = [
+        {
+            "orders": 2,
+            "duplicate_orders": 0,
+            "invalid_identity": 0,
+            "requested_pieces": None,
+            "fulfilled_pieces": 0,
+        }
+    ]
+    data = service.overview(PRINCIPAL, GRANT, from_day="2026-09-01", to_day="2026-09-02")["data"]
+    assert data["requested_pieces"] is None and data["requested_pieces_per_order"] is None
+    assert data["fulfilled_pieces"] == 0
+
+
+@pytest.mark.parametrize(
+    "field,value", [("orders", 3), ("duplicate_orders", 1), ("invalid_identity", 1)]
+)
+def test_overview_quantity_summary_must_reconcile_with_analytics(setup, field, value):
+    service, reader = setup
+    service.catalog_enabled = True
+    reader.override["order_quantity_summary"] = [
+        {
+            "orders": 2,
+            "duplicate_orders": 0,
+            "invalid_identity": 0,
+            "requested_pieces": 11,
+            "fulfilled_pieces": 7,
+            field: value,
+        }
+    ]
+    with pytest.raises(ReadError, match="order_quantity_summary_not_reconciled"):
+        service.overview(PRINCIPAL, GRANT, from_day="2026-09-01", to_day="2026-09-02")

@@ -1,5 +1,6 @@
 /** Server-owned service identity, user session and workspace resolution. */
 import { serviceAuthorization } from "./service-identity.server";
+import { numericServerTimings } from "./timing.server";
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { parseCatalog } from "./catalog";
 import { inclusiveToExclusive } from "@/lib/period";
@@ -377,6 +378,15 @@ export async function liveRead(
     const serializationDuration = performance.now() - serializationStart;
     timing.push(`bff;dur=${(performance.now() - started).toFixed(1)}`);
     timing.push(`bff_serialization;dur=${serializationDuration.toFixed(1)}`);
+    if (process.env.UP_READ_TIMING_LOGS === "true")
+      console.info(
+        JSON.stringify({
+          event: "dashboard_read_timing",
+          resource,
+          status: 200,
+          durations_ms: numericServerTimings(timing.join(", ")),
+        }),
+      );
     return new Response(body, {
       headers: {
         ...secureHeaders,

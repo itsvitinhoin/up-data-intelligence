@@ -312,6 +312,63 @@ describe("controlled B2B Overview preview", () => {
     );
     expect(p.metadata.history_complete).toBe(false);
   });
+  it("maps certified piece counts and observed retention into the existing overview body", () => {
+    const envelope = decodeOverviewEnvelope({
+      ...live,
+      data: {
+        ...live.data,
+        requested_pieces: 123,
+        fulfilled_pieces: 0,
+        requested_pieces_per_order: "6.833333333333333333333333333",
+        retention_ticket_observed: "50.25",
+        repeat_mean_days_observed: 2.5,
+      },
+    });
+    const p = presentLiveOverview(envelope);
+    expect(
+      p.data.orders.find((x) => x.label === "Peças Solicitadas")?.value,
+    ).toBe("123");
+    expect(
+      p.data.orders.find((x) => x.label === "Peças Atendidas")?.value,
+    ).toBe("0");
+    expect(
+      p.data.orders.find((x) => x.label === "Peças por Pedido")?.value,
+    ).toBe("6.833333333333333333333333333");
+    expect(
+      p.data.customers.find((x) => x.label === "Recorrentes")?.secondary?.value,
+    ).toBe("50.25");
+    expect(
+      p.data.relationship.find(
+        (x) => x.label === "Dias para compras recorrentes",
+      )?.value,
+    ).toBe("2.5");
+    expect(
+      p.data.relationship.find((x) => x.label === "LTV Geral")?.value,
+    ).toBeNull();
+    const missing = presentLiveOverview(
+      decodeOverviewEnvelope({
+        ...live,
+        data: {
+          ...live.data,
+          requested_pieces: null,
+          retention_ticket_observed: null,
+        },
+      }),
+    );
+    expect(
+      missing.data.orders.find((x) => x.label === "Peças Solicitadas")?.value,
+    ).toBeNull();
+    expect(
+      missing.data.customers.find((x) => x.label === "Recorrentes")?.secondary
+        ?.value,
+    ).toBeNull();
+    expect(() =>
+      decodeOverviewEnvelope({
+        ...live,
+        data: { ...live.data, requested_pieces: "123" },
+      }),
+    ).toThrow();
+  });
   it("never converts an unknown denominator into zero and separates query keys", () => {
     expect(ticket("50.00", 0)).toBeNull();
     expect(ticket(null, 2)).toBeNull();

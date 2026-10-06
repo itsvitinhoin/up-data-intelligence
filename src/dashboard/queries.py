@@ -98,6 +98,24 @@ WHERE h.record_kind='HEAD' AND h.store_id=@store AND h.policy_hash=@policy"""
         params.update(
             {"from": ("DATE", values.get("from_day")), "to": ("DATE", values.get("to_day"))}
         )
+    if name == "order_quantity_summary":
+        params.update(
+            {
+                "from": ("DATE", values.get("from_day")),
+                "to": ("DATE", values.get("to_day")),
+                "timezone": ("STRING", values.get("timezone")),
+                "as_of": ("TIMESTAMP", values.get("as_of")),
+            }
+        )
+        sql = f"""SELECT COUNT(*) orders,
+ COUNT(*)-COUNT(DISTINCT order_id) duplicate_orders,
+ COUNTIF(order_id IS NULL OR order_id='') invalid_identity,
+ IF(COUNT(*)=0,0,IF(COUNTIF(requested_items_qty IS NULL)>0,NULL,SUM(requested_items_qty))) requested_pieces,
+ IF(COUNT(*)=0,0,IF(COUNTIF(fulfilled_items_qty IS NULL)>0,NULL,SUM(fulfilled_items_qty))) fulfilled_pieces
+ FROM {c("orders")} {history}
+ WHERE store_id=@store AND source_system='upzero' AND created_at<@as_of
+ AND DATE(created_at,@timezone)>=@from AND DATE(created_at,@timezone)<@to"""
+        return Query(name, sql, params)
     if name == "funnel_extra":
         params.update(
             {

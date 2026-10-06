@@ -2,7 +2,7 @@
 
 The implementation preserves Manager V2 page/section order and existing bodies. It does not promote production, start historical extraction or add another provider. The initial 21-column matrix was created before changing values; its implementation section is the authoritative local mapping audit.
 
-## Implemented, not yet deployed
+## Implemented and deployed to private Preview
 
 81 metric IDs map explicitly to read resource, response path, formatter and coverage rule; 21 widgets and 10 reused body contracts are enumerated and tested. Resource incompatibility cannot borrow a page's Overview value. NULL stays unavailable and a covered zero stays zero. Existing decimal monetary text remains exact in transport and monthly aggregation.
 
@@ -14,7 +14,7 @@ Contacts are authorized on demand only. Order snapshot reads use the official ne
 
 Basic Meta reads remain independent of creative previews. Additional campaign/day link-clicks, landing-page views and reach-sum reads use the Intelligence source snapshot, exact account and configuration. Landing-page-view NUMERIC is transported as decimal text, not rounded to an integer. Reach sum is not unique period reach. Actions/action_values are absent in the currently persisted 35 campaign/day rows; an empty action list is not a claim of source absence.
 
-The new source reads are gated by the existing completion feature flag used by private Preview; production has that feature off. This flag does not assert catalog completeness. Queries remain parameterized, read-only, store-scoped and budgeted by the existing read repository: 1 GiB maximum/query and the unchanged per-request reservation ceiling. The two additional proposed table reads are analytics_events and meta_live_insights_daily. Their proposed IAM member is shared by existing Read runtimes; this security impact must be explicitly reviewed before apply, even though only Preview images would change.
+The new source reads are gated by the existing completion feature flag used by private Preview; production has that feature off. This flag does not assert catalog completeness. Queries remain parameterized, read-only, store-scoped and budgeted by the existing read repository: 256 MiB maximum/query and 8 GiB per-request reservation ceiling in the deployed product API. The two additional table reads are analytics_events and meta_live_insights_daily. The IAM member is shared by existing Read runtimes. The user explicitly approved this security impact before apply; the two new grants are table-scoped READ only. Production images and feature flags remain unchanged.
 
 ## B2C review
 
@@ -53,10 +53,55 @@ No further lead-definition decision is required. No Meta purchase question is as
 
 ## Deployment and performance gate
 
-New private Preview API deployment has not occurred in this Change. Proposed table-read IAM is not applied. Existing production APIs, production Vercel deployment, data Jobs and scheduler configuration remain unchanged. No success claim for complete live data wiring or current freshness is made while Health/enrichment acceptance is pending.
+The exact saved plan was applied once after explicit approval: SHA256 `52c88ff3421da8e56544a9db9314e2b3666560d63f36e26b3f5f09c275a333ff`; two private Preview image updates and two table READ grants, zero deletes/replacements. Apply exit 0; fresh post-plan exit 0 (No changes); Terraform fmt/validate passed. Protected Job templates, production service templates, Preview service invoker IAM and all nine scheduler states matched the before snapshot. Production Read identity gained only the two expressly approved table READ grants; production code and flags were not deployed. No success claim for complete live data wiring or current freshness is made while Health/enrichment acceptance is pending.
 
 Existing Server-Timing instrumentation is retained. Deployment measurements for auth/WIF/API/BQ/serialization have not yet been taken for this code; no dominant latency or page request count is invented. Internal audit reads share the existing React Query keys to deduplicate card/widget readers. Contact calls occur only when a detail is opened.
 
 ## Validation
 
 Full Python: 2443 passed. Focused dashboard: 222 passed. Ruff and mypy: pass (185 source files). Frontend: 335 tests in 31 files, lint/typecheck/format pass. Next.js webpack production build passes; Turbopack local build encountered environment EPERM while opening its PostCSS process port. Authenticated offline E2E: 4 passed; demo E2E: 1 passed. Final validation is repeated after the last changes.
+
+## Preview deployment provenance
+
+- API source: `151670a650b6bfb10e12b9dce534870067e4429b`.
+- Cloud Build: `6f3395a6-2514-4849-9a4d-82cde27508c9`, SUCCESS.
+- Build/Artifact Registry digest: `sha256:db89ea80acbccb1bcaf10542d52d01b24dd81b30e7d513b24f7fcbd7aab2b11f`, equal.
+- Frontend source: `7a50e341dcded6ebed161d538b1bf41f1f4d7306`; follow-up fixes only the synthetic paid-gauge percentage contract and adds a coherence assertion. No Python/infra change after the API image source.
+- Vercel Preview: https://up-data-intelligence-fyjm8gjj0-victorcheunin-6445s-projects.vercel.app/b2b . Deployment exit 0; Vercel production Next/Turbopack build passed. Production alias was not promoted.
+- Post-gauge regression: frontend 335/335 tests; lint/typecheck/format and local webpack production build pass; demo E2E 1/1 in 12.2s.
+- The approved operator signed in successfully in the new Preview. Real B2B overview, registrations, funnel, retention, order/product/customer tables have been observed. Complete navigation/B2C review and timing acceptance are ongoing; no client/contact values are included in this report.
+
+## Real reader measurements (not authenticated browser timing)
+
+One read-only pass of the deployed API source against canonical live metadata returned Analytics generation 6 and Intelligence generation 4/base 6. It is a domain-reader check, not evidence of an authenticated HTTP or browser session.
+
+| Resource | Query count | BigQuery duration ms | Bytes processed | Result |
+| --- | ---: | ---: | ---: | --- |
+| Overview | 8 | 9699 | 28480526 | 200 |
+| Orders | 6 | 6196 | 48940 | 22 rows |
+| Customers | 6 | 6044 | 211235 | 18 rows |
+| Products | 8 | 8403 | 1920326 | First 100 rows |
+| Retention | 7 | 7055 | 52908 | 200 |
+| Geography | 6 | 5918 | 49731 | 9 states; 22/22 orders mapped; monetary delta 0 |
+| Acquisition | 8 | 8028 | 28475206 | 200 |
+| Performance | 8 | 8108 | 90409 | 200 |
+| Funnel | 7 | 6979 | 28473144 | 200 |
+| Order contact | 6 | 5964 | 46891 | Snapshot document/email/phone present; no values reported |
+
+Overview aggregate: requested `99033.96`, fulfilled `85384.51`, 22 orders. Operational leads: 864 submitted / 588 approved; qualification `68.05555555555555555555555556`; conversion NULL. Customer360, timeline, customer product profile and campaign detail readers also returned valid envelopes. Covered empty campaign-customer/order lists are distinct from unavailable data.
+
+The first helper used generic ReadBudget defaults (1 GiB/query, 8 GiB total), which reserved only eight calls and rejected order/product detail before catalog proof with query_budget_exceeded. This is a harness configuration mismatch, not proof of deployed failure: product runtime uses 256 MiB/query and 8 GiB total. A second pass uses exactly those existing runtime limits; no application budget was raised.
+
+The deployed invalid-token session exchange returned 401. This confirms that invalid authentication was rejected; it does not establish valid-user acceptance. auth/WIF/API/serialization and browser page-request measurements remain pending valid login, so no end-to-end dominant component or SLO is claimed.
+
+## Authenticated browser follow-up
+
+Live navigation exposed inherited Overview body slots still hardcoded NULL. The follow-up maps observed retention ticket/repeat mean directly from the existing customer period query and adds one bounded, parameterized CORE order quantity aggregate at the same read snapshot/certified cutoff. Its order count must reconcile exactly with Analytics; duplicate/invalid IDs fail closed. Requested and fulfilled pieces remain separate, NULL stays unknown, and a fully covered empty period returns zero pieces. No ingestion/commercial/publication semantics changed. No count of “fulfilled orders” is inferred from quantities, approved status or paid status.
+
+The funnel's rates remain the certified session-chain ratios. Labels now state those denominators and display percent units, avoiding comparison against raw event counts. Purchase progression share uses the same exact ratio-to-percent conversion.
+
+Preview-only opt-in numeric Server-Timing diagnostics (`UP_READ_TIMING_LOGS`) collect auth/WIF/BQ/API/serialization durations by resource. The allowlist strips descriptions and all scope/entity/payload values; the flag is off by default.
+
+Follow-up offline verification: 2448 Python tests passed in 131.73s; 227 focused dashboard tests; Ruff/format/mypy passed (185 source files). Frontend full validation and immutable Preview release are repeated for this patch. Authenticated offline E2E: 4/4 passed in 20.1s, including isolated B2C review/return.
+
+Frontend patch regression: 337 tests in 32 files; lint/typecheck/format and webpack production build passed. No new auth/source dependency was added.
