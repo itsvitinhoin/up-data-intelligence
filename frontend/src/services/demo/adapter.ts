@@ -1,6 +1,7 @@
 import { periodDays } from "@/lib/period";
 import { managerDemoRetail } from "./manager-v2";
 import { retailFor } from "./retail";
+import { retailProductsFor } from "./retail-products";
 import { erpFor } from "./erp";
 import { retentionSummaryFor } from "./retention-summary";
 import { leadsFor, geographyWithLeads } from "./leads";
@@ -107,6 +108,10 @@ export const demoApi: DataApi = {
         break;
       case "inventory_products":
       case "products": {
+        if (c.scope.operation === "B2C") {
+          result = retailProductsFor(c, resource === "inventory_products");
+          break;
+        }
         const historical = resource === "inventory_products";
         const days = historical
           ? 30

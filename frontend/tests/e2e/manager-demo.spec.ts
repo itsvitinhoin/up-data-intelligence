@@ -52,4 +52,11 @@ test("B2C V2, retained V1 and session personalization", async ({ page }) => {
   await expect(page.getByTestId("b2c-demo-banner")).toContainText(
     "B2C · DADOS DEMONSTRATIVOS",
   );
+  await page.locator('nav a[href="/b2c/products"]').first().click();
+  await expect(
+    page
+      .locator(".metric")
+      .filter({ hasText: "Peças Vendidas" })
+      .locator(".metric-value"),
+  ).toHaveText("1.440");
 });

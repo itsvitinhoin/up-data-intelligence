@@ -1,5 +1,6 @@
 import type {
   OrderDetail,
+  Order,
   Product,
   RequestContext,
 } from "@/services/demo/types";
@@ -34,9 +35,11 @@ export function orderDetailFor(
   id: string,
   c: RequestContext,
 ): OrderDetail | null {
-  const order = (
-    c.scope.operation === "B2C" ? allOrdersFor(c) : ordersFor(c)
-  ).find((row) => row.id === id);
+  const order =
+    ordersFor(c).find((row) => row.id === id) ??
+    (c.scope.operation === "B2C"
+      ? allOrdersFor(c).find((row) => row.id === id)
+      : undefined);
   if (!order) return null;
   const customer = customersFor({
     ...c,
@@ -51,13 +54,6 @@ export function orderDetailFor(
     },
   }).find((row) => row.id === order.customer_id);
   if (!customer) return null;
-  const index = fixtures.orders.findIndex((row) => row.id === id);
-  const products = [
-    fixtures.products[index % fixtures.products.length],
-    fixtures.products[(index + 1) % fixtures.products.length],
-  ];
-  const split = (value: number, i: number) =>
-    i === 0 ? Math.floor(value / 2) : value - Math.floor(value / 2);
   return {
     order,
     customer: {
@@ -66,22 +62,34 @@ export function orderDetailFor(
       email: `${customer.id}@clientes.example`,
       phone: "(00) 00000-0000 · fictício",
     },
-    items: products.map((product, i) => ({
-      product_id: product.id,
-      name: product.name,
-      sku: product.sku,
-      color: product.color,
-      size: i === 0 ? "M" : "G",
-      requestedQuantity: split(order.requestedQuantity, i),
-      fulfilledQuantity: split(order.fulfilledQuantity, i),
-      requested: (
-        split(Math.round(Number(order.requested) * 100), i) / 100
-      ).toFixed(2),
-      fulfilled: (
-        split(Math.round(Number(order.fulfilled) * 100), i) / 100
-      ).toFixed(2),
-    })),
+    items: orderItemsFor(order),
   };
+}
+
+/** The same synthetic lines feed order detail and B2C product aggregates. */
+export function orderItemsFor(order: Order): OrderDetail["items"] {
+  const index = fixtures.orders.findIndex((row) => row.id === order.id);
+  const products = [
+    fixtures.products[index % fixtures.products.length],
+    fixtures.products[(index + 1) % fixtures.products.length],
+  ];
+  const split = (value: number, i: number) =>
+    i === 0 ? Math.floor(value / 2) : value - Math.floor(value / 2);
+  return products.map((product, i) => ({
+    product_id: product.id,
+    name: product.name,
+    sku: product.sku,
+    color: product.color,
+    size: i === 0 ? "M" : "G",
+    requestedQuantity: split(order.requestedQuantity, i),
+    fulfilledQuantity: split(order.fulfilledQuantity, i),
+    requested: (
+      split(Math.round(Number(order.requested) * 100), i) / 100
+    ).toFixed(2),
+    fulfilled: (
+      split(Math.round(Number(order.fulfilled) * 100), i) / 100
+    ).toFixed(2),
+  }));
 }
 
 /** Synthetic sold units, independent of current stock. Never inferred from availability. */

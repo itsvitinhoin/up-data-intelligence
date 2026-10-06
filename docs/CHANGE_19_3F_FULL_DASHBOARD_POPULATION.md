@@ -100,6 +100,29 @@ binding/reporting definition, budgets and bounded V2 processing. It must complet
 before the historical UP Zero publication is expanded. Neither historical plan
 has been persisted at this documentation point; current catalog work is preserved.
 
+## Bounded authenticated read update
+
+Commit `883524625010a842e5147ea9efc8fee332ab10cf` passed 2571 Python tests,
+354 frontend tests, Ruff/format/mypy, frontend lint/typecheck/format, local Webpack,
+four offline B2B/Admin E2Es and the ten-route B2C Demo E2E. The first local E2E
+attempt could not bind in the sandbox; the subsequent attempt needed the installed
+Chrome executable. The completed isolated Chrome runs passed 4/4 and 1/1.
+
+Immutable API build `7bfee379-ee21-40ef-b080-dce9fb34da9e` completed successfully,
+including the non-root, no-network image smoke. Artifact Registry matched digest
+`sha256:a8c0045bac986fdeb4520d4cf642f8fc4f7f8cbf9ed52f51df3cef9a188d5e82`.
+The separate saved image-only plan, SHA256
+`795d78ec41e614f80d1312cfc214ecb1a7e932b0ecf11daef9740e31a99e0a55`,
+was applied once: two private Preview service image updates, no IAM, Jobs,
+Production or Scheduler changes. Fresh post-plan exited 0 (No changes).
+
+The user authenticated the new protected Preview
+`up-data-intelligence-a8lxgwy1o-victorcheunin-6445s-projects.vercel.app`.
+Current Performance rendered requested UP Zero revenue, requested and explicit
+paid-status order counts, requested ROAS, Meta impressions/clicks, observed
+frequency, period ticket and repurchase rate. Paid monetary revenue remains NULL.
+This is intermediate acceptance while images, history and final Health are pending.
+
 ## Live gates still required
 
 Offline release validation: Python 2563 passed; frontend 34 files / 353 tests
@@ -120,3 +143,22 @@ real authenticated E2E, six-page final-host latency measurements, remote
 Webpack/Turbopack builds and zero blocking Health failures. No success title is
 valid before these gates pass. ERP/Google/TikTok/WhatsApp remain explicit future
 connectors. B2B Live never falls back to demo values.
+
+## Authenticated Demo parity correction (intermediate)
+
+The authenticated Preview review exposed an independent B2C fixture projection:
+September product revenue summed to BRL 190,796 while the demo order ledger and
+retail Overview captured BRL 82,488. This is a Demo projection bug, not a real MX
+data discrepancy. B2C product sales now aggregate the exact same deterministic
+order lines as the order dialog, in integer cents. Product units, revenue, buyer
+counts and color/size sales reconcile to those lines; current stock remains a
+separate snapshot. Date-independent inventory uses all demo orders. Filtered
+order details preserve the selected order amount, with historical lookup retained.
+B2B fixtures, live adapters, backend, publications and credentials are unchanged.
+Focused parity and existing retail suites: 11 tests passed. Full frontend: 35
+files / 359 tests passed; lint, typecheck, format and local Webpack passed.
+Offline Chrome E2E: B2C ten-route test 1/1 passed (14.0s), including the exact
+1,440 sold-piece assertion; B2B/Admin regression 4/4 passed (19.3s). Remote
+Webpack and Turbopack for source `883524625010a842e5147ea9efc8fee332ab10cf`
+also passed. Deployment and final-host certification of the Demo correction
+remain pending. No change to connected source data is implied by these tests.

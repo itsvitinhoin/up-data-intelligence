@@ -9,6 +9,7 @@ is already live. Missing certified source data never becomes demo or numeric zer
 
 | Metric | Classification | Resource / field | Contract / limitation |
 |---|---|---|---|
+| Frequência de compra observada (purchase_frequency_observed) | LIVE_REAL | overview / purchase_frequency_observed | Pedidos qualificantes / compradores observados no período; não é frequência lifetime. |
 | Impressões Meta (meta_impressions) | LIVE_REAL | performance / impressions | Histórico observado; não confirma pagamento. |
 | Cliques Meta (meta_clicks) | LIVE_REAL | performance / clicks | Histórico observado; não confirma pagamento. |
 | Cliques no link Meta (meta_link_clicks) | LIVE_REAL | performance / link_clicks | Histórico observado; não confirma pagamento. |
@@ -137,7 +138,7 @@ is already live. Missing certified source data never becomes demo or numeric zer
 | Route | Metric IDs | Widgets / body |
 |---|---|---|
 | /b2b | erp_revenue_paid, erp_orders_paid, ecommerce_revenue_paid, ad_revenue_paid, roas_paid, total_media_spend, erp_ad_share, new_customers, new_requested_observed, new_orders_observed, new_ad_customers, repurchasers, recurring_fulfilled_observed, recurring_orders_observed | commercial-trend / none |
-| /b2b/performance | revenue_paid, roas_paid, total_media_spend, meta_spend, google_spend, new_requested_observed, new_ticket_observed, new_orders_observed, recurring_fulfilled_observed, recurring_ticket_observed, recurring_orders_observed, approved_conversion, cac, approved_registrations, registrations, approved_registration_cost, approval_rate | paid-media-trend, acquisition-retention / none |
+| /b2b/performance | revenue_captured, orders_generated, orders_paid, roas_requested, meta_impressions, meta_clicks, average_ticket, purchase_frequency_observed, repurchase_rate, revenue_paid, roas_paid, total_media_spend, meta_spend, google_spend, new_requested_observed, new_ticket_observed, new_orders_observed, recurring_fulfilled_observed, recurring_ticket_observed, recurring_orders_observed, approved_conversion, cac, approved_registrations, registrations, approved_registration_cost, approval_rate | paid-media-trend, acquisition-retention / none |
 | /b2b/performance/funnel | total_media_spend, roas_requested, roas_paid, approved_conversion | funnel / none |
 | /b2b/performance/new-customers | new_requested_observed, new_ticket_observed, new_orders_observed, new_customers, cac, registration_cost, approved_registration_cost, total_media_spend, approved_registrations, approved_converted, approved_conversion, registration_first_purchase_mean, registration_first_purchase_median | new-revenue-ticket, new-sales-customers, investment-cac, approved-conversion, registration-cohort / none |
 | /b2b/performance/repurchase | repurchase_fulfilled_observed, repurchase_ticket_observed, repurchase_orders_observed, repurchasers, recurring_customers, recurring_fulfilled_observed, recurring_ticket_observed, recurring_orders_observed, reactivated_customers, reactivated_revenue_paid, reactivated_ticket_paid, reactivated_sales_paid, repeat_mean_days, repeat_median_days | repeat-revenue-ticket, recurring-reactivated, repurchase-cohort, purchase-progression / none |
