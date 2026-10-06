@@ -45,7 +45,11 @@ const sumCreatives = (
 const times = (value: number | null, factor: number) =>
   value === null ? null : value * factor;
 const cost = (r: MarketingCreative, b2c: boolean) =>
-  ratio(r.spend, b2c ? r.purchases : r.leads);
+  r.source === "real"
+    ? r.metaCpa == null
+      ? null
+      : Number(r.metaCpa)
+    : ratio(r.spend, b2c ? r.purchases : r.leads);
 const pct = (value: number | null) =>
   value === null
     ? "—"
@@ -132,7 +136,9 @@ function CreativeRank({
                 <span>{ad.campaign_name}</span>
                 <div className="creative-result num">
                   {kind === "ctr"
-                    ? pct(ratio(times(ad.clicks, 100), ad.impressions))
+                    ? ad.source === "real"
+                      ? metric(ad.metaCtr ?? null, "percent")
+                      : pct(ratio(times(ad.clicks, 100), ad.impressions))
                     : kind === "cost"
                       ? money(cost(ad, b2c))
                       : number(b2c ? ad.purchases : ad.leads)}
@@ -270,36 +276,46 @@ function MarketingContent({
       cell: (c) => money(c.getValue<string>()),
     },
     {
-      accessorKey: "fulfilled",
-      header: "Receita influenciada",
+      accessorKey: data.source === "real" ? "metaPurchaseValue" : "fulfilled",
+      header:
+        data.source === "real"
+          ? "Valor de compras Meta"
+          : "Receita influenciada",
       cell: (c) => money(c.getValue<string>()),
     },
     {
-      accessorKey: "roasFulfilled",
+      accessorKey: data.source === "real" ? "metaRoas" : "roasFulfilled",
       header: "ROAS",
       cell: (c) => metric(c.getValue<string>(), "ratio"),
     },
+    ...(data.source !== "real"
+      ? [
+          {
+            accessorKey: "leads",
+            header: "Leads",
+            cell: (c: { getValue: () => unknown }) =>
+              number(c.getValue() as number | null),
+          },
+        ]
+      : []),
     {
-      accessorKey: "leads",
-      header: "Leads",
-      cell: (c) => number(c.getValue<number | null>()),
-    },
-    {
-      accessorKey: b2c ? "purchases" : "approved",
-      header: b2c ? "Compras Meta" : "Aprovados",
+      accessorKey: b2c || data.source === "real" ? "purchases" : "approved",
+      header: b2c || data.source === "real" ? "Compras Meta" : "Aprovados",
       cell: (c) => number(c.getValue<number | null>()),
     },
     {
       id: "cost",
-      header: b2c ? "Custo/compra" : "CPL",
+      header: b2c || data.source === "real" ? "CPA Meta" : "CPL",
       accessorFn: (row) =>
-        ratio(
-          row.spend === null ? null : Number(row.spend),
-          b2c ? row.purchases : row.leads,
-        ),
+        data.source === "real"
+          ? row.metaCpa
+          : ratio(
+              row.spend === null ? null : Number(row.spend),
+              b2c ? row.purchases : row.leads,
+            ),
       cell: (c) => money(c.getValue<number | null>()),
     },
-    ...(!b2c
+    ...(!b2c && data.source !== "real"
       ? [
           {
             id: "cpa",
@@ -319,7 +335,14 @@ function MarketingContent({
       id: "ctr",
       header: "CTR",
       accessorFn: (row) =>
-        ratio(row.clicks === null ? null : row.clicks * 100, row.impressions),
+        data.source === "real"
+          ? row.metaCtr == null
+            ? null
+            : Number(row.metaCtr)
+          : ratio(
+              row.clicks === null ? null : row.clicks * 100,
+              row.impressions,
+            ),
       cell: (c) => pct(c.getValue<number | null>()),
     },
   ];
@@ -380,27 +403,73 @@ function MarketingContent({
       </section>
       <section className="marketing-trends">
         <Panel
-          title={b2c ? "Investimento × Compras" : "Investimento × Leads"}
+          title={
+            b2c || data.source === "real"
+              ? "Investimento × Compras Meta"
+              : "Investimento × Leads"
+          }
           subtitle={
             data.source === "real"
-              ? "Investimento diário certificado; leads não disponíveis"
+              ? "Investimento e compras reportados pelo Meta por dia"
               : "Volume e investimento por dia · série sintética"
           }
         >
-          <MarketingChart series={data.series} kind="results" b2c={b2c} />
+          {data.seriesAvailable === false ? (
+            <p className="muted">
+              Cobertura diária Meta ainda não certificada neste período.
+            </p>
+          ) : (
+            <MarketingChart
+              series={data.series}
+              kind="results"
+              b2c={b2c || data.source === "real"}
+            />
+          )}
         </Panel>
         <Panel
           title="ROAS ao longo do período"
-          subtitle="Receita influenciada / investimento"
+          subtitle={
+            data.source === "real"
+              ? "Valor de compras Meta / investimento Meta"
+              : "Receita influenciada / investimento"
+          }
         >
-          <MarketingChart series={data.series} kind="roas" b2c={b2c} />
+          {data.seriesAvailable === false ? (
+            <p className="muted">
+              Cobertura diária Meta ainda não certificada neste período.
+            </p>
+          ) : (
+            <MarketingChart
+              series={data.series}
+              kind="roas"
+              b2c={b2c || data.source === "real"}
+            />
+          )}
         </Panel>
       </section>
       <Panel
-        title="Investimento × Receita"
-        subtitle="Receita atendida dos pedidos com influência de mídia, sem duplicação"
+        title={
+          data.source === "real"
+            ? "Investimento × Valor de compras Meta"
+            : "Investimento × Receita"
+        }
+        subtitle={
+          data.source === "real"
+            ? "Valor reportado pela plataforma; não é receita comercial UP Zero"
+            : "Receita atendida dos pedidos com influência de mídia, sem duplicação"
+        }
       >
-        <MarketingChart series={data.series} kind="revenue" b2c={b2c} />
+        {data.seriesAvailable === false ? (
+          <p className="muted">
+            Cobertura diária Meta ainda não certificada neste período.
+          </p>
+        ) : (
+          <MarketingChart
+            series={data.series}
+            kind="revenue"
+            b2c={b2c || data.source === "real"}
+          />
+        )}
       </Panel>
       <section className="marketing-breakdowns">
         <Panel
@@ -417,10 +486,12 @@ function MarketingContent({
             </small>
           </div>
           <dl className="detail-list">
-            <div>
-              <dt>Leads</dt>
-              <dd>{number(leads)}</dd>
-            </div>
+            {data.source !== "real" && (
+              <div>
+                <dt>Leads</dt>
+                <dd>{number(leads)}</dd>
+              </div>
+            )}
             <div>
               <dt>Cliques</dt>
               <dd>
@@ -454,7 +525,11 @@ function MarketingContent({
       </section>
       <Panel
         title="Performance por campanha"
-        subtitle="Clique na campanha para ver os clientes e pedidos participantes. Receitas de campanhas podem se sobrepor."
+        subtitle={
+          data.source === "real"
+            ? "Métricas reportadas pela plataforma; não representam receita comercial atribuída."
+            : "Clique na campanha para ver os clientes e pedidos participantes. Receitas de campanhas podem se sobrepor."
+        }
       >
         <div className="marketing-table-filters">
           <Input

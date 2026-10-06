@@ -45,12 +45,12 @@ const denied = new Set(
   ),
 );
 const monetary = new Set(
-  "landing_page_views spend observed_spend meta_spend observed_meta_spend ctr cpc cpm roas_requested roas_fulfilled cac_new_customer fulfillment_rate requested_total fulfilled_total value ltv_observed total_requested_revenue total_fulfilled_revenue first_purchase_requested_revenue first_purchase_fulfilled_revenue requested_revenue fulfilled_revenue requested_revenue_influenced fulfilled_revenue_influenced".split(
+  "requested fulfilled cancelled paid_revenue requested_ticket recurring_rate session_purchase_rate session_cart_rate cart_checkout_rate checkout_purchase_rate cost_per_paid_order cost_per_sale commercial_requested_revenue commercial_paid_revenue commercial_roas_requested commercial_roas_paid available_media_spend registration_cost approved_registration_cost cost_per_session cost_per_add_to_cart cost_per_checkout lead_qualification_rate approved_conversion_rate purchase_frequency_observed average_requested_ticket landing_page_views spend observed_spend meta_spend observed_meta_spend ctr cpc cpm roas_requested roas_fulfilled cac_new_customer fulfillment_rate requested_total fulfilled_total value ltv_observed total_requested_revenue total_fulfilled_revenue first_purchase_requested_revenue first_purchase_fulfilled_revenue requested_revenue fulfilled_revenue requested_revenue_influenced fulfilled_revenue_influenced".split(
     " ",
   ),
 );
 const counts = new Set(
-  "link_clicks reach_campaign_day_sum impressions clicks influenced_orders influenced_customers new_customers_influenced purchase_count total_orders orders_count orders_influenced campaign_count paid_touch_count total_events total_sessions total_products_viewed total_cart_events total_checkout_events influenced_orders purchase_number".split(
+  "orders paid_orders buyers recurring sessions add_to_cart checkout_started sessions_with_cart sessions_cart_then_checkout sessions_cart_checkout_purchase sessions_with_purchase commercial_orders_requested commercial_orders_paid leads_generated leads_approved recurring_buyers_observed link_clicks reach_campaign_day_sum impressions clicks influenced_orders influenced_customers new_customers_influenced purchase_count total_orders orders_count orders_influenced campaign_count paid_touch_count total_events total_sessions total_products_viewed total_cart_events total_checkout_events influenced_orders purchase_number".split(
     " ",
   ),
 );
@@ -145,6 +145,32 @@ export function parseIntelligence<K extends IntelligenceResource>(
       "cac_new_customer",
     ])
       if (!(k in result)) return invalid();
+    if ("monthly" in result) {
+      if (!Array.isArray(result.monthly) || result.monthly.length > 120)
+        return invalid();
+      let previous = "";
+      for (const raw of result.monthly) {
+        const row = record(raw);
+        if (
+          typeof row.month !== "string" ||
+          !/^\d{4}-(?:0[1-9]|1[0-2])$/.test(row.month) ||
+          row.month <= previous
+        )
+          return invalid();
+        previous = row.month;
+        for (const key of [
+          "requested",
+          "fulfilled",
+          "orders",
+          "paid_orders",
+          "meta_spend",
+          "available_media_spend",
+          "commercial_roas_requested",
+          "paid_revenue",
+        ])
+          if (!(key in row)) return invalid();
+      }
+    }
     if ("series" in result) {
       if (!Array.isArray(result.series) || result.series.length > 366)
         return invalid();

@@ -1,6 +1,6 @@
 """Operational metadata only. No RAW payload, secrets, cursors or CORE scans."""
 
-from src.dashboard.queries import Query, table
+from src.dashboard.queries import Query, build, table
 
 OPS = {
     "store_runtime_config",
@@ -26,7 +26,47 @@ def build_installation(project: str, name: str, store: str, snapshot: str | None
     history = "FOR SYSTEM_TIME AS OF @snapshot_at"
     if snapshot is not None:
         params["snapshot_at"] = ("TIMESTAMP", snapshot)
-    if name == "installation_registry":
+    if name == "installation_context":
+        # One fresh statement resolves Registry, immutable work, HEAD/RECEIPT
+        # and published coverage. No authorization/publication cache is involved.
+        head_sql = (
+            build(project, "head", snapshot_at="unused")
+            .sql.replace("@snapshot_at", "CURRENT_TIMESTAMP()")
+            .replace(" AND h.policy_hash=@policy", "")
+        )
+        daily = table(project, "up_analytics", "analytics_store_daily")
+        funnel = table(project, "up_analytics", "analytics_funnel_daily")
+        sql = f"""WITH candidates AS (
+ SELECT *,ROW_NUMBER() OVER() candidate_number FROM ({head_sql})
+), store_flags AS (
+ SELECT h.candidate_number, COUNT(s.store_id) observed_rows,
+ ARRAY_AGG(DISTINCT TO_JSON_STRING(STRUCT(s.history_complete,s.currency,s.reporting_timezone))) flags
+ FROM candidates h LEFT JOIN {daily} AS s FOR SYSTEM_TIME AS OF CURRENT_TIMESTAMP()
+ ON s.store_id=h.store_id AND s.policy_hash=h.policy_hash
+ AND s.order_date>=h.receipt_from AND s.order_date<h.receipt_to
+ GROUP BY h.candidate_number
+), fact_flags AS (
+ SELECT h.candidate_number, COUNT(f.store_id) observed_rows,
+ ARRAY_AGG(DISTINCT TO_JSON_STRING(STRUCT(f.observation_complete AS facts_complete))) flags
+ FROM candidates h LEFT JOIN {funnel} AS f FOR SYSTEM_TIME AS OF CURRENT_TIMESTAMP()
+ ON f.store_id=h.store_id AND f.policy_hash=h.policy_hash
+ AND f.event_date>=h.receipt_from AND f.event_date<h.receipt_to
+ GROUP BY h.candidate_number
+) SELECT CURRENT_TIMESTAMP() snapshot_at,
+ ARRAY(SELECT AS STRUCT * FROM {ops("store_runtime_config")}
+ FOR SYSTEM_TIME AS OF CURRENT_TIMESTAMP() WHERE store_id=@store LIMIT 2) registry,
+ ARRAY(SELECT AS STRUCT * FROM {ops("installation_plans")}
+ FOR SYSTEM_TIME AS OF CURRENT_TIMESTAMP() WHERE store_id=@store
+ ORDER BY created_at DESC LIMIT 2) plans,
+ ARRAY(SELECT AS STRUCT * FROM {ops("installation_work_units")}
+ FOR SYSTEM_TIME AS OF CURRENT_TIMESTAMP() WHERE store_id=@store
+ ORDER BY sequence,work_unit_id LIMIT 10001) units,
+ ARRAY(SELECT AS STRUCT h.* EXCEPT(candidate_number),
+ s.observed_rows AS store_observed_rows,s.flags AS store_flags,
+ f.observed_rows AS facts_observed_rows,f.flags AS facts_flags
+ FROM candidates h JOIN store_flags s USING(candidate_number)
+ JOIN fact_flags f USING(candidate_number) LIMIT 1001) heads"""
+    elif name == "installation_registry":
         sql = f"""SELECT *, CURRENT_TIMESTAMP() AS snapshot_at
  FROM {ops("store_runtime_config")} WHERE store_id=@store LIMIT 2"""
     elif name == "installation_plans":

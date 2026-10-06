@@ -10,8 +10,17 @@ from src.utils.data import digest
 
 
 class EnrichmentPrepare:
-    def __init__(self, service: HistoryService, limits: Limits):
+    def __init__(
+        self,
+        service: HistoryService,
+        limits: Limits,
+        *,
+        images_enabled: bool = False,
+        meta_period_enabled: bool = False,
+    ):
         self.service, self.limits = service, limits
+        self.images_enabled = images_enabled
+        self.meta_period_enabled = meta_period_enabled
 
     def __call__(self, store: str | None = None) -> int:
         ledger = self.service.ledger
@@ -36,14 +45,19 @@ class EnrichmentPrepare:
                 c = ledger.config(store_id)
                 publication = self.service.publication(c)
                 end = publication["report_to"]
-                for provider, purpose, start in (
+                purposes = [
                     (
                         "upzero",
                         "CATALOG_SNAPSHOT",
                         (date.fromisoformat(end) - timedelta(days=1)).isoformat(),
                     ),
-                    ("meta", "META_CREATIVE_COVERAGE", publication["report_from"]),
-                ):
+                ]
+                if self.images_enabled:
+                    purposes.append(("upzero", "CATALOG_IMAGES", purposes[0][2]))
+                purposes.append(("meta", "META_CREATIVE_COVERAGE", publication["report_from"]))
+                if self.meta_period_enabled:
+                    purposes.append(("meta", "META_PERIOD_REPORT", publication["report_from"]))
+                for provider, purpose, start in purposes:
                     if not getattr(c, provider + "_enabled"):
                         continue
                     completed = [
@@ -53,6 +67,28 @@ class EnrichmentPrepare:
                         and p["adopted_coverage"]["extension"]["publication"]["report_to"] == end
                         and p["config_hash"] == config_hash(c)
                     ]
+                    if purpose == "META_CREATIVE_COVERAGE" and self.service.purchase_certificates:
+                        certificates = [
+                            x
+                            for x in self.service.purchase_certificates
+                            if x.account.store_id == store_id
+                        ]
+                        if len(certificates) != 1:
+                            raise SafeError("extension_meta_definition_required")
+                        action = certificates[0].purchase_action_type
+                        completed = [
+                            p
+                            for p in completed
+                            if all(
+                                u["filters"].get("purchase_action_type") == action
+                                for u in ledger.units(p["plan_id"])
+                                if u["resource"] == "creative_insights"
+                            )
+                            and any(
+                                u["resource"] == "creative_insights"
+                                for u in ledger.units(p["plan_id"])
+                            )
+                        ]
                     if completed:
                         continue
                     self.service.prepare(

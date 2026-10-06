@@ -67,6 +67,70 @@ def installed():
     return c, source, pub, checkpoints, runs
 
 
+def test_certified_ad_purchase_definition_has_distinct_id_and_preserves_initial_graph():
+    from src.connectors.meta.config import Account, Insights
+
+    c, _, publication, _, _ = installed()
+    c = replace(
+        c,
+        meta_enabled=True,
+        meta_connection_id="synthetic-meta",
+        meta_account_id="000101",
+        meta_api_version="v26.0",
+    )
+    source = dict(
+        store_id=c.store_id,
+        connection_id=c.meta_connection_id,
+        source_system="meta",
+        status="active",
+        secret_resource_name=None,
+        row_key="source",
+        updated_at=NOW,
+    )
+    account = Account(
+        c.store_id,
+        c.meta_account_id,
+        c.meta_connection_id,
+        c.meta_api_version,
+        c.timezone,
+        c.currency,
+    )
+    report = Insights("2026-09-01", "2026-09-01", "impression", ("7d_click",), None)
+
+    def calculate(spec):
+        return ExtensionPlanner().calculate(
+            c,
+            source,
+            "META_CREATIVE_COVERAGE",
+            "2026-09-01",
+            "2026-09-02",
+            NOW,
+            requested_by_hash="c" * 64,
+            checkpoints=[],
+            runs=[],
+            publication=publication,
+            account=account,
+            reporting=spec,
+        )
+
+    observed, observed_units = calculate(report)
+    certified, certified_units = calculate(
+        replace(report, purchase_action_type="offsite_conversion.fb_pixel_purchase")
+    )
+    repeated, repeated_units = calculate(
+        replace(report, purchase_action_type="offsite_conversion.fb_pixel_purchase")
+    )
+    assert certified["plan_id"] != observed["plan_id"]
+    assert certified == repeated and certified_units == repeated_units
+    assert len(certified_units) == 1 and certified_units[0]["resource"] == "creative_insights"
+    assert (
+        certified_units[0]["filters"]["purchase_action_type"]
+        == "offsite_conversion.fb_pixel_purchase"
+    )
+    assert observed_units[0]["filters"]["purchase_action_type"] is None
+    assert c.history_complete is False
+
+
 def plan(purpose="HISTORY_EXTENSION", start="2026-08-30", end="2026-09-01", **kwargs):
     c, s, p, checkpoints, runs = installed()
     return ExtensionPlanner(kwargs.pop("limits", Limits())).calculate(
@@ -365,3 +429,211 @@ def test_enrichment_inventory_is_bounded_fair_and_blocks_only_the_affected_store
     assert service.prepare.call_args.args[0] == {"store_id": c.store_id}
     assert service.prepare.call_args.args[2] == "2026-09-30"
     assert service.prepare.call_args.args[4] == "CATALOG_SNAPSHOT"
+
+
+def test_images_extension_is_distinct_and_never_replaces_completed_catalog_graph():
+    original, units = plan(purpose="CATALOG_SNAPSHOT", start="2026-09-30", end="2026-10-01")
+    images, image_units = plan(purpose="CATALOG_IMAGES", start="2026-09-30", end="2026-10-01")
+    assert images["plan_id"] != original["plan_id"]
+    assert len(image_units) == 1 and image_units[0]["resource"] == "catalog_images"
+    assert image_units[0]["unit_kind"] == "SYNC_SNAPSHOT"
+    assert image_units[0]["filters"] == units[0]["filters"]
+    assert original["status"] == "RUNNING" and units[0]["resource"] == "catalog"
+    assert plan(purpose="CATALOG_IMAGES", start="2026-09-30", end="2026-10-01")[0] == images
+
+
+def test_enrichment_images_only_after_completed_catalog_and_feature_gate():
+    c, *_ = installed()
+    p, _ = plan(purpose="CATALOG_SNAPSHOT", start="2026-09-30", end="2026-10-01")
+    p["status"] = "COMPLETE"
+    transport = Mock()
+    transport.query.return_value = ([{"store_id": c.store_id}], None)
+    service = SimpleNamespace(
+        ledger=SimpleNamespace(
+            transport=transport,
+            sql=ExtensionSql(Transport()),
+            plans=lambda store: [p],
+            config=lambda store: c,
+        ),
+        publication=lambda config: installed()[2],
+        prepare=Mock(),
+    )
+    assert EnrichmentPrepare(service, Limits(max_stores=1))() == 0
+    assert service.prepare.call_count == 0
+    assert EnrichmentPrepare(service, Limits(max_stores=1), images_enabled=True)() == 1
+    assert service.prepare.call_args.args[4] == "CATALOG_IMAGES"
+    p["status"] = "PARTIAL"
+    service.prepare.reset_mock()
+    assert EnrichmentPrepare(service, Limits(max_stores=1), images_enabled=True)() == 0
+    service.prepare.assert_not_called()
+
+
+def meta_installed():
+    from src.connectors.meta.config import Account, Insights
+
+    c, _, publication, _, _ = installed()
+    c = replace(
+        c,
+        meta_enabled=True,
+        meta_connection_id="synthetic-meta",
+        meta_account_id="000101",
+        meta_api_version="v26.0",
+    )
+    source = dict(
+        store_id=c.store_id,
+        connection_id=c.meta_connection_id,
+        source_system="meta",
+        status="active",
+        secret_resource_name=None,
+        row_key="source",
+        updated_at=NOW,
+    )
+    account = Account(
+        c.store_id,
+        c.meta_account_id,
+        c.meta_connection_id,
+        c.meta_api_version,
+        c.timezone,
+        c.currency,
+    )
+    report = Insights(
+        "2026-09-01",
+        "2026-09-30",
+        "impression",
+        ("7d_click",),
+        "offsite_conversion.fb_pixel_purchase",
+    )
+    return c, source, publication, account, report
+
+
+def test_period_extension_is_deterministic_four_levels_and_no_daily_alias():
+    c, source, pub, account, report = meta_installed()
+
+    def calculate():
+        return ExtensionPlanner().calculate(
+            c,
+            source,
+            "META_PERIOD_REPORT",
+            "2026-09-01",
+            "2026-10-01",
+            NOW,
+            requested_by_hash="c" * 64,
+            checkpoints=[],
+            runs=[],
+            publication=pub,
+            account=account,
+            reporting=report,
+        )
+
+    p, rows = calculate()
+    assert calculate() == (p, rows)
+    assert len(rows) == 4
+    assert {r["filters"]["level"] for r in rows} == {"account", "campaign", "adset", "ad"}
+    assert all(
+        r["resource"] == "period_insights" and r["filters"]["time_increment"] == "all_days"
+        for r in rows
+    )
+    assert c.history_complete is False and c.sync_enabled is True
+
+
+def test_period_extension_includes_monthly_unique_account_windows_without_duplicate():
+    c, source, pub, account, report = meta_installed()
+    pub = {**pub, "report_to": "2026-10-05", "as_of": "2026-10-05T03:00:00Z"}
+    p, rows = ExtensionPlanner().calculate(
+        c,
+        source,
+        "META_PERIOD_REPORT",
+        "2026-09-01",
+        "2026-10-05",
+        "2026-10-06T03:00:00Z",
+        requested_by_hash="c" * 64,
+        checkpoints=[],
+        runs=[],
+        publication=pub,
+        account=account,
+        reporting=report,
+    )
+    assert len(rows) == 6
+    assert len({r["work_unit_id"] for r in rows}) == 6
+    assert [(r["filters"]["since"], r["filters"]["until"]) for r in rows[4:]] == [
+        ("2026-09-01", "2026-09-30"),
+        ("2026-10-01", "2026-10-04"),
+    ]
+    assert all(r["filters"]["level"] == "account" for r in rows[4:])
+
+
+@pytest.mark.parametrize("resource", ["meta_period_insights", "meta_creative_insights_daily"])
+def test_new_reporting_definition_never_bypasses_pending_raw(resource):
+    c, source, pub, account, report = meta_installed()
+    pending = dict(
+        store_id=c.store_id,
+        connection_id=c.meta_connection_id,
+        resource=resource,
+        status="running",
+        pending_raw_id="synthetic-pending",
+        filters={
+            "account": account.snapshot(),
+            "insights": {
+                "since": "2026-09-01",
+                "until": "2026-09-30",
+                "purchase_action_type": None,
+            },
+        },
+    )
+    purpose = (
+        "META_PERIOD_REPORT" if resource == "meta_period_insights" else "META_CREATIVE_COVERAGE"
+    )
+    with pytest.raises(SafeError, match="extension_pending_checkpoint_requires_reconciliation"):
+        ExtensionPlanner().calculate(
+            c,
+            source,
+            purpose,
+            "2026-09-01",
+            "2026-10-01",
+            NOW,
+            requested_by_hash="c" * 64,
+            checkpoints=[pending],
+            runs=[],
+            publication=pub,
+            account=account,
+            reporting=report,
+        )
+
+
+def test_completed_old_ad_definition_can_coexist_with_certified_purchase_definition():
+    c, source, pub, account, report = meta_installed()
+    old = dict(
+        store_id=c.store_id,
+        connection_id=c.meta_connection_id,
+        resource="meta_creative_insights_daily",
+        status="complete",
+        pending_raw_id=None,
+        filters={
+            "account": account.snapshot(),
+            "insights": {
+                "since": "2026-09-01",
+                "until": "2026-09-30",
+                "purchase_action_type": None,
+            },
+        },
+    )
+    p, rows = ExtensionPlanner().calculate(
+        c,
+        source,
+        "META_CREATIVE_COVERAGE",
+        "2026-09-01",
+        "2026-09-02",
+        NOW,
+        requested_by_hash="c" * 64,
+        checkpoints=[old],
+        runs=[],
+        publication=pub,
+        account=account,
+        reporting=report,
+    )
+    assert (
+        len(rows) == 1 and rows[0]["filters"]["purchase_action_type"] == report.purchase_action_type
+    )
+    assert (
+        old["status"] == "complete" and old["filters"]["insights"]["purchase_action_type"] is None
+    )

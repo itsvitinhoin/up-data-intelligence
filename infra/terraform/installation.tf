@@ -110,6 +110,13 @@ resource "google_cloud_run_v2_job" "installation_worker" {
             value = "1"
           }
         }
+        dynamic "env" {
+          for_each = each.key == "upzero" && var.dashboard_completion_product_images ? [1] : []
+          content {
+            name  = "UP_INSTALLATION_PRODUCT_IMAGES_ENABLED"
+            value = "1"
+          }
+        }
         resources { limits = { cpu = "2", memory = "4Gi" } }
       }
     }
@@ -134,6 +141,20 @@ resource "google_cloud_run_v2_job" "installation_orchestrator" {
         command = ["python", "-m", "src.installation.cli"]
         # Manual scope intentionally required; do not dispatch all stores accidentally.
         args = concat(local.installation_args, ["--dispatch", "--project-number", data.google_project.control_plane.number])
+        dynamic "env" {
+          for_each = var.dashboard_completion_product_images ? [1] : []
+          content {
+            name  = "UP_INSTALLATION_PRODUCT_IMAGES_ENABLED"
+            value = "1"
+          }
+        }
+        dynamic "env" {
+          for_each = var.dashboard_completion_verified_meta_purchases ? [1] : []
+          content {
+            name  = "UP_META_VERIFIED_PURCHASES_ENABLED"
+            value = "1"
+          }
+        }
         dynamic "env" {
           for_each = var.dashboard_completion_enabled ? [1] : []
           content {

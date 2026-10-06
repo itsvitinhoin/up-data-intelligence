@@ -42,6 +42,7 @@ def check() -> None:
             {
                 "UP_PRODUCT_PROJECT": "up-data-intelligence-dev",
                 "UP_PRODUCT_LOCATION": "southamerica-east1",
+                "UP_META_VERIFIED_PURCHASES_ENABLED": "1",
             },
         ),
         patch("google.cloud.bigquery.Client") as client,

@@ -31,7 +31,7 @@ export const MetricRegistry: Readonly<Record<string, RegisteredMetric>> = {
   },
   meta_reach_campaign_day_sum: {
     id: "meta_reach_campaign_day_sum",
-    label: "Alcance · soma campanha/dia",
+    label: "Alcance Meta · único no período",
     format: "number",
   },
   facts_product_views: {

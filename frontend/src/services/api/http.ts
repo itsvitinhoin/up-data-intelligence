@@ -1,3 +1,4 @@
+import { parseMetaAds, type LiveMetaAds } from "./meta-ads";
 import { parseCreatives, type LiveCreative } from "./creatives";
 import {
   parseOrderDetail,
@@ -99,6 +100,8 @@ export type LiveAcquisition = OperationalLeads & {
   confirmed_new_customers: number | null;
 };
 export type LiveOverview = OperationalLeads & {
+  orders_paid?: number | null;
+  orders_paid_rate?: string | null;
   requested_pieces?: number | null;
   fulfilled_pieces?: number | null;
   requested_pieces_per_order?: string | null;
@@ -135,6 +138,7 @@ export type LiveOverview = OperationalLeads & {
   }[];
 };
 export type LiveProduct = {
+  image?: string | null;
   reference?: string | null;
   catalog?: CatalogEvidence | null;
   store_id: string;
@@ -160,11 +164,22 @@ export type LiveCustomerDetail = {
     ltv_complete: string | null;
   };
 };
+export type PurchaseStage = {
+  stage: number;
+  buyers_observed: number;
+  share_observed: string | null;
+  continuation_observed: string | null;
+  requested_revenue_observed: string | null;
+  accumulated_requested_revenue_observed: string | null;
+  mean_days_observed: number | null;
+};
 export type LiveRetention = {
   recurring_fulfilled_observed?: string | null;
   recurring_orders_observed?: number | null;
   repeat_mean_days_observed?: number | null;
   repeat_median_days_observed?: number | null;
+  exact_purchase_stages?: PurchaseStage[];
+  exact_purchase_stages_basis?: "observed_purchase_number_in_selected_period";
   purchase_stages?: {
     stage: number;
     buyers_observed: number;
@@ -383,6 +398,8 @@ function parseLeads(row: Record<string, unknown>): OperationalLeads {
 function parseOverview(value: unknown): LiveOverview {
   const row = object(value);
   return {
+    orders_paid: count(row.orders_paid ?? null),
+    orders_paid_rate: decimal(row.orders_paid_rate ?? null),
     requested_pieces: count(row.requested_pieces ?? null),
     fulfilled_pieces: count(row.fulfilled_pieces ?? null),
     requested_pieces_per_order: decimal(row.requested_pieces_per_order ?? null),
@@ -493,6 +510,7 @@ export type ReadResourceMap = IntelligenceResourceMap & {
   funnel: LiveFunnel;
   geography: LiveGeography;
   creatives: LiveCreative[];
+  metaAds: LiveMetaAds;
 };
 export type ReadResource = keyof ReadResourceMap;
 export function decodeReadEnvelope<K extends ReadResource>(
@@ -556,6 +574,7 @@ export function decodeReadEnvelope<K extends ReadResource>(
     },
     geography: parseGeography,
     creatives: (v) => parseCreatives(v, meta),
+    metaAds: (v) => parseMetaAds(v, meta),
   };
   const data = parsers[resource as Exclude<ReadResource, IntelligenceResource>](
     payload.data,
@@ -598,6 +617,7 @@ function parseProduct(value: unknown, scope: LiveScope): LiveProduct {
   return {
     store_id: text(row.store_id),
     product_key: text(row.product_key),
+    ...(row.image === undefined ? {} : { image: nullableImage(row.image) }),
     ...(row.reference === undefined
       ? {}
       : { reference: nullableText(row.reference) }),
@@ -615,6 +635,24 @@ function parseProduct(value: unknown, scope: LiveScope): LiveProduct {
     buyers_unique: count(row.buyers_unique),
   };
 }
+function nullableImage(value: unknown): string | null {
+  if (value === null) return null;
+  const raw = text(value);
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw invalid();
+  }
+  if (
+    url.protocol !== "https:" ||
+    url.username ||
+    url.password ||
+    raw.length > 2048
+  )
+    throw invalid();
+  return raw;
+}
 function nullableNumber(value: unknown): number | null {
   if (value === null) return null;
   if (typeof value !== "number" || !Number.isFinite(value)) throw invalid();
@@ -625,6 +663,32 @@ function finiteOrNull(v: unknown): number | null {
   if (typeof v !== "number" || !Number.isFinite(v) || v < 0)
     throw new ApiError(502, "Intervalo observado inválido.");
   return v;
+}
+function parseExactStages(row: Record<string, unknown>): PurchaseStage[] {
+  if (
+    row.exact_purchase_stages_basis !==
+    "observed_purchase_number_in_selected_period"
+  )
+    throw invalid();
+  const stages = array(row.exact_purchase_stages);
+  if (stages.length !== 6) throw invalid();
+  return stages.map((v, index) => {
+    const s = object(v),
+      stage = count(s.stage),
+      buyers = count(s.buyers_observed);
+    if (stage !== index + 1 || buyers === null) throw invalid();
+    return {
+      stage,
+      buyers_observed: buyers,
+      share_observed: decimal(s.share_observed),
+      continuation_observed: decimal(s.continuation_observed),
+      requested_revenue_observed: decimal(s.requested_revenue_observed),
+      accumulated_requested_revenue_observed: decimal(
+        s.accumulated_requested_revenue_observed,
+      ),
+      mean_days_observed: finiteOrNull(s.mean_days_observed),
+    };
+  });
 }
 function parseRetention(value: unknown): LiveRetention {
   const row = object(value);
@@ -639,6 +703,13 @@ function parseRetention(value: unknown): LiveRetention {
       row.recurring_fulfilled_observed ?? null,
     ),
     recurring_orders_observed: count(row.recurring_orders_observed ?? null),
+    ...(row.exact_purchase_stages === undefined
+      ? {}
+      : {
+          exact_purchase_stages: parseExactStages(row),
+          exact_purchase_stages_basis:
+            "observed_purchase_number_in_selected_period" as const,
+        }),
     ...(row.purchase_stages === undefined
       ? {}
       : {
@@ -872,6 +943,10 @@ export function createHttpApi(baseUrl: string, fetcher: typeof fetch = fetch) {
       ),
     acquisition: (scope: LiveScope, options?: ReadOptions) =>
       request("/v1/acquisition", scope, parseAcquisition, options),
+    metaAds: (scope: LiveScope, options?: ReadOptions) =>
+      request("/v1/metaAds", scope, (v) => v, options).then((r) =>
+        decodeReadEnvelope("metaAds", r),
+      ),
     creatives: (scope: LiveScope, options?: ReadOptions) =>
       request("/v1/creatives", scope, (v) => v, options).then((r) =>
         decodeReadEnvelope("creatives", r),

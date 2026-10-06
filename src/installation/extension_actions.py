@@ -31,21 +31,40 @@ class ExtensionActions(InstallationActions):
                 "ads",
             }:
                 return super().execute(c, row, limits)
-            if row["resource"] not in {"insights", "creative_insights"}:
+            if row["resource"] not in {"insights", "creative_insights", "period_insights"}:
                 raise SafeError("extension_work_contract_invalid")
             if self.source(c, "meta")["status"] != "active":
                 raise SafeError("source_verification_required")
-            engine, close = self.meta(c, creative=row["resource"] == "creative_insights")
+            period = row["resource"] == "period_insights"
+            engine, close = self.meta(
+                c,
+                creative=row["resource"] == "creative_insights",
+                period_level=row["filters"].get("level") if period else None,
+            )
             try:
                 f = row["filters"]
-                report = Insights(
+                from src.connectors.meta.period import MetaPeriodEngine, PeriodInsights
+
+                report_type = PeriodInsights if period else Insights
+                report = report_type(
                     f["since"],
                     f["until"],
                     f["action_report_time"],
                     tuple(f["action_attribution_windows"]),
                     f["purchase_action_type"],
                     tuple(f.get("breakdowns", ())),
+                    **({"level": f["level"]} if period else {}),
                 )
+                if period:
+                    if f.get("time_increment") != "all_days":
+                        raise SafeError("meta_period_definition_invalid")
+                    engine = MetaPeriodEngine(
+                        engine.repo,
+                        engine.connector,
+                        accounts=(engine.account,),
+                        lease=lambda: nullcontext(),
+                        level=f["level"],
+                    )
                 if row["resource"] == "creative_insights":
                     engine = MetaCreativeEngine(
                         engine.repo,

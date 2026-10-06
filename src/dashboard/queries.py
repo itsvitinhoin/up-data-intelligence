@@ -46,20 +46,27 @@ def build(project: str, name: str, **values: object) -> Query:
 
         return build_product_read(project, name, **values)
 
-    if name == "retention_details":
+    if name in {"retention_details", "overview_details"}:
         models = {
             "distribution": "retention_distribution",
             "cohorts": "retention_cohorts",
             "gaps": "retention_gaps",
             "series": "retention_series",
         }
+        if name == "overview_details":
+            models = {
+                "daily": "store_daily",
+                "population": "customer_period",
+                "quantities": "order_quantity_summary",
+                "leads": "operational_leads",
+            }
         queries = {field: build(project, model, **values) for field, model in models.items()}
         parameters = {k: v for query in queries.values() for k, v in query.parameters.items()}
         sql = "SELECT " + ",".join(
             f"ARRAY(SELECT AS STRUCT * FROM ({query.sql})) AS {field}"
             for field, query in queries.items()
         )
-        return Query(name, "/* dashboard:retention_details */\n" + sql, parameters)
+        return Query(name, f"/* dashboard:{name} */\n" + sql, parameters)
 
     def a(model: str) -> str:
         return table(project, "up_analytics", model)
@@ -107,14 +114,22 @@ WHERE h.record_kind='HEAD' AND h.store_id=@store AND h.policy_hash=@policy"""
                 "as_of": ("TIMESTAMP", values.get("as_of")),
             }
         )
-        sql = f"""SELECT COUNT(*) orders,
+        sql = f"""WITH selected AS (SELECT * FROM {c("orders")} {history}
+ WHERE store_id=@store AND source_system='upzero' AND created_at<@as_of
+ AND DATE(created_at,@timezone)>=@from AND DATE(created_at,@timezone)<@to),
+ monthly AS (SELECT DATE_TRUNC(DATE(created_at,@timezone),MONTH) month,COUNT(*) orders,
+ COUNTIF(payment_status='paid') paid_orders,
+ COUNTIF(payment_status IS NULL OR payment_status NOT IN ('paid','unpaid','canceled')) unknown_payment_status
+ FROM selected GROUP BY month)
+ SELECT COUNT(*) orders,
  COUNT(*)-COUNT(DISTINCT order_id) duplicate_orders,
  COUNTIF(order_id IS NULL OR order_id='') invalid_identity,
+ COUNTIF(payment_status='paid') paid_orders,
+ COUNTIF(payment_status IS NULL OR payment_status NOT IN ('paid','unpaid','canceled')) unknown_payment_status,
  IF(COUNT(*)=0,0,IF(COUNTIF(requested_items_qty IS NULL)>0,NULL,SUM(requested_items_qty))) requested_pieces,
  IF(COUNT(*)=0,0,IF(COUNTIF(fulfilled_items_qty IS NULL)>0,NULL,SUM(fulfilled_items_qty))) fulfilled_pieces
- FROM {c("orders")} {history}
- WHERE store_id=@store AND source_system='upzero' AND created_at<@as_of
- AND DATE(created_at,@timezone)>=@from AND DATE(created_at,@timezone)<@to"""
+ ,ARRAY(SELECT AS STRUCT * FROM monthly ORDER BY month) monthly
+ FROM selected"""
         return Query(name, sql, params)
     if name == "funnel_extra":
         params.update(
@@ -386,6 +401,25 @@ SELECT stage,COUNT(*) AS transitions,AVG(gap_days) AS mean_days,
 FROM (SELECT stage,gap_days,PERCENTILE_CONT(gap_days,0.5)
  OVER(PARTITION BY stage) AS median_days FROM gaps)
 GROUP BY stage ORDER BY stage"""
+    elif name == "retention_exact_stages":
+        params.update(
+            {"from": ("DATE", values.get("from_day")), "to": ("DATE", values.get("to_day"))}
+        )
+        sql = f"""/* dashboard:retention_exact_stages */
+WITH numbered AS (
+ SELECT customer_id,order_id,purchase_number,order_date,revenue_generated,order_at,
+ LAG(order_at) OVER(PARTITION BY customer_id ORDER BY purchase_number) previous_at
+ FROM {a("analytics_customer_purchase_sequence")} {history} WHERE {scope}
+), selected AS (
+ SELECT *,TIMESTAMP_DIFF(order_at,previous_at,MICROSECOND)/86400000000.0 gap_days
+ FROM numbered WHERE purchase_number BETWEEN 1 AND 6 AND order_date>=@from AND order_date<@to
+)
+SELECT purchase_number stage,COUNT(*) orders,COUNT(DISTINCT customer_id) buyers,
+ COUNT(*)-COUNT(DISTINCT order_id) duplicate_orders,
+ COUNTIF(customer_id IS NULL OR order_id IS NULL) invalid_identity,
+ IF(COUNTIF(revenue_generated IS NULL)>0,NULL,SUM(revenue_generated)) requested,
+ AVG(gap_days) mean_days
+ FROM selected GROUP BY stage ORDER BY stage LIMIT 7"""
     elif name == "products":
         params.update(
             {

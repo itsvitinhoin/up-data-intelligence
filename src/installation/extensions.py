@@ -26,7 +26,14 @@ from src.installation.model import (
 from src.utils.data import digest
 
 PURPOSES = frozenset(
-    {"CATALOG_SNAPSHOT", "META_CREATIVE_COVERAGE", "HISTORY_EXTENSION", "META_SOURCE_ADDITION"}
+    {
+        "CATALOG_SNAPSHOT",
+        "CATALOG_IMAGES",
+        "META_CREATIVE_COVERAGE",
+        "META_PERIOD_REPORT",
+        "HISTORY_EXTENSION",
+        "META_SOURCE_ADDITION",
+    }
 )
 
 
@@ -139,28 +146,37 @@ class ExtensionPlanner:
             raise SafeError("extension_outside_certified_cutoff")
         system = (
             "upzero"
-            if purpose == "CATALOG_SNAPSHOT"
+            if purpose in {"CATALOG_SNAPSHOT", "CATALOG_IMAGES"}
             else "meta"
-            if purpose in {"META_CREATIVE_COVERAGE", "META_SOURCE_ADDITION"}
+            if purpose in {"META_CREATIVE_COVERAGE", "META_SOURCE_ADDITION", "META_PERIOD_REPORT"}
             else source.get("source_system")
         )
         if system not in {"upzero", "meta"}:
             raise SafeError("extension_provider_unavailable")
         fingerprint = source_identity(config, source, system)
-        identity = digest(
-            [
-                config.store_id,
-                system,
-                source["connection_id"],
-                purpose,
-                left,
-                right,
-                config_hash(config),
-                fingerprint,
-                publication["policy_hash"],
-                "extension.v1",
-            ]
-        )
+        identity_parts = [
+            config.store_id,
+            system,
+            source["connection_id"],
+            purpose,
+            left,
+            right,
+            config_hash(config),
+            fingerprint,
+            publication["policy_hash"],
+            "extension.v1",
+        ]
+        # Preserve all existing graph identities. Newly certified ad purchase
+        # definitions must not alias a prior NULL-definition extension.
+        if (
+            purpose in {"META_CREATIVE_COVERAGE", "META_PERIOD_REPORT"}
+            and reporting
+            and reporting.purchase_action_type is not None
+        ):
+            if account is None:
+                raise SafeError("extension_meta_definition_required")
+            identity_parts.append(digest([account.snapshot(), reporting.definition()]))
+        identity = digest(identity_parts)
         plan: Row = dict(
             row_key=identity,
             plan_id=identity,
@@ -193,7 +209,7 @@ class ExtensionPlanner:
             },
         )
         units: list[Row] = []
-        if purpose == "CATALOG_SNAPSHOT":
+        if purpose in {"CATALOG_SNAPSHOT", "CATALOG_IMAGES"}:
             if end_day != str(publication["report_to"]) or start != end - timedelta(days=1):
                 raise SafeError("catalog_current_cutoff_required")
             units.append(
@@ -201,7 +217,7 @@ class ExtensionPlanner:
                     plan,
                     "upzero",
                     source["connection_id"],
-                    "catalog",
+                    "catalog_images" if purpose == "CATALOG_IMAGES" else "catalog",
                     "SYNC_SNAPSHOT",
                     {"catalog_as_of": publication["as_of"]},
                     [],
@@ -300,6 +316,75 @@ class ExtensionPlanner:
                 or reporting.breakdowns
             ):
                 raise SafeError("extension_meta_definition_required")
+            if purpose == "META_PERIOD_REPORT":
+                from src.connectors.meta.period import PeriodInsights
+
+                if not reporting.purchase_action_type:
+                    raise SafeError("extension_meta_definition_required")
+                # A new report must never bypass pending RAW or a nonterminal
+                # extraction belonging to this account. Completed definitions may
+                # coexist because all_days/date/configuration are separate grains.
+                if any(
+                    cp.get("store_id") == config.store_id
+                    and cp.get("connection_id") == source["connection_id"]
+                    and cp.get("resource") == "meta_period_insights"
+                    and (cp.get("status") != "complete" or cp.get("pending_raw_id") is not None)
+                    for cp in checkpoints
+                ):
+                    raise SafeError("extension_pending_checkpoint_requires_reconciliation")
+                for level in ("account", "campaign", "adset", "ad"):
+                    period_spec = PeriodInsights(
+                        start_day,
+                        (end - timedelta(days=1)).isoformat(),
+                        reporting.action_report_time,
+                        reporting.action_attribution_windows,
+                        reporting.purchase_action_type,
+                        level=level,
+                    )
+                    units.append(
+                        unit(
+                            plan,
+                            "meta",
+                            source["connection_id"],
+                            "period_insights",
+                            "META_INSIGHTS",
+                            period_spec.snapshot(),
+                            [],
+                            len(units),
+                            mode="sync",
+                        )
+                    )
+                # Monthly account windows certify unique reach without summing days.
+                month_cursor = start
+                while month_cursor < end:
+                    next_month = (month_cursor.replace(day=28) + timedelta(days=4)).replace(day=1)
+                    month_boundary = min(next_month, end)
+                    if month_cursor != start or month_boundary != end:
+                        period_spec = PeriodInsights(
+                            month_cursor.isoformat(),
+                            (month_boundary - timedelta(days=1)).isoformat(),
+                            reporting.action_report_time,
+                            reporting.action_attribution_windows,
+                            reporting.purchase_action_type,
+                            level="account",
+                        )
+                        units.append(
+                            unit(
+                                plan,
+                                "meta",
+                                source["connection_id"],
+                                "period_insights",
+                                "META_INSIGHTS",
+                                period_spec.snapshot(),
+                                [],
+                                len(units),
+                                mode="sync",
+                            )
+                        )
+                    month_cursor = month_boundary
+                if len(units) > self.limits.max_units:
+                    raise SafeError("installation_plan_too_large")
+                return plan, units
             if purpose == "META_SOURCE_ADDITION":
                 # Addition admits a previously absent connection. Existing source
                 # evidence must be reconciled instead of silently reinstalling it.
@@ -379,6 +464,10 @@ class ExtensionPlanner:
                             and cp.get("connection_id") == source["connection_id"]
                             and cp.get("resource") == resource
                             and spec.get("since", "") <= day.isoformat() <= spec.get("until", "")
+                            and (
+                                cp.get("status") != "complete"
+                                or cp.get("pending_raw_id") is not None
+                            )
                         ):
                             raise SafeError(
                                 "extension_pending_checkpoint_requires_reconciliation"

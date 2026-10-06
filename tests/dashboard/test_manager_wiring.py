@@ -76,4 +76,80 @@ def test_order_quantity_read_is_exact_scoped_and_snapshot_pinned():
         "fulfilled_items_qty IS NULL",
     ):
         assert guard in q.sql
-    assert "paid" not in q.sql
+    assert "COUNTIF(payment_status='paid') paid_orders" in q.sql
+    assert "paid_total" not in q.sql
+
+
+def test_global_roas_uses_all_upzero_commerce_and_keeps_influence_separate():
+    from copy import deepcopy
+    from unittest.mock import patch
+
+    from tests.change16.test_stack import service
+
+    svc, reader, principal, grant = service()
+    svc.catalog_enabled = True
+    reader.override["intelligence_meta_period_evidence"] = [
+        {
+            "duplicate_grains": 0,
+            "action_types": [],
+            "action_rows_unavailable": 0,
+            "link_clicks": 1,
+            "reach_campaign_day_sum": 2,
+            "landing_page_views": "1",
+        }
+    ]
+    original = deepcopy(reader.artifact)
+    with (
+        patch.object(
+            svc,
+            "_daily",
+            return_value=[
+                {
+                    "event_date": "2026-09-01",
+                    "sessions": 10,
+                    "add_to_cart": 4,
+                    "checkout_started": 2,
+                }
+            ],
+        ),
+        patch.object(
+            svc,
+            "_overview_data",
+            return_value={
+                "requested_revenue": "200.01",
+                "revenue_paid": None,
+                "orders_requested": 4,
+                "orders_paid": 2,
+                "leads_generated": 10,
+                "leads_approved": 5,
+                "lead_qualification_rate": "50",
+                "approved_conversion_rate": None,
+                "purchase_frequency_observed": "2",
+                "recurring_buyers_observed": 2,
+                "average_requested_ticket": "50.0025",
+            },
+        ),
+    ):
+        r = svc.intelligence(principal, grant, "performance")
+        data = r["data"]
+        assert data["commercial_requested_revenue"] == "200.01"
+        assert data["commercial_paid_revenue"] is None and data["commercial_roas_paid"] is None
+        assert data["commercial_orders_paid"] == 2
+        from decimal import Decimal
+
+        assert Decimal(data["commercial_roas_requested"]) == Decimal("200.01") / Decimal(
+            data["meta_spend"]
+        )
+        assert data["commercial_roas_requested"] != data["roas_requested"]
+        assert data["media_platforms"] == ["META"]
+        assert Decimal(data["registration_cost"]) == Decimal(data["meta_spend"]) / 10
+        for row in reader.artifact["tables"]["analytics_performance_summary"]:
+            if row["influence_scope"] == "LIFETIME":
+                assert data["roas_requested"] == row["roas_requested"]
+        assert original["tables"] == reader.artifact["tables"]
+        reader.artifact["publication"]["meta_complete"] = False
+        data = svc.intelligence(principal, grant, "performance")["data"]
+        assert data["available_media_spend"] is None
+        assert data["commercial_roas_requested"] is None
+        assert data["registration_cost"] is None
+        assert data["media_platforms"] == []

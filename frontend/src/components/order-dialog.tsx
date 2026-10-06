@@ -144,7 +144,12 @@ export function OrderDialog({
                             item.sku ??
                             "Identificação indisponível"}
                           {!b2c && (
-                            <small className="block muted">{item.sku}</small>
+                            <small className="block muted">
+                              {item.reference
+                                ? `Ref. ${item.reference} · `
+                                : ""}
+                              {item.sku ? `SKU ${item.sku}` : ""}
+                            </small>
                           )}
                         </td>
                         <td>{item.color ?? "—"}</td>

@@ -302,6 +302,8 @@ def main(argv: list[str] | None = None) -> int:
                 ),
                 source,
                 certify,
+                product_images_enabled=os.environ.get("UP_INSTALLATION_PRODUCT_IMAGES_ENABLED")
+                == "1",
             )
             worker_type(
                 ledger, actions, lease, limits=limits, verification_source=source, **worker_options
@@ -374,11 +376,25 @@ def main(argv: list[str] | None = None) -> int:
                 from src.installation.extension_runtime import ExtensionOrchestrator
 
                 extension_ledger = ExtensionLedger(transport)
+                from src.connectors.meta.purchase_reporting import load_certificates
+
                 extension_service = HistoryService(
-                    extension_ledger, lease, b"system-enrichment-key-not-user" * 2
+                    extension_ledger,
+                    lease,
+                    b"system-enrichment-key-not-user" * 2,
+                    purchase_certificates=load_certificates(
+                        enabled=os.environ.get("UP_META_VERIFIED_PURCHASES_ENABLED") == "1"
+                    ),
                 )
                 if os.environ.get("UP_INSTALLATION_ENRICHMENT_ENABLED") == "1":
-                    EnrichmentPrepare(extension_service, limits)(None)
+                    EnrichmentPrepare(
+                        extension_service,
+                        limits,
+                        meta_period_enabled=os.environ.get("UP_META_VERIFIED_PURCHASES_ENABLED")
+                        == "1",
+                        images_enabled=os.environ.get("UP_INSTALLATION_PRODUCT_IMAGES_ENABLED")
+                        == "1",
+                    )(None)
 
                 def extension_publications(plan: Row, units: list[Row]) -> tuple[bool, bool]:
                     current = extension_service.publication(

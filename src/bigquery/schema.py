@@ -86,7 +86,7 @@ def generate() -> None:
         ]
         (folder / (name + ".json")).write_text(json.dumps(fields, indent=2) + "\n")
         target_manifest = meta_manifest if name in META_TABLE_NAMES else manifest
-        if name.startswith(("meta_live_", "meta_creative_")):
+        if name.startswith(("meta_live_", "meta_creative_", "meta_period_")):
             target_manifest = manifest
         target_manifest[name] = {
             "dataset": spec.dataset,

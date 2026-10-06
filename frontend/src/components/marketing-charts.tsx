@@ -24,16 +24,22 @@ export function MarketingChart({
   b2c: boolean;
   linesOnly?: boolean;
 }) {
+  const platform = series.some((row) => row.source === "real");
   const data = series.map((row) => ({
     ...row,
     spend: row.spend === null ? null : Number(row.spend),
     revenue: row.revenue === null ? null : Number(row.revenue),
     date: row.date.slice(8) + "/" + row.date.slice(5, 7),
-    results: b2c ? row.purchases : row.leads,
-    roas: ratio(
-      row.revenue === null ? null : Number(row.revenue),
-      row.spend === null ? null : Number(row.spend),
-    ),
+    results: b2c || platform ? row.purchases : row.leads,
+    roas:
+      row.source === "real"
+        ? row.roas === null || row.roas === undefined
+          ? null
+          : Number(row.roas)
+        : ratio(
+            row.revenue === null ? null : Number(row.revenue),
+            row.spend === null ? null : Number(row.spend),
+          ),
   }));
   return (
     <div
@@ -41,10 +47,12 @@ export function MarketingChart({
       role="img"
       aria-label={
         kind === "results"
-          ? `Investimento e ${b2c ? "compras" : "leads"}`
+          ? `Investimento e ${b2c || platform ? "compras Meta" : "leads"}`
           : kind === "roas"
             ? "ROAS ao longo do período"
-            : "Investimento e receita influenciada"
+            : platform
+              ? "Investimento e valor de compras reportado pelo Meta"
+              : "Investimento e receita influenciada"
       }
     >
       <ResponsiveContainer
@@ -137,12 +145,14 @@ export function MarketingChart({
             }
             name={
               kind === "results"
-                ? b2c
+                ? b2c || platform
                   ? "Compras Meta"
                   : "Leads"
                 : kind === "roas"
                   ? "ROAS"
-                  : "Receita influenciada"
+                  : platform
+                    ? "Valor de compras Meta"
+                    : "Receita influenciada"
             }
             stroke="#5DD9B0"
             strokeWidth={2}

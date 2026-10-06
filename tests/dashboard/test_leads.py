@@ -82,7 +82,11 @@ def test_operational_leads_reach_overview_acquisition_with_generation_pinning():
         assert result["data"]["lead_qualification_rate"] == "150"
         assert result["data"]["leads_generated"] == 2
         assert result["data"]["approved_converted"] is None
-        q = next(c for c in reversed(reader.calls) if c.name == "operational_leads")
+        q = next(
+            c
+            for c in reversed(reader.calls)
+            if c.name == ("overview_details" if name == "overview" else "operational_leads")
+        )
         assert q.parameters["snapshot_at"][1] == service.publication.snapshot_at
         assert q.parameters["as_of"][1] == service.publication.as_of
         assert q.parameters["store"][1] == GRANT.store_id

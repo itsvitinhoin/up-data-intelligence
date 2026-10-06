@@ -76,7 +76,9 @@ def order(
                 "catalog": current.get("catalog"),
                 "reference": current.get("reference"),
                 "sku": item.get("sku"),
-                "image": item.get("asset_image_url") or item.get("image_url"),
+                "image": item.get("asset_image_url")
+                or item.get("image_url")
+                or current.get("image"),
                 "color": current.get("color"),
                 "size": current.get("size"),
                 "status": item["status"],
@@ -242,7 +244,7 @@ def product(
             "color_hex": current.get("color_hex"),
             "active": current.get("active"),
             "sale_price": current.get("sale_price"),
-            "image": profile.get("image"),
+            "image": profile.get("image") or current.get("image"),
             "requested_revenue": decimal_string(row.get("requested")),
             "fulfilled_revenue": decimal_string(row.get("fulfilled")),
             "units_requested": decimal_string(row.get("units_requested")),

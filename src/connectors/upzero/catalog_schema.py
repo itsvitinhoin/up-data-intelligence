@@ -43,11 +43,23 @@ INVENTORY = {
     "qty_available": "NUMERIC",
     "breakdown": "JSON",
 }
+IMAGE = {
+    "image_id": "STRING",
+    "product_id": "STRING",
+    "image_url": "STRING",
+    "combination_key": "STRING",
+    "display_order": "INT64",
+    "is_primary": "BOOL",
+    "variant_ids": "JSON",
+    "created_at": "TIMESTAMP",
+    "updated_at": "TIMESTAMP",
+}
 RESOURCES = {
     "products": ("catalog_products", PRODUCT, "product_id"),
     "variants": ("catalog_variants", VARIANT, "variant_id"),
     "attributes": ("catalog_attributes", ATTRIBUTE, "attribute_id"),
     "inventory": ("catalog_inventory", INVENTORY, "variant_id"),
+    "images": ("catalog_images", IMAGE, "image_id"),
 }
 
 TABLE_NAMES = frozenset(

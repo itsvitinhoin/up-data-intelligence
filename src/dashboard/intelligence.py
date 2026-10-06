@@ -5,7 +5,7 @@ from typing import Any
 
 from src.dashboard.contracts import Grant, Principal, ReadError, metadata, page_size
 from src.dashboard.queries import Query
-from src.dashboard.service import DashboardService, _date, _timestamp
+from src.dashboard.service import DashboardService, _date, _ratio, _sum_count, _timestamp
 from src.intelligence.api import JOURNEY, PRODUCT, PROFILE, TIMELINE
 from src.intelligence.live.schema import PUBLICATION, SCHEMAS
 from src.utils.data import timestamp
@@ -403,6 +403,45 @@ class IntelligenceDashboardService(DashboardService):
                 data["action_types"] = names
                 data["action_types_complete"] = extra[0].get("action_rows_unavailable") == 0
                 data["reach_basis"] = "sum_campaign_day_not_unique_period_reach"
+            if self.catalog_enabled:
+                # General performance has UP Zero commercial authority. Existing
+                # influence ratios remain distinct for legacy/intelligence consumers.
+                commercial = self._overview_data(start, end)
+                spend = data.get("meta_spend") if h["meta_complete"] else None
+                funnel = self._daily("funnel_daily", start, end)
+                from src.dashboard.monthly import monthly_performance
+
+                data["monthly"] = monthly_performance(
+                    commercial, funnel, data["series"], start, end, meta_complete=h["meta_complete"]
+                )
+                data.update(
+                    {
+                        "commercial_requested_revenue": commercial["requested_revenue"],
+                        "commercial_paid_revenue": commercial["revenue_paid"],
+                        "commercial_orders_requested": commercial["orders_requested"],
+                        "commercial_orders_paid": commercial.get("orders_paid"),
+                        "commercial_roas_requested": _ratio(commercial["requested_revenue"], spend),
+                        "commercial_roas_paid": _ratio(commercial["revenue_paid"], spend),
+                        "available_media_spend": spend,
+                        "media_platforms": ["META"] if h["meta_complete"] else [],
+                        "media_coverage_basis": "certified_connected_platforms_only",
+                        "registration_cost": _ratio(spend, commercial.get("leads_generated")),
+                        "approved_registration_cost": _ratio(
+                            spend, commercial.get("leads_approved")
+                        ),
+                        "cost_per_sale": _ratio(spend, commercial.get("orders_paid")),
+                        "cost_per_session": _ratio(spend, _sum_count(funnel, "sessions")),
+                        "cost_per_add_to_cart": _ratio(spend, _sum_count(funnel, "add_to_cart")),
+                        "cost_per_checkout": _ratio(spend, _sum_count(funnel, "checkout_started")),
+                        "leads_generated": commercial.get("leads_generated"),
+                        "leads_approved": commercial.get("leads_approved"),
+                        "lead_qualification_rate": commercial.get("lead_qualification_rate"),
+                        "approved_conversion_rate": commercial.get("approved_conversion_rate"),
+                        "purchase_frequency_observed": commercial["purchase_frequency_observed"],
+                        "recurring_buyers_observed": commercial["recurring_buyers_observed"],
+                        "average_requested_ticket": commercial["average_requested_ticket"],
+                    }
+                )
             return self._envelope(data)
         models = {
             "timeline": "analytics_customer_timeline",

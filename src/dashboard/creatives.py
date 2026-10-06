@@ -7,6 +7,7 @@ from decimal import Decimal
 from typing import Any
 
 from src.connectors.meta.config import Account, Insights, configuration_key
+from src.connectors.meta.purchase_reporting import PurchaseCertificate, selected_reporting
 from src.control_plane.recurring import meta_coverage, meta_evidence_hash
 from src.dashboard.contracts import ReadError, decimal_string, integer
 from src.dashboard.queries import Query
@@ -17,7 +18,16 @@ from src.utils.data import timestamp
 
 
 class CreativeReader:
-    def __init__(self, project: str, reader: Reader, store: str, request: str, snapshot: str):
+    def __init__(
+        self,
+        project: str,
+        reader: Reader,
+        store: str,
+        request: str,
+        snapshot: str,
+        *,
+        purchase_certificates: tuple[PurchaseCertificate, ...] = (),
+    ):
         if not re.fullmatch(r"[a-z][a-z0-9-]{4,62}", project):
             raise ValueError("invalid_project")
         self.project, self.reader, self.store, self.request, self.snapshot = (
@@ -27,6 +37,7 @@ class CreativeReader:
             request,
             snapshot,
         )
+        self.purchase_certificates = purchase_certificates
 
     def table(self, dataset: str, name: str) -> str:
         allowed = {
@@ -119,6 +130,7 @@ class CreativeReader:
             )
             if report.breakdowns:
                 raise ReadError(424, "creative_definition_unavailable")
+            report = selected_reporting(account, report, self.purchase_certificates)
             proof = meta_coverage(
                 account, report, cps, runs, level="ad", resource="meta_creative_insights_daily"
             )
@@ -203,7 +215,7 @@ class CreativeReader:
 ), ranked AS (
  SELECT *,ROW_NUMBER() OVER(ORDER BY ctr DESC NULLS LAST,ad_id) ctr_rank,ROW_NUMBER() OVER(ORDER BY cpa ASC NULLS LAST,ad_id) cpa_rank,ROW_NUMBER() OVER(ORDER BY meta_reported_purchases DESC NULLS LAST,ad_id) purchases_rank FROM rates
 ), ads AS (
- SELECT ad_id,COUNT(*) catalog_matches,ANY_VALUE(name) name,ANY_VALUE(status) status,ANY_VALUE(creative_id) creative_id,ANY_VALUE(creative_image_url) image_url,ANY_VALUE(creative_thumbnail_url) thumbnail_url,ANY_VALUE(creative_video_id) video_id,MAX(observed_at) preview_observed_at
+ SELECT ad_id,COUNT(*) catalog_matches,ANY_VALUE(ad_name) name,ANY_VALUE(status) status,ANY_VALUE(creative_id) creative_id,ANY_VALUE(creative_image_url) image_url,ANY_VALUE(creative_thumbnail_url) thumbnail_url,ANY_VALUE(creative_video_id) video_id,MAX(observed_at) preview_observed_at
  FROM {self.table("up_core", "meta_live_ads")} FOR SYSTEM_TIME AS OF @read_at WHERE store_id=@store AND account_id=@account GROUP BY ad_id
 )
  SELECT r.*,a.* EXCEPT(ad_id) FROM ranked r LEFT JOIN ads a USING(ad_id)

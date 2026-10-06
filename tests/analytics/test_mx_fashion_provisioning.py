@@ -45,7 +45,12 @@ def test_exactly_eight_active_tables_preserve_schemas_and_existing_metadata():
     assert len(ACTIVE_ANALYTICS_TABLES) == 8
     from src.intelligence.live.schema import META_ACTIVE
 
-    creative_tables = {"meta_creative_insights_daily", "meta_creative_insights_daily_versions"}
+    creative_tables = {
+        "meta_creative_insights_daily",
+        "meta_creative_insights_daily_versions",
+        "meta_period_insights",
+        "meta_period_insights_versions",
+    }
     from src.intelligence.live.schema import SCHEMAS as LIVE
 
     assert (

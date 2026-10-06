@@ -25,7 +25,7 @@ import {
   type ManagerPage,
 } from "./registry";
 import { validatedPagePreference } from "./preferences";
-import { managerMetrics, divideDecimal } from "./presenters";
+import { managerMetrics } from "./presenters";
 import { WidgetBindings } from "./widgets";
 import { PageDataCoverage } from "./coverage";
 import { MetricBindings } from "./bindings";
@@ -247,87 +247,34 @@ function LiveHistorical({
 }: {
   metadata: NonNullable<ReturnType<typeof usePublicationMetadata>>;
 }) {
-  const overview = useDashboardRead("overview", metadata);
-  const funnel = useDashboardRead("funnel", metadata);
   const performance = useDashboardRead("performance", metadata);
-  if (overview.isError)
+  if (performance.isError)
+    return <Failure retry={() => void performance.refetch()} />;
+  if (!performance.data) return <Loading />;
+  type Monthly = Record<string, string | number | null>;
+  const monthly = performance.data.data.monthly;
+  if (!Array.isArray(monthly))
     return (
-      <Failure
-        retry={() => {
-          void overview.refetch();
-          void funnel.refetch();
-          void performance.refetch();
-        }}
+      <Empty
+        title="Histórico mensal ainda não certificado"
+        description="A projeção mensal precisa estar disponível na publicação do Preview."
       />
     );
-  if (!overview.data) return <Loading />;
-  type Monthly = Record<string, string | number | null>;
   const buckets = new Map<string, Monthly>();
-  const add = (
-    month: string,
-    field: string,
-    v: string | number | null | undefined,
-  ) => {
-    const r = buckets.get(month) ?? {};
-    r[field] =
-      v == null || r[field] === null
-        ? null
-        : typeof v === "number"
-          ? Number(r[field] ?? 0) + v
-          : decimalSum(String(r[field] ?? "0"), v);
-    buckets.set(month, r);
-  };
-  for (const r of overview.data.data.series) {
-    const month = r.date.slice(0, 7);
-    add(month, "requested", r.requested);
-    add(month, "fulfilled", r.fulfilled);
-    add(month, "orders", r.orders);
-    add(month, "cancelled", r.cancelled_requested);
+  for (const raw of monthly) {
+    if (
+      raw &&
+      typeof raw === "object" &&
+      !Array.isArray(raw) &&
+      typeof raw.month === "string"
+    )
+      buckets.set(raw.month, raw as Monthly);
   }
-  for (const r of overview.data.data.monthly_customers ?? []) {
-    const m = r.month.slice(0, 7),
-      values = buckets.get(m) ?? {};
-    values.buyers = r.buyers_observed;
-    values.recurring = r.recurring_buyers_observed;
-    buckets.set(m, values);
-  }
-  for (const r of funnel.data?.data.days ?? []) {
-    const m = r.date.slice(0, 7);
-    for (const k of [
-      "sessions",
-      "add_to_cart",
-      "checkout_started",
-      "sessions_with_cart",
-      "sessions_cart_then_checkout",
-      "sessions_cart_checkout_purchase",
-      "sessions_with_purchase",
-    ])
-      add(m, k, r[k]);
-  }
-  const media = performance.data?.data.series;
-  if (Array.isArray(media))
-    for (const item of media)
-      if (
-        item &&
-        typeof item === "object" &&
-        !Array.isArray(item) &&
-        typeof item.date === "string"
-      )
-        add(
-          item.date.slice(0, 7),
-          "meta_spend",
-          typeof item.spend === "string" ? item.spend : null,
-        );
-  const ratio = (r: Monthly, a: string, b: string, scale = 1) =>
-    r[a] == null || r[b] == null
-      ? null
-      : divideDecimal(String(r[a]), String(r[b]), scale);
   const groups: Record<
     string,
     {
       label: string;
       field?: string;
-      value?: (r: Monthly) => string | null;
       reason?: string;
     }[]
   > = {
@@ -335,16 +282,23 @@ function LiveHistorical({
       { label: "Receita solicitada", field: "requested" },
       { label: "Receita atendida", field: "fulfilled" },
       { label: "Receita cancelada solicitada", field: "cancelled" },
-      { label: "Faturamento pago", reason: "PAYMENT_SOURCE_NOT_CERTIFIED" },
+      {
+        label: "Faturamento pago",
+        reason: "SOURCE_DOES_NOT_PROVIDE: valor pago não certificado",
+      },
       {
         label: "Ticket solicitado",
-        value: (r) => ratio(r, "requested", "orders"),
+        field: "requested_ticket",
       },
       { label: "Pedidos", field: "orders" },
-      { label: "Pedidos pagos", reason: "PAYMENT_SOURCE_NOT_CERTIFIED" },
+      {
+        label: "Pedidos pagos",
+        field: "paid_orders",
+        reason: "SOURCE_DOES_NOT_PROVIDE: status pago desconhecido",
+      },
       {
         label: "Custo por venda paga",
-        reason: "PAID_SALES_AND_TOTAL_MEDIA_CONNECTORS_REQUIRED",
+        field: "cost_per_paid_order",
       },
     ],
     Clientes: [
@@ -352,66 +306,72 @@ function LiveHistorical({
       { label: "Recorrentes observados", field: "recurring" },
       {
         label: "% recorrentes observado",
-        value: (r) => ratio(r, "recurring", "buyers", 100),
+        field: "recurring_rate",
       },
-      { label: "CAC definitivo", reason: "REQUIRES_HISTORICAL_BACKFILL" },
+      {
+        label: "CAC definitivo",
+        reason:
+          "HISTORY_NOT_AVAILABLE_FROM_SOURCE: histórico completo não comprovado",
+      },
     ],
     Mídia: [
       { label: "Investimento Meta", field: "meta_spend" },
-      { label: "Investimento Google", reason: "GOOGLE_ADS_CONNECTOR_REQUIRED" },
-      { label: "Investimento TikTok", reason: "TIKTOK_ADS_CONNECTOR_REQUIRED" },
       {
-        label: "Investimento total",
-        reason: "MEDIA_PLATFORM_COVERAGE_INCOMPLETE",
+        label: "Investimento Google",
+        reason: "FUTURE_CONNECTOR_REQUIRED: Google Ads",
       },
       {
-        label: "ROAS captado geral",
-        reason: "MEDIA_PLATFORM_COVERAGE_INCOMPLETE",
+        label: "Investimento TikTok",
+        reason: "FUTURE_CONNECTOR_REQUIRED: TikTok Ads",
       },
-      { label: "ROAS pago", reason: "PAYMENT_SOURCE_NOT_CERTIFIED" },
+      {
+        label: "Investimento disponível (Meta)",
+        field: "available_media_spend",
+      },
+      {
+        label: "ROAS solicitado UP Zero / Meta",
+        field: "commercial_roas_requested",
+      },
+      {
+        label: "ROAS pago",
+        reason: "SOURCE_DOES_NOT_PROVIDE: valor pago não certificado",
+      },
     ],
     Sessões: [
       { label: "Sessões", field: "sessions" },
       {
-        label: "Custo por sessão geral",
-        reason: "MEDIA_PLATFORM_COVERAGE_INCOMPLETE",
+        label: "Custo por sessão (Meta)",
+        field: "cost_per_session",
       },
       {
         label: "Sessões com compra (%)",
-        value: (r) => ratio(r, "sessions_with_purchase", "sessions", 100),
+        field: "session_purchase_rate",
       },
     ],
     Carrinho: [
       { label: "Eventos de carrinho", field: "add_to_cart" },
       {
-        label: "Custo por carrinho geral",
-        reason: "MEDIA_PLATFORM_COVERAGE_INCOMPLETE",
+        label: "Custo por carrinho (Meta)",
+        field: "cost_per_add_to_cart",
       },
       {
         label: "Sessão → carrinho (%)",
-        value: (r) => ratio(r, "sessions_with_cart", "sessions", 100),
+        field: "session_cart_rate",
       },
     ],
     Checkout: [
       { label: "Eventos de checkout", field: "checkout_started" },
       {
-        label: "Custo por checkout geral",
-        reason: "MEDIA_PLATFORM_COVERAGE_INCOMPLETE",
+        label: "Custo por checkout (Meta)",
+        field: "cost_per_checkout",
       },
       {
         label: "Carrinho → checkout (%)",
-        value: (r) =>
-          ratio(r, "sessions_cart_then_checkout", "sessions_with_cart", 100),
+        field: "cart_checkout_rate",
       },
       {
         label: "Checkout → compra (%)",
-        value: (r) =>
-          ratio(
-            r,
-            "sessions_cart_checkout_purchase",
-            "sessions_cart_then_checkout",
-            100,
-          ),
+        field: "checkout_purchase_rate",
       },
     ],
   };
@@ -431,11 +391,7 @@ function LiveHistorical({
               ...Object.fromEntries(
                 [...buckets].map(([month, r]) => [
                   month,
-                  row.field
-                    ? (r[row.field] ?? null)
-                    : row.value
-                      ? row.value(r)
-                      : null,
+                  row.field ? (r[row.field] ?? null) : null,
                 ]),
               ),
             }))}
@@ -464,18 +420,6 @@ function LiveHistorical({
       ))}
     </>
   );
-}
-function decimalSum(a: string, b: string): string {
-  const [ai, af = ""] = a.split("."),
-    [bi, bf = ""] = b.split("."),
-    length = Math.max(af.length, bf.length),
-    scale = 10n ** BigInt(length);
-  const v =
-    BigInt(ai) * scale +
-    BigInt(af.padEnd(length, "0") || "0") +
-    BigInt(bi) * scale +
-    BigInt(bf.padEnd(length, "0") || "0");
-  return `${v / scale}${length ? "." + (v % scale).toString().padStart(length, "0") : ""}`;
 }
 function UnavailableWidget({ id }: { id: string }) {
   const title = WidgetRegistry[id]?.label ?? "Cobertura ainda não certificada";
@@ -514,7 +458,7 @@ function UnavailableWidget({ id }: { id: string }) {
       title={title}
       subtitle={
         WidgetBindings[id]?.reason ??
-        "SELLER_PERIOD_READ_NOT_CERTIFIED · associação vendedor/pedido ainda não projetada."
+        "SOURCE_DOES_NOT_PROVIDE · Fonte de vendedor histórico ainda não conectada."
       }
     >
       {columns.length ? (
@@ -545,7 +489,8 @@ function UnavailableWidget({ id }: { id: string }) {
         <Empty
           title="Indisponível"
           description={
-            WidgetBindings[id]?.reason ?? "SELLER_PERIOD_READ_NOT_CERTIFIED"
+            WidgetBindings[id]?.reason ??
+            "SOURCE_DOES_NOT_PROVIDE · Fonte de vendedor histórico ainda não conectada."
           }
         />
       )}
@@ -692,19 +637,16 @@ function ReadFunnel({
   metadata: NonNullable<ReturnType<typeof usePublicationMetadata>>;
 }) {
   const q = useDashboardRead("funnel", metadata);
-  const p = useDashboardRead("performance", metadata),
+  const p = useDashboardRead("metaAds", metadata),
     overview = useDashboardRead("overview", metadata),
     leads = useDashboardRead("acquisition", metadata);
   if (q.isError) return <Failure retry={() => void q.refetch()} />;
   if (q.isPending || !q.data) return <Loading />;
   const d = q.data.data;
-  const media = p.data?.data;
+  const media = p.data?.data.summary;
   const stages = [
     ["Impressões", media?.impressions ?? null],
-    [
-      "Alcance observado · soma campanha/dia",
-      media?.reach_campaign_day_sum ?? null,
-    ],
+    ["Alcance Meta · único no período", media?.reach ?? null],
     ["Cliques no Link", media?.link_clicks ?? null],
     ["Visitas / Sessões", d.totals.sessions ?? null],
     ["Cadastros concluídos", leads.data?.data.leads_generated ?? null],
@@ -718,7 +660,7 @@ function ReadFunnel({
     ["Faturamento pago", null],
   ] as const;
   const rates = [
-    ["Frequência", null],
+    ["Frequência Meta", media?.frequency ?? null],
     ["CTR", media?.ctr ?? null],
     ["CPC", media?.cpc ?? null],
     ["Connect Rate", null],
@@ -736,7 +678,10 @@ function ReadFunnel({
       "Sessões checkout → compra observada (%)",
       percentOfRatio(d.checkout_to_purchase_rate),
     ],
-    ["Taxa de pagamento", null],
+    [
+      "Pedidos com status pago / pedidos (%)",
+      overview.data?.data.orders_paid_rate ?? null,
+    ],
   ] as const;
   return (
     <>
@@ -746,14 +691,30 @@ function ReadFunnel({
       >
         <DataTable
           pageSize={15}
-          data={stages.map(([stage, value]) => ({ stage, value }))}
+          data={stages.map(([stage, value], index) => ({
+            stage,
+            value,
+            source:
+              index < 3
+                ? "Meta Ads · reportado pela plataforma"
+                : index < 12
+                  ? "UP Zero · observado no período"
+                  : "UP Zero · pagamento",
+            limitation:
+              value !== null
+                ? null
+                : index === 12
+                  ? "SOURCE_DOES_NOT_PROVIDE · valor pago não certificado; atendimento não comprova pagamento."
+                  : "HISTORY_NOT_AVAILABLE_FROM_SOURCE · cobertura da fonte e do período ainda não certificada.",
+          }))}
           columns={[
             { accessorKey: "stage", header: "Etapa" },
             {
               accessorKey: "value",
               header: "Valor",
-              cell: ({ row }) => row.original.value ?? "—",
+              cell: ({ row }) => row.original.value ?? row.original.limitation,
             },
+            { accessorKey: "source", header: "Fonte" },
           ]}
         />
       </Panel>
@@ -763,13 +724,20 @@ function ReadFunnel({
       >
         <DataTable
           pageSize={12}
-          data={rates.map(([stage, value]) => ({ stage, value }))}
+          data={rates.map(([stage, value]) => ({
+            stage,
+            value,
+            limitation:
+              stage === "Connect Rate" || stage === "Taxa de cadastro"
+                ? "IDENTITY_RELATIONSHIP_NOT_PROVABLE · não há sequência canônica entre estas etapas e fontes."
+                : "HISTORY_NOT_AVAILABLE_FROM_SOURCE · cobertura compatível ou denominador ainda não certificado.",
+          }))}
           columns={[
             { accessorKey: "stage", header: "Transição" },
             {
               accessorKey: "value",
               header: "Taxa certificada",
-              cell: ({ row }) => row.original.value ?? "—",
+              cell: ({ row }) => row.original.value ?? row.original.limitation,
             },
           ]}
         />
@@ -790,23 +758,32 @@ function ReadProgression({
   const q = useDashboardRead("retention", metadata);
   if (q.isError) return <Failure retry={() => void q.refetch()} />;
   if (q.isPending || !q.data) return <Loading />;
-  const stages = q.data.data.purchase_stages ?? [];
+  const exact = q.data.data.exact_purchase_stages;
+  const stages = exact ?? q.data.data.purchase_stages ?? [];
   return (
     <>
       <Panel
         title="Progressão de recompra"
-        subtitle="Histórico observado. O contrato atual agrupa 5+; quinta e sexta compras separadas aguardam certificação."
+        subtitle={
+          exact
+            ? "Número de compra observado na sequência certificada, dentro do período selecionado. Não confirma histórico lifetime completo."
+            : "Histórico observado. O contrato atual agrupa 5+; quinta e sexta compras separadas aguardam certificação."
+        }
       >
         <div className="purchase-progression">
           {Array.from({ length: 6 }, (_, i) => i + 1).map((stage) => {
             const row =
-              stage <= 5 ? stages.find((s) => s.stage === stage) : undefined;
+              exact || stage <= 5
+                ? stages.find((s) => s.stage === stage)
+                : undefined;
             return (
               <section key={stage} className="purchase-stage">
                 <div className="progression-track">
                   <span />
                 </div>
-                <h3>{stage === 5 ? "5+ compras" : `${stage}ª compra`}</h3>
+                <h3>
+                  {!exact && stage === 5 ? "5+ compras" : `${stage}ª compra`}
+                </h3>
                 <div className="progression-count num">
                   {row?.buyers_observed ?? "—"}
                 </div>

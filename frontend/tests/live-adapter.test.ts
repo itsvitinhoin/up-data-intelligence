@@ -1,3 +1,4 @@
+import { metaPeriodData } from "./fixtures/meta-period";
 import { creative } from "./fixtures/creatives";
 import { describe, it, expect, vi } from "vitest";
 import { createLiveDataApi } from "@/services/api/live";
@@ -128,11 +129,10 @@ describe("original component real adapter", () => {
       ).rejects.toThrow();
     }
   });
-  it("uses decimal daily Meta evidence and preserves all eight original KPI positions", async () => {
+  it("uses official period Meta evidence without influence or commercial revenue substitution", async () => {
     const f = vi
       .fn<typeof fetch>()
-      .mockResolvedValueOnce(Response.json(envelope(performance, true)))
-      .mockResolvedValueOnce(Response.json(envelope([campaign], true)))
+      .mockResolvedValueOnce(Response.json(envelope(metaPeriodData())))
       .mockResolvedValueOnce(
         Response.json(
           { error: { code: "creative_coverage_unavailable" } },
@@ -143,20 +143,24 @@ describe("original component real adapter", () => {
       "marketing",
       context,
     );
-    expect(result.metrics).toHaveLength(8);
-    expect(result.metrics![0].value).toBe("100.01");
-    expect(result.metrics![1].value).toBeNull();
+    expect(result.metrics).toHaveLength(12);
+    expect(result.metrics![0].value).toBe("0.30");
+    expect(result.metrics![1].value).toBe("1.00");
+    expect(result.campaigns[0].requested).toBeNull();
+    expect(result.campaigns[0].fulfilled).toBeNull();
     expect(result.creatives).toEqual([]);
-    expect(result.series[0].revenue).toBeNull();
-    expect(result.series[0].spend).toBe("100.01");
+    expect(result.series[0]).toMatchObject({
+      source: "real",
+      revenue: "1.00",
+      spend: "0.30",
+      roas: "3.333333333333333333",
+    });
   });
   it("loads ad rankings independently and never substitutes campaign values", async () => {
     const fetcher = vi.fn<typeof fetch>().mockImplementation(async (input) => {
       const path = new URL(String(input), "https://web.example.test").pathname;
-      if (path.endsWith("/performance"))
-        return Response.json(envelope(performance, true));
-      if (path.endsWith("/campaigns"))
-        return Response.json(envelope([campaign], true));
+      if (path.endsWith("/metaAds"))
+        return Response.json(envelope(metaPeriodData()));
       if (path.endsWith("/creatives"))
         return Response.json(envelope([creative]));
       throw new Error("unexpected resource");
@@ -170,27 +174,39 @@ describe("original component real adapter", () => {
     expect(result.creatives[0].source).toBe("real");
     expect(result.creatives[0].purchases).toBe(2);
     expect(result.creatives[0].approved).toBeNull();
-    expect(fetcher).toHaveBeenCalledTimes(3);
+    expect(fetcher).toHaveBeenCalledTimes(2);
   });
   it("pins Intelligence across separate projections", async () => {
     const f = vi
       .fn<typeof fetch>()
-      .mockResolvedValueOnce(Response.json(envelope(performance, true)))
+      .mockResolvedValueOnce(Response.json(envelope([campaign], true)))
       .mockResolvedValueOnce(
         Response.json({
           ...envelope([campaign], true),
           metadata: { ...envelope(null, true).metadata, generation: 5 },
         }),
-      )
-      .mockResolvedValueOnce(
-        Response.json(
-          { error: { code: "creative_coverage_unavailable" } },
-          { status: 424 },
-        ),
       );
-    await expect(
-      createLiveDataApi(metadata, f).read("marketing", context),
-    ).rejects.toMatchObject({ status: 409 });
+    const api = createLiveDataApi(metadata, f);
+    await api.read("campaigns", context);
+    await expect(api.read("campaigns", context)).rejects.toMatchObject({
+      status: 409,
+    });
+  });
+  it("drills down official Meta campaign to exact adsets and ads without commercial IO", async () => {
+    const f = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json(envelope(metaPeriodData())));
+    const detail = await createLiveDataApi(metadata, f).campaign(
+      "101",
+      context,
+    );
+    expect(detail.meta?.adsets).toHaveLength(1);
+    expect(detail.meta?.ads).toHaveLength(1);
+    expect(detail.requested).toBeNull();
+    expect(detail.customers).toEqual([]);
+    expect(detail.orders).toEqual([]);
+    expect(f).toHaveBeenCalledTimes(1);
+    expect(String(f.mock.calls[0][0])).toContain("/metaAds");
   });
   it("keeps canonical routing, NULL and requested/fulfilled differences in drill-down view models", () => {
     const order = orderDetailView(orderDetail);

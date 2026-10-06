@@ -20,23 +20,65 @@ const history: MetricBinding = {
   path: null,
   category: "C",
   reason:
-    "REQUIRES_HISTORICAL_BACKFILL · history_complete=false; aquisição lifetime não certificada.",
+    "HISTORY_NOT_AVAILABLE_FROM_SOURCE · history_complete=false; aquisição lifetime não certificada.",
   history: true,
 };
 const payment: MetricBinding = {
   resource: null,
   path: null,
   category: "D",
-  reason: "PAYMENT_SOURCE_NOT_CERTIFIED · atendimento não comprova pagamento.",
+  reason:
+    "SOURCE_DOES_NOT_PROVIDE · valor pago não certificado; atendimento não comprova pagamento.",
 };
 const overrides: Record<string, MetricBinding> = {
+  orders_paid: source(
+    "overview",
+    "orders_paid",
+    "Pedidos com status de pagamento paid explícito no UP Zero; não certifica valor monetário pago.",
+  ),
+  total_media_spend: source(
+    "performance",
+    "available_media_spend",
+    "Investimento disponível: Meta certificado. Google e TikTok não conectados.",
+  ),
+  roas_captured: source(
+    "performance",
+    "commercial_roas_requested",
+    "Receita solicitada UP Zero / investimento Meta certificado.",
+  ),
+  registration_cost: source(
+    "performance",
+    "registration_cost",
+    "Investimento Meta certificado / cadastros no período.",
+  ),
+  approved_registration_cost: source(
+    "performance",
+    "approved_registration_cost",
+    "Investimento Meta certificado / aprovações no período.",
+  ),
+  cost_per_session: source(
+    "performance",
+    "cost_per_session",
+    "Investimento Meta certificado / sessões UP Zero observadas.",
+  ),
+  cost_per_add_to_cart: source(
+    "performance",
+    "cost_per_add_to_cart",
+    "Investimento Meta certificado / eventos de carrinho UP Zero.",
+  ),
+  cost_per_checkout: source(
+    "performance",
+    "cost_per_checkout",
+    "Investimento Meta certificado / eventos de checkout UP Zero.",
+  ),
+
   meta_impressions: source("performance", "impressions"),
   meta_clicks: source("performance", "clicks"),
   meta_link_clicks: source("performance", "link_clicks"),
   meta_reach_campaign_day_sum: source(
-    "performance",
-    "reach_campaign_day_sum",
-    "Soma no grão campanha/dia; não é alcance único do período.",
+    "metaAds",
+    "summary.reach",
+    "Alcance único reportado pelo Meta para o período completo; não soma dias ou campanhas.",
   ),
   facts_product_views: source("funnel", "totals.product_views"),
   facts_purchase: source("funnel", "totals.purchase"),
@@ -63,8 +105,8 @@ const overrides: Record<string, MetricBinding> = {
   ),
   roas_requested: source(
     "performance",
-    "roas_requested",
-    "Receita solicitada influenciada / investimento Meta; influência não é atribuição financeira.",
+    "commercial_roas_requested",
+    "Receita solicitada UP Zero / investimento Meta certificado. Apenas Meta conectado.",
   ),
   ctr: source(
     "performance",
@@ -91,12 +133,12 @@ const overrides: Record<string, MetricBinding> = {
   approved_conversion: source(
     "acquisition",
     "approved_conversion_rate",
-    "REGISTRATION_CUSTOMER_IDENTITY_NOT_CERTIFIED · exige vínculo determinístico e pedido qualificante após aprovação.",
+    "IDENTITY_RELATIONSHIP_NOT_PROVABLE · exige vínculo determinístico e pedido qualificante após aprovação.",
   ),
   approved_converted: source(
     "acquisition",
     "approved_converted",
-    "REGISTRATION_CUSTOMER_IDENTITY_NOT_CERTIFIED · não inferir identidade por user_id.",
+    "IDENTITY_RELATIONSHIP_NOT_PROVABLE · não inferir identidade por user_id.",
   ),
   new_requested_observed: source(
     "acquisition",
@@ -152,34 +194,28 @@ const gap = (category: GapCategory, reason: string): MetricBinding => ({
 const gaps: Record<string, MetricBinding> = {
   erp_ad_share: gap(
     "D",
-    "ERP_PAID_ATTRIBUTION_CONNECTOR_REQUIRED · falta receita paga e vínculo ERP/anúncio.",
+    "FUTURE_CONNECTOR_REQUIRED · ERP não conectado; atribuição paga não está certificada.",
   ),
-  google_spend: gap("D", "GOOGLE_ADS_CONNECTOR_REQUIRED"),
-  tiktok_spend: gap("D", "TIKTOK_ADS_CONNECTOR_REQUIRED"),
-  total_media_spend: gap(
+  google_spend: gap(
     "D",
-    "MEDIA_PLATFORM_COVERAGE_INCOMPLETE · Meta não é soma de Google/TikTok desconectados.",
+    "FUTURE_CONNECTOR_REQUIRED · Google Ads não conectado.",
   ),
-  registration_cost: gap(
+  tiktok_spend: gap(
     "D",
-    "MEDIA_PLATFORM_COVERAGE_INCOMPLETE · custo geral exige investimento total certificado.",
-  ),
-  approved_registration_cost: gap(
-    "D",
-    "MEDIA_PLATFORM_COVERAGE_INCOMPLETE · custo geral exige investimento total certificado.",
+    "FUTURE_CONNECTOR_REQUIRED · TikTok Ads não conectado.",
   ),
   registration_first_purchase_mean: gap(
     "A",
-    "REGISTRATION_CUSTOMER_IDENTITY_NOT_CERTIFIED · falta vínculo entre cadastro e compra qualificante.",
+    "IDENTITY_RELATIONSHIP_NOT_PROVABLE · falta vínculo entre cadastro e compra qualificante.",
   ),
   registration_first_purchase_median: gap(
     "A",
-    "REGISTRATION_CUSTOMER_IDENTITY_NOT_CERTIFIED · falta vínculo entre cadastro e compra qualificante.",
+    "IDENTITY_RELATIONSHIP_NOT_PROVABLE · falta vínculo entre cadastro e compra qualificante.",
   ),
-  cost_per_sale: gap("D", "PAID_SALES_AND_TOTAL_MEDIA_CONNECTORS_REQUIRED"),
-  roas_captured: gap(
-    "D",
-    "MEDIA_PLATFORM_COVERAGE_INCOMPLETE · ROAS geral exige investimento total.",
+  cost_per_sale: source(
+    "performance",
+    "cost_per_sale",
+    "Investimento Meta certificado / pedidos com status pago UP Zero; não comprova valor pago.",
   ),
   average_ticket: source(
     "overview",
@@ -191,18 +227,6 @@ const gaps: Record<string, MetricBinding> = {
     "retention_observed",
     "Compradores recorrentes / compradores observados × 100.",
     100,
-  ),
-  cost_per_session: gap(
-    "D",
-    "MEDIA_PLATFORM_COVERAGE_INCOMPLETE · custo geral exige investimento total.",
-  ),
-  cost_per_add_to_cart: gap(
-    "D",
-    "MEDIA_PLATFORM_COVERAGE_INCOMPLETE · custo geral exige investimento total.",
-  ),
-  cost_per_checkout: gap(
-    "D",
-    "MEDIA_PLATFORM_COVERAGE_INCOMPLETE · custo geral exige investimento total.",
   ),
   final_conversion_rate: source(
     "funnel",
@@ -217,6 +241,12 @@ export const MetricBindings: Readonly<Record<string, MetricBinding>> =
       const binding =
         overrides[id] ??
         gaps[id] ??
+        (id.startsWith("erp_")
+          ? gap(
+              "D",
+              "FUTURE_CONNECTOR_REQUIRED · ERP ainda não conectado para esta marca. Conecte um ERP no Admin para habilitar estes dados.",
+            )
+          : undefined) ??
         (id.startsWith("reactivated_") || id === "new_ad_customers"
           ? history
           : id.endsWith("_paid") ||

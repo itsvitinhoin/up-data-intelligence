@@ -30,6 +30,91 @@ VARIANT = {
         {"attribute": {"id": "a2", "code": "size"}, "term": {"name": "M", "code": "M"}},
     ],
 }
+IMAGE = {
+    "id": "image-1",
+    "product_id": "p1",
+    "image_url": "https://images.example.test/p1.jpg",
+    "display_order": 0,
+    "is_primary": True,
+    "variant_ids": ["v1"],
+    "created_at": STAMP,
+    "updated_at": STAMP,
+}
+
+
+def test_official_images_resume_between_products_and_certify_exact_relationships(tmp_path):
+    from src.ingestion.catalog import CatalogSnapshot
+
+    calls = []
+
+    def handler(request):
+        calls.append(request.url.path)
+        if request.url.path.endswith("/products"):
+            return httpx.Response(
+                200, json={"data": [PRODUCT, {**PRODUCT, "id": "p2", "product_id": "p2"}]}
+            )
+        if request.url.path.endswith("/variants"):
+            return httpx.Response(200, json={"data": [VARIANT]})
+        if request.url.path.endswith("/attributes"):
+            return httpx.Response(200, json=[])
+        if request.url.path.endswith("/images"):
+            assert not request.url.params
+            return httpx.Response(200, json=[IMAGE] if "/p1/" in request.url.path else [])
+        return httpx.Response(
+            200,
+            json={
+                "variant_id": "v1",
+                "totals": {"qty_total": 1, "qty_reserved": 0, "qty_available": 1},
+            },
+        )
+
+    engine, repo = setup(tmp_path, handler)
+    snapshot = CatalogSnapshot(engine)
+    first = snapshot.advance(STAMP, page_budget=5, include_images=True)
+    assert first["yielded"] and not first["complete"] and len(calls) == 5
+    cp = next(c for c in repo.read("sync_checkpoints", "synthetic-a") if c["resource"] == "images")
+    assert cp["position"] == {"index": 1} and cp["pending_raw_id"] is None
+    before = cp["run_id"]
+    last = snapshot.advance(STAMP, page_budget=5, include_images=True)
+    assert last["complete"] and len(calls) == 6
+    image_cp = next(
+        c for c in repo.read("sync_checkpoints", "synthetic-a") if c["resource"] == "images"
+    )
+    assert image_cp["run_id"] == before and image_cp["status"] == "complete"
+    assert image_cp["filters"]["product_ids"] == ["p1", "p2"]
+    assert len(repo.read("upzero_images", "synthetic-a")) == 2  # Empty gallery is still observed.
+    assert len(repo.read("catalog_images", "synthetic-a")) == 1
+    assert last["snapshots"][-1]["observed_count"] == 1
+    assert all("images" not in r["resource"] for r in repo.read("sync_runs", "synthetic-b"))
+
+
+def test_image_endpoint_rejects_product_mismatch_and_invalid_position_before_fetch(tmp_path):
+    engine, _ = setup(
+        tmp_path, lambda _: httpx.Response(200, json=[{**IMAGE, "product_id": "other"}])
+    )
+    with pytest.raises(Exception, match="catalog_image_product_mismatch"):
+        next(engine.connector.pages("images", {"product_ids": ["p1"], "catalog_as_of": STAMP}))
+    with pytest.raises(Exception, match="catalog_images_position_invalid"):
+        next(
+            engine.connector.pages(
+                "images", {"product_ids": ["p1"], "catalog_as_of": STAMP}, {"index": 1}
+            )
+        )
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        {"image_url": "http://images.example.test/a"},
+        {"image_url": "https://user:password@images.example.test/a"},
+        {"is_primary": "true"},
+        {"variant_ids": ["v1", "v1"]},
+        {"display_order": -1},
+    ],
+)
+def test_image_contract_rejects_unsafe_or_ambiguous_fields(mutation):
+    with pytest.raises(ValueError):
+        normalize_catalog("images", {**IMAGE, **mutation})
 
 
 def setup(tmp_path, handler, store="synthetic-a"):
@@ -247,3 +332,48 @@ def test_logical_catalog_snapshot_uses_one_shared_budget_and_certified_variant_m
     }
     assert snapshot.advance(STAMP, page_budget=4)["complete"]
     assert len(calls) == 5  # Same-cutoff rerun does not refresh completed checkpoints.
+
+
+def test_images_only_requires_existing_certified_base_before_any_source_request(tmp_path):
+    from src.ingestion.catalog import CatalogSnapshot
+
+    def forbidden(request):
+        raise AssertionError("Images extension must not create a second base snapshot")
+
+    engine, _ = setup(tmp_path, forbidden)
+    with pytest.raises(Exception, match="catalog_images_base_not_certified"):
+        CatalogSnapshot(engine).advance(STAMP, include_images=True, images_only=True)
+
+
+def test_images_only_reuses_all_completed_child_runs_and_fetches_only_images(tmp_path):
+    from src.ingestion.catalog import CatalogSnapshot
+
+    calls = []
+
+    def handler(request):
+        calls.append(request.url.path)
+        if request.url.path.endswith("/products"):
+            return httpx.Response(200, json={"data": [PRODUCT]})
+        if request.url.path.endswith("/variants"):
+            return httpx.Response(200, json={"data": [VARIANT]})
+        if request.url.path.endswith("/attributes"):
+            return httpx.Response(200, json=[])
+        if request.url.path.endswith("/images"):
+            return httpx.Response(200, json=[IMAGE])
+        return httpx.Response(
+            200,
+            json={
+                "variant_id": "v1",
+                "totals": {"qty_total": 1, "qty_reserved": 0, "qty_available": 1},
+            },
+        )
+
+    engine, repo = setup(tmp_path, handler)
+    snapshot = CatalogSnapshot(engine)
+    assert snapshot.advance(STAMP)["complete"]
+    before = repo.read("sync_checkpoints", "synthetic-a")
+    calls.clear()
+    assert snapshot.advance(STAMP, include_images=True, images_only=True)["complete"]
+    assert len(calls) == 1 and calls[0].endswith("/images")
+    after = [c for c in repo.read("sync_checkpoints", "synthetic-a") if c["resource"] != "images"]
+    assert after == before

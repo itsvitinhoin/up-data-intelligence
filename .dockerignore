@@ -7,6 +7,8 @@
 !src/
 !src/**/
 !src/**/*.py
+# Reviewed non-secret, account-specific Meta reporting definition.
+!src/connectors/meta/approved_purchase_reporting.json
 !sql/
 !sql/**/
 !sql/**/*.sql

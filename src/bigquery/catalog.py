@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from src.admin.schema import BINDINGS, CONNECTION_OPERATIONS, OPERATIONS
 from src.connectors.meta.enrichment_schema import FIELDS as META_ENRICHMENT_FIELDS
 from src.connectors.meta.foundation_schema import SCHEMAS as META_FOUNDATION_SCHEMAS
+from src.connectors.meta.period_schema import FIELDS as META_PERIOD_FIELDS
 from src.connectors.upzero.catalog_schema import RESOURCES as CATALOG_RESOURCES
 from src.control_plane.model import REGISTRY, REGISTRY_FIELDS
 from src.ingestion.metrics import COUNTERS
@@ -325,6 +326,17 @@ for name, partition in (
         dict(TABLES["meta_live_insights_daily"].fields),
         partition,
         ("store_id", "account_id", "ad_id"),
+    )
+    META_TABLE_NAMES.add(name)
+
+# Official all-days Insights have a separate non-additive account/entity period grain.
+
+for name, partition in (
+    ("meta_period_insights", "date_start"),
+    ("meta_period_insights_versions", "observed_at"),
+):
+    TABLES[name] = Table(
+        "up_core", dict(META_PERIOD_FIELDS), partition, ("store_id", "account_id", "level")
     )
     META_TABLE_NAMES.add(name)
 

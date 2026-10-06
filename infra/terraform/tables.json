@@ -73,6 +73,14 @@
       "resource"
     ]
   },
+  "upzero_images": {
+    "dataset": "up_raw",
+    "partition": "ingested_at",
+    "cluster": [
+      "store_id",
+      "resource"
+    ]
+  },
   "customers": {
     "dataset": "up_core",
     "partition": null,
@@ -199,6 +207,22 @@
     "cluster": [
       "store_id",
       "variant_id"
+    ]
+  },
+  "catalog_images": {
+    "dataset": "up_core",
+    "partition": null,
+    "cluster": [
+      "store_id",
+      "image_id"
+    ]
+  },
+  "catalog_images_versions": {
+    "dataset": "up_core",
+    "partition": "observed_at",
+    "cluster": [
+      "store_id",
+      "image_id"
     ]
   },
   "catalog_observations": {
@@ -374,6 +398,24 @@
       "store_id",
       "account_id",
       "ad_id"
+    ]
+  },
+  "meta_period_insights": {
+    "dataset": "up_core",
+    "partition": "date_start",
+    "cluster": [
+      "store_id",
+      "account_id",
+      "level"
+    ]
+  },
+  "meta_period_insights_versions": {
+    "dataset": "up_core",
+    "partition": "observed_at",
+    "cluster": [
+      "store_id",
+      "account_id",
+      "level"
     ]
   },
   "store_runtime_config": {

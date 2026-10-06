@@ -513,7 +513,12 @@ def test_proposed_schemas_are_separate_and_bq_date_merge_supported():
     proposed = json.loads(Path("infra/terraform/meta_tables.proposed.json").read_text())
     from src.intelligence.live.schema import META_ACTIVE
 
-    creative_tables = {"meta_creative_insights_daily", "meta_creative_insights_daily_versions"}
+    creative_tables = {
+        "meta_creative_insights_daily",
+        "meta_creative_insights_daily_versions",
+        "meta_period_insights",
+        "meta_period_insights_versions",
+    }
 
     assert set(proposed) == META_TABLE_NAMES - META_ACTIVE - creative_tables
     assert set(active) & META_TABLE_NAMES == META_ACTIVE | creative_tables

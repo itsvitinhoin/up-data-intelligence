@@ -133,6 +133,38 @@ def read(reader):
     ).read(START, END)
 
 
+def test_verified_ad_definition_does_not_change_campaign_commercial_evidence():
+    from src.connectors.meta.purchase_reporting import PurchaseCertificate
+
+    fake = Reader()
+    candidate = "offsite_conversion.fb_pixel_purchase"
+    fake.cps[0]["filters"]["insights"]["purchase_action_type"] = None
+    fake.cps[1]["filters"]["insights"]["purchase_action_type"] = candidate
+    certificate = PurchaseCertificate(ACCOUNT, "impression", ("7d_click",), candidate, "synthetic")
+    rows = CreativeReader(
+        "synthetic-project",
+        fake,
+        ACCOUNT.store_id,
+        "request",
+        SNAPSHOT,
+        purchase_certificates=(certificate,),
+    ).read(START, END)
+    assert rows[0]["meta_reported_purchases"] == "2"
+    assert fake.cps[0]["filters"]["insights"]["purchase_action_type"] is None
+    # A valid certificate alone cannot prove ingestion. Missing completed ad
+    # coverage remains unavailable; it cannot borrow campaign-only coverage.
+    fake.cps[1]["status"] = "running"
+    with pytest.raises(ReadError):
+        CreativeReader(
+            "synthetic-project",
+            fake,
+            ACCOUNT.store_id,
+            "request",
+            SNAPSHOT,
+            purchase_certificates=(certificate,),
+        ).read(START, END)
+
+
 def test_ad_metrics_exact_money_current_preview_and_not_attribution():
     fake = Reader()
     rows = read(fake)

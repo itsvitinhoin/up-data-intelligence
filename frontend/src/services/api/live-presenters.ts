@@ -106,6 +106,7 @@ export function orderDetailView(r: LiveOrderDetail): OrderDetail {
       product_key: i.product_key,
       name: i.name,
       sku: i.sku,
+      reference: i.reference,
       image: i.image,
       color: i.color,
       size: i.size,

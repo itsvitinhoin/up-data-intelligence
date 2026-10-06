@@ -4,7 +4,10 @@ import dynamic from "next/dynamic";
 import { ConversionVelocity } from "@/features/lifecycle";
 import Link from "next/link";
 import { OrderDialog } from "@/components/order-dialog";
-import { money } from "@/lib/format";
+import { money, number } from "@/lib/format";
+import Image from "next/image";
+import type { CampaignDetail, Metric } from "@/types/domain";
+import type { MetaPeriodRow } from "@/services/api/meta-ads";
 import { useState } from "react";
 import { useResource, useCampaign } from "@/hooks/use-resource";
 import { useWorkspace } from "@/features/providers";
@@ -25,28 +28,23 @@ import {
   campaignColumns,
 } from "@/components/business";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-const MarketingChart = dynamic(
-  () => import("@/components/marketing-charts").then((m) => m.MarketingChart),
+const CommercialTrend = dynamic(
+  () => import("@/components/charts").then((m) => m.RevenueChart),
   { ssr: false },
 );
 function PerformanceTrend() {
-  const q = useResource("marketing");
+  const q = useResource("overview");
   return (
     <Panel
-      title="Faturamento × Investimento por período"
-      subtitle="Receita atendida influenciada, sem duplicação de pedidos, e investimento em mídia no período selecionado."
+      title="Faturamento comercial por período"
+      subtitle="Receita solicitada e atendida UP Zero; atendimento não comprova pagamento."
     >
       {q.isPending ? (
         <Loading />
       ) : q.isError ? (
         <Failure retry={() => void q.refetch()} />
       ) : (
-        <MarketingChart
-          series={q.data.series}
-          kind="revenue"
-          b2c={false}
-          linesOnly
-        />
+        <CommercialTrend data={q.data.series} />
       )}
     </Panel>
   );
@@ -188,12 +186,133 @@ function DemoInfluencePage({
     </>
   );
 }
+function MetaCampaignDetail({
+  report,
+}: {
+  report: NonNullable<CampaignDetail["meta"]>;
+}) {
+  const campaign = report.campaign;
+  const metrics: Omit<Metric, "hint">[] = [
+    { label: "Investimento Meta", value: campaign.spend, format: "currency" },
+    {
+      label: "Compras reportadas pelo Meta",
+      value: campaign.meta_reported_purchases,
+      format: "number",
+    },
+    {
+      label: "Valor de compras reportado pelo Meta",
+      value: campaign.meta_reported_purchase_value,
+      format: "currency",
+    },
+    { label: "ROAS Meta", value: campaign.roas, format: "ratio" },
+    { label: "CPA Meta", value: campaign.cpa, format: "currency" },
+    {
+      label: "Alcance Meta",
+      value: campaign.reach === null ? null : String(campaign.reach),
+      format: "number",
+    },
+    { label: "Frequência Meta", value: campaign.frequency, format: "decimal" },
+    { label: "CTR Meta", value: campaign.ctr, format: "percent" },
+  ];
+  const columns = (entity: "adset" | "ad") => [
+    {
+      accessorKey: entity + "_name",
+      header: entity === "adset" ? "Conjunto" : "Anúncio",
+    },
+    { accessorKey: entity + "_status", header: "Status" },
+    {
+      accessorKey: "spend",
+      header: "Investimento",
+      cell: ({ row }: { row: { original: MetaPeriodRow } }) =>
+        money(row.original.spend),
+    },
+    {
+      accessorKey: "meta_reported_purchases",
+      header: "Compras Meta",
+      cell: ({ row }: { row: { original: MetaPeriodRow } }) =>
+        number(
+          row.original.meta_reported_purchases === null
+            ? null
+            : Number(row.original.meta_reported_purchases),
+        ),
+    },
+    {
+      accessorKey: "meta_reported_purchase_value",
+      header: "Valor de compras Meta",
+      cell: ({ row }: { row: { original: MetaPeriodRow } }) =>
+        money(row.original.meta_reported_purchase_value),
+    },
+    {
+      accessorKey: "cpa",
+      header: "CPA Meta",
+      cell: ({ row }: { row: { original: MetaPeriodRow } }) =>
+        money(row.original.cpa),
+    },
+    ...(entity === "ad"
+      ? [
+          {
+            id: "preview",
+            header: "Criativo atual",
+            cell: ({ row }: { row: { original: MetaPeriodRow } }) =>
+              row.original.preview_url ? (
+                <Image
+                  src={row.original.preview_url}
+                  width={100}
+                  height={120}
+                  unoptimized
+                  alt="Prévia oficial Meta"
+                />
+              ) : (
+                <span className="muted">Prévia não fornecida pelo Meta</span>
+              ),
+          },
+        ]
+      : []),
+  ];
+  return (
+    <>
+      <Link href="/campaigns" className="back-link">
+        ← Meta Ads
+      </Link>
+      <PageHead
+        eyebrow="Meta Ads · Campanha"
+        title={campaign.campaign_name ?? "Campanha Meta"}
+        description="Métricas oficiais da plataforma no período selecionado."
+      />
+      <FiltersBar />
+      <Notice>
+        Compras e valores reportados pelo Meta. Não representam receita
+        comercial UP Zero nem atribuição de pedidos. Prévia e status são do
+        catálogo atual.
+      </Notice>
+      <div className="metrics">
+        {metrics.map((item) => (
+          <MetricCard
+            key={item.label}
+            item={{
+              ...item,
+              hint: "Relatório oficial Meta all_days; família de compras certificada.",
+            }}
+            decorativeTrend={false}
+          />
+        ))}
+      </div>
+      <Panel title="Conjuntos de anúncios">
+        <DataTable data={report.adsets} columns={columns("adset")} />
+      </Panel>
+      <Panel title="Anúncios e criativos">
+        <DataTable data={report.ads} columns={columns("ad")} />
+      </Panel>
+    </>
+  );
+}
 function DemoCampaignDetailPage({ id }: { id: string }) {
   const q = useCampaign(id);
   const [tab, setTab] = useState("customers");
   if (q.isPending) return <Loading />;
   if (q.isError) return <Failure retry={() => void q.refetch()} />;
   const d = q.data;
+  if (d.meta) return <MetaCampaignDetail report={d.meta} />;
   const orders = d.orders.map((o) => ({
     ...o,
     customer_name:

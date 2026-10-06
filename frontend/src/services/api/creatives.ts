@@ -241,6 +241,8 @@ export function parseCreatives(
 export function creativeView(r: LiveCreative): MarketingCreative {
   const n = (v: string | null) => (v === null ? null : Number(v));
   return {
+    metaCtr: r.ctr,
+    metaCpa: r.cpa,
     id: r.ad_id,
     campaign_id: r.campaign_id,
     campaign_name: `Campanha ${r.campaign_id}`,

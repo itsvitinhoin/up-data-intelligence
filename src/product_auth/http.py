@@ -123,7 +123,7 @@ def create_read_app(
             if resource in {"overview", "installation"}:
                 path = f"/v1/stores/{binding['store_id']}/{resource}"
             elif re.fullmatch(
-                r"(?:orders|acquisition|retention|products|funnel|geography|performance|customers|campaigns|creatives)(?:/[^/]{1,200}){0,2}",
+                r"(?:orders|acquisition|retention|products|funnel|geography|performance|customers|campaigns|creatives|metaAds)(?:/[^/]{1,200}){0,2}",
                 resource,
             ):
                 path = "/v1/" + resource
@@ -134,6 +134,15 @@ def create_read_app(
             # Business service/client is constructed only after scope authorization.
             auth_duration = int((time.monotonic() - auth_started) * 1000)
             instance = service(str(environ["HTTP_X_UP_SESSION"]))
+            if isinstance(instance, DashboardService):
+                # Binding was resolved from freshly authenticated server grants.
+                # Technical store/browser query values cannot select a cache scope.
+                instance.aggregate_workspace = (
+                    binding["tenant_id"],
+                    binding["workspace_operation_id"],
+                    binding["store_id"],
+                    binding["operation"],
+                )
             status, data = dispatch(instance, "GET", path, query, access.dashboard())
             timings = {"auth": auth_duration}
             from src.dashboard.repository import BigQueryReadSession

@@ -3,7 +3,7 @@
 from collections.abc import Callable
 from contextlib import nullcontext
 from dataclasses import replace
-from typing import Protocol
+from typing import Any, Protocol
 
 from src.config.settings import Settings
 from src.connectors.meta.config import Insights
@@ -49,8 +49,11 @@ class InstallationActions:
         actions: Actions,
         source: Callable[[StoreConfig, str], Row],
         certify: Callable[[StoreConfig, Row], None],
+        *,
+        product_images_enabled: bool = False,
     ):
         self.actions, self.source, self.certify = actions, source, certify
+        self.product_images_enabled = product_images_enabled
         self.verifier = ProbeVerifier({"upzero": self.probe_upzero, "meta": self.probe_meta})
 
     def upzero(self, c: StoreConfig, *, active: bool) -> tuple[Settings, UpZeroConnector]:
@@ -97,13 +100,17 @@ class InstallationActions:
             connector.close()
 
     def meta(
-        self, c: StoreConfig, *, creative: bool = False
+        self, c: StoreConfig, *, creative: bool = False, period_level: str | None = None
     ) -> tuple[MetaLiveEngine, Callable[[], None]]:
         from src.connectors.meta.live import MetaCreativeLiveConnector, MetaFoundationLiveConnector
         from src.intelligence.live.cli import validated_secret_reference
 
         account = self.actions.prerequisites.account(c)
-        connector_type = MetaCreativeLiveConnector if creative else MetaFoundationLiveConnector
+        connector_type: Any = MetaCreativeLiveConnector if creative else MetaFoundationLiveConnector
+        if period_level is not None:
+            from src.connectors.meta.period import MetaPeriodLiveConnector
+
+            connector_type = MetaPeriodLiveConnector
         connector = connector_type(
             account,
             project=self.actions.transport.config.project,
@@ -112,6 +119,7 @@ class InstallationActions:
             confirm_account=account.account_id,
             token=resolve_secret(validated_secret_reference(self.actions.meta_reference or "")),
             page_limit=100,
+            **({"level": period_level} if period_level is not None else {}),
         )
         return MetaLiveEngine(
             self.actions.repository(), connector, accounts=(account,), lease=lambda: nullcontext()
@@ -149,7 +157,7 @@ class InstallationActions:
             cfg, connector = self.upzero(c, active=True)
             try:
                 repo = self.actions.repository()
-                if row["resource"] == "catalog":
+                if row["resource"] in {"catalog", "catalog_images"}:
                     from src.ingestion.catalog import CatalogSnapshot
 
                     if row["unit_kind"] != "SYNC_SNAPSHOT" or set(row["filters"]) != {
@@ -160,6 +168,9 @@ class InstallationActions:
                     # page/time ceiling across products, variants, attributes and stock.
                     return CatalogSnapshot(Engine(cfg, repo, connector)).advance(
                         row["filters"]["catalog_as_of"],
+                        include_images=self.product_images_enabled
+                        or row["resource"] == "catalog_images",
+                        images_only=row["resource"] == "catalog_images",
                         page_budget=limits.page_budget,
                         soft_time_budget_seconds=limits.soft_time_budget_seconds,
                     )

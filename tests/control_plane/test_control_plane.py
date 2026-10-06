@@ -532,7 +532,12 @@ def test_shared_schema_is_only_addition_and_old_terraform_preserved():
     active = json.loads((root / "tables.json").read_text())
     from src.connectors.upzero.catalog_schema import TABLE_NAMES as CATALOG_TABLE_NAMES
 
-    creative_tables = {"meta_creative_insights_daily", "meta_creative_insights_daily_versions"}
+    creative_tables = {
+        "meta_creative_insights_daily",
+        "meta_creative_insights_daily_versions",
+        "meta_period_insights",
+        "meta_period_insights_versions",
+    }
 
     assert set(active) - set(old) == CATALOG_TABLE_NAMES | creative_tables | {
         REGISTRY,

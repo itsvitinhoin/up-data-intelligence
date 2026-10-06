@@ -110,6 +110,7 @@ export interface OrderDetail {
     product_key?: string;
     image?: string | null;
     unitPrice?: string | null;
+    reference?: string | null;
     name: string | null;
     sku: string | null;
     color: string | null;
@@ -319,6 +320,8 @@ export interface User {
   role: Role;
 }
 export interface MarketingCreative {
+  metaCtr?: string | null;
+  metaCpa?: string | null;
   source?: "real" | "demo";
   previewObservedAt?: string | null;
   evidenceHash?: string;
@@ -349,6 +352,10 @@ export interface Marketing {
   };
   creatives: MarketingCreative[];
   campaigns: (Campaign & {
+    metaPurchaseValue?: string | null;
+    metaRoas?: string | null;
+    metaCpa?: string | null;
+    metaCtr?: string | null;
     impressions: number | null;
     clicks: number | null;
     leads: number | null;
@@ -357,7 +364,10 @@ export interface Marketing {
     platform: string;
     status: string | null;
   })[];
+  seriesAvailable?: boolean;
   series: {
+    source?: "real" | "demo";
+    roas?: string | null;
     date: string;
     spend: number | string | null;
     leads: number | null;
@@ -459,5 +469,10 @@ export interface Influence {
   metrics?: Metric[];
 }
 export interface CampaignDetail extends Influence {
+  meta?: {
+    campaign: import("@/services/api/meta-ads").MetaPeriodRow;
+    adsets: import("@/services/api/meta-ads").MetaPeriodRow[];
+    ads: import("@/services/api/meta-ads").MetaPeriodRow[];
+  };
   campaign: Campaign;
 }

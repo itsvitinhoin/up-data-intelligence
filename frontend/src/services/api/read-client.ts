@@ -74,6 +74,7 @@ export async function readDashboard<K extends ReadResource>(
     funnel: "funnel",
     geography: "geography",
     creatives: "creatives",
+    metaAds: "metaAds",
   };
   const response = await fetcher(
     `/api/dashboard/${paths[resource]}?${params}`,

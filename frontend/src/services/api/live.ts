@@ -1,3 +1,4 @@
+import { metaCampaignView } from "./meta-ads";
 import { creativeView } from "./creatives";
 /** Real DataApi for the approved original feature tree. No fixture imports. */
 import type {
@@ -36,7 +37,6 @@ import {
   lifecycleView,
   rowCount,
   rowText,
-  requiredText,
   rowFlag,
   chartValue,
   unavailable,
@@ -449,17 +449,15 @@ export function createLiveDataApi(
           break;
         }
         case "marketing": {
-          const p = (await request("performance", c, m)).data;
-          if (!Array.isArray(p.series)) throw unavailable();
-          const [campaignsResponse, creativesResponse] = await Promise.all([
-            collection("campaigns", c, m),
+          const [platform, creativesResponse] = await Promise.all([
+            request("metaAds", c, m),
             request("creatives", c, m).catch((error: unknown) => {
               if (error instanceof ApiError && error.status === 424)
                 return null;
               throw error;
             }),
           ]);
-          const campaignRows = campaignsResponse.data;
+          const p = platform.data.summary;
           const kpi = (
             label: string,
             value: string | number | null,
@@ -470,80 +468,113 @@ export function createLiveDataApi(
             source: "real",
             creatives: creativesResponse?.data.map(creativeView) ?? [],
             summary: {
-              spend: rowText(p, "meta_spend"),
+              spend: p.spend,
               leads: null,
-              clicks: rowCount(p, "clicks"),
-              ctr: rowText(p, "ctr"),
+              clicks: p.clicks,
+              ctr: p.ctr,
             },
-            campaigns: campaignRows.map((r) => ({
-              ...campaignView(r),
-              impressions: rowCount(r, "impressions"),
-              clicks: rowCount(r, "clicks"),
+            campaigns: platform.data.campaigns.map((r) => ({
+              ...metaCampaignView(r),
+              impressions: r.impressions,
+              clicks: r.clicks,
               leads: null,
               approved: null,
-              purchases: null,
+              purchases:
+                r.meta_reported_purchases === null
+                  ? null
+                  : Number(r.meta_reported_purchases),
               platform: "Meta Ads",
-              status: rowText(r, "campaign_status"),
+              status: r.campaign_status,
+              metaPurchaseValue: r.meta_reported_purchase_value,
+              metaRoas: r.roas,
+              metaCpa: r.cpa,
+              metaCtr: r.ctr,
             })),
-            series: p.series.map((raw) => {
-              if (!raw || typeof raw !== "object" || Array.isArray(raw))
-                throw new ApiError(502, "Série diária inválida.");
-              return {
-                date: requiredText(raw, "date"),
-                spend: rowText(raw, "spend"),
-                revenue: rowText(raw, "fulfilled_revenue_influenced"),
-                leads: null,
-                purchases: null,
-              };
-            }),
+            seriesAvailable: platform.data.series !== null,
+            series: (platform.data.series ?? []).map((r) => ({
+              source: "real" as const,
+              date: r.date,
+              spend: r.spend,
+              leads: null,
+              purchases:
+                r.meta_reported_purchases === null
+                  ? null
+                  : Number(r.meta_reported_purchases),
+              revenue: r.meta_reported_purchase_value,
+              roas: r.roas,
+            })),
             metrics: [
               kpi(
-                "Investimento em mídia",
-                rowText(p, "meta_spend"),
+                "Investimento Meta",
+                p.spend,
                 "currency",
-                "Investimento Meta certificado no período.",
+                "Gasto oficial do Meta no período.",
               ),
               kpi(
-                "Faturamento atribuído",
-                null,
+                "Valor de compras reportado pelo Meta",
+                p.meta_reported_purchase_value,
                 "currency",
-                "Influência observada não comprova atribuição exclusiva.",
+                "Action value da família de compras certificada; não é receita comercial UP Zero.",
               ),
               kpi(
-                "ROAS",
-                null,
+                "ROAS Meta",
+                p.roas,
                 "ratio",
-                "Atribuição de faturamento ainda não certificada.",
+                "Valor de compras reportado / gasto Meta; não é atribuição comercial.",
               ),
               kpi(
-                "CTR médio",
-                rowText(p, "ctr"),
+                "Compras reportadas pelo Meta",
+                p.meta_reported_purchases,
+                "number",
+                platform.data.purchase_action_type,
+              ),
+              kpi(
+                "CTR Meta",
+                p.ctr,
                 "percent",
-                "Cliques / impressões × 100, ponderado pelo volume.",
+                "Cliques / impressões × 100; cálculo no backend.",
               ),
               kpi(
-                "CPM",
-                rowText(p, "cpm"),
+                "CPM Meta",
+                p.cpm,
                 "currency",
-                "Investimento / impressões × 1.000.",
+                "Gasto / impressões × 1.000; cálculo no backend.",
               ),
               kpi(
-                "Frequência",
-                null,
+                "Frequência Meta",
+                p.frequency,
                 "decimal",
-                "Alcance único agregado não certificado nesta publicação.",
+                "Frequência oficial all_days; não soma dias ou campanhas.",
               ),
               kpi(
-                "CPC",
-                rowText(p, "cpc"),
+                "CPC Meta",
+                p.cpc,
                 "currency",
-                "Investimento / cliques.",
+                "Gasto / cliques; cálculo no backend.",
               ),
               kpi(
-                "Custo por compra",
-                null,
+                "CPA Meta",
+                p.cpa,
                 "currency",
-                "Compras atribuídas não certificadas nesta projeção.",
+                "Gasto / compras reportadas pelo Meta.",
+              ),
+              kpi(
+                "Impressões Meta",
+                p.impressions,
+                "number",
+                "Relatório oficial do período.",
+              ),
+              kpi(
+                "Alcance Meta",
+                p.reach,
+                "number",
+                "Alcance único oficial do período all_days.",
+              ),
+              kpi(
+                "Cliques no link Meta",
+                p.link_clicks,
+                "number",
+                "inline_link_clicks do relatório oficial.",
               ),
             ],
           };
@@ -619,38 +650,22 @@ export function createLiveDataApi(
       };
     },
     async campaign(id, c) {
-      const m = await metadata(c),
-        campaignRows = (await collection("campaign", c, m, { customerId: id }))
-          .data;
-      if (campaignRows.length !== 1)
-        throw new ApiError(404, "Campanha não encontrada.");
-      const r = campaignRows[0],
-        orderRelations = (
-          await collection("campaignOrders", c, m, { customerId: id })
-        ).data;
-      const allOrders = (await collection("orders", c, m)).data.map(orderView),
-        orderIds = new Set(
-          orderRelations.map((r) => requiredText(r, "order_id")),
-        );
-      const orders = allOrders
-        .filter((r) => orderIds.has(r.id))
-        .map((r) => ({ ...r, paid: true }));
-      if (orders.length !== orderIds.size)
-        throw new ApiError(502, "Pedidos participantes não reconciliados.");
-      const people = (
-          await collection("campaignCustomers", c, m, { customerId: id })
-        ).data,
-        ids = new Set(people.map((r) => requiredText(r, "customer_id")));
-      const rows = await customers(c, m, true);
+      const m = await metadata(c);
+      const report = (await request("metaAds", c, m)).data;
+      const campaign = report.campaigns.find((r) => r.campaign_id === id);
+      if (!campaign) throw new ApiError(404, "Campanha não encontrada.");
       return {
-        campaign: campaignView(r),
-        customers: rows
-          .filter((r) => ids.has(r.id))
-          .map((r) => ({ ...r, paid: true })),
-        orders,
-        campaigns: [campaignView(r)],
-        requested: rowText(r, "requested_revenue_influenced"),
-        fulfilled: rowText(r, "fulfilled_revenue_influenced"),
+        campaign: metaCampaignView(campaign),
+        campaigns: [metaCampaignView(campaign)],
+        customers: [],
+        orders: [],
+        requested: null,
+        fulfilled: null,
+        meta: {
+          campaign,
+          adsets: report.adsets.filter((r) => r.campaign_id === id),
+          ads: report.ads.filter((r) => r.campaign_id === id),
+        },
       };
     },
     async saveCompany() {

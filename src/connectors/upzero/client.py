@@ -6,6 +6,7 @@ from collections.abc import Callable, Iterator
 from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
 from typing import Any
+from urllib.parse import quote
 
 import httpx
 
@@ -21,6 +22,7 @@ PATHS = {
     "variants": "/external/v1/variants",
     "attributes": "/external/v1/attributes",
     "inventory": "/external/v1/inventory/availability",
+    "images": "/external/v1/products/{product_id}/images",
 }
 FILTERS = {
     "customers": {"start_date", "end_date", "limit"},
@@ -30,6 +32,7 @@ FILTERS = {
     "variants": {"limit", "catalog_as_of"},
     "attributes": {"catalog_as_of"},
     "inventory": {"variant_id", "variant_ids", "catalog_as_of"},
+    "images": {"product_ids", "catalog_as_of"},
 }
 CURSOR_RESOURCES = frozenset({"analytics_facts", "products", "variants"})
 
@@ -60,11 +63,19 @@ class UpZeroConnector:
         self.client.close()
 
     def _get(self, resource: str, params: dict[str, Any]) -> tuple[dict[str, Any], int]:
+        path = PATHS[resource]
+        query_params = params
+        if resource == "images":
+            product = params.get("product_id")
+            if not isinstance(product, str) or not product.strip() or len(product) > 200:
+                raise SafeError("catalog_image_product_required")
+            path = path.replace("{product_id}", quote(product, safe=""))
+            query_params = {k: v for k, v in params.items() if k != "product_id"}
         for attempt in range(self.attempts):
             response = None
             try:
                 response = self.client.get(
-                    PATHS[resource], params=params, headers={"X-API-Key": self._key}
+                    path, params=query_params, headers={"X-API-Key": self._key}
                 )
                 status = response.status_code
                 event("http_response", resource=resource, http_status=status, attempt=attempt)
@@ -88,9 +99,14 @@ class UpZeroConnector:
                                 str if resource in {"products", "variants", "inventory"} else float
                             ),
                         )
-                        if resource == "attributes":
+                        if resource in {"attributes", "images"}:
                             if not isinstance(data, list):
                                 raise ValueError
+                            if resource == "images" and any(
+                                not isinstance(row, dict) or row.get("product_id") != product
+                                for row in data
+                            ):
+                                raise SafeError("catalog_image_product_mismatch")
                             data = {"data": data}
                         elif resource == "inventory":
                             if not isinstance(data, dict) or not data.get("variant_id"):
@@ -144,6 +160,19 @@ class UpZeroConnector:
             except (ValueError, TypeError):
                 raise SafeError("catalog_snapshot_required") from None
         variant_ids = filters.get("variant_ids")
+        product_ids = filters.get("product_ids")
+        if resource == "images":
+            if (
+                not isinstance(product_ids, list)
+                or len(product_ids) > 10000
+                or any(not isinstance(v, str) or not v.strip() or len(v) > 200 for v in product_ids)
+                or len(set(product_ids)) != len(product_ids)
+                or product_ids != sorted(product_ids)
+                or "catalog_as_of" not in filters
+            ):
+                raise SafeError("catalog_images_snapshot_invalid")
+            if not product_ids:
+                return
         if variant_ids is not None:
             if (
                 resource != "inventory"
@@ -174,14 +203,23 @@ class UpZeroConnector:
         if resource == "analytics_facts" and not all(filters.get(k) for k in ("from", "to")):
             raise SafeError("fixed_window_required")
         pos = position or (
-            {"index": 0} if variant_ids is not None else {"page": 1} if resource == "orders" else {}
+            {"index": 0}
+            if variant_ids is not None or product_ids is not None
+            else {"page": 1}
+            if resource == "orders"
+            else {}
         )
-        if variant_ids is not None and (
+        targets = product_ids if resource == "images" else variant_ids
+        if targets is not None and (
             set(pos) != {"index"}
             or type(pos["index"]) is not int
-            or not 0 <= pos["index"] < len(variant_ids)
+            or not 0 <= pos["index"] < len(targets)
         ):
-            raise SafeError("inventory_snapshot_position_invalid")
+            raise SafeError(
+                "catalog_images_position_invalid"
+                if resource == "images"
+                else "inventory_snapshot_position_invalid"
+            )
         seen: set[str] = set()
         for _ in range(self.max_pages):
             token = json.dumps(pos, sort_keys=True)
@@ -190,19 +228,28 @@ class UpZeroConnector:
             seen.add(token)
             # catalog_as_of identifies a durable logical snapshot/checkpoint. It
             # is internal metadata, never an undocumented provider query filter.
-            params = {k: v for k, v in filters.items() if k not in {"catalog_as_of", "variant_ids"}}
+            params = {
+                k: v
+                for k, v in filters.items()
+                if k not in {"catalog_as_of", "variant_ids", "product_ids"}
+            }
             if variant_ids is not None:
                 params["variant_id"] = variant_ids[pos["index"]]
+            elif product_ids is not None:
+                params["product_id"] = product_ids[pos["index"]]
             else:
                 params.update(pos)
-            if resource not in {"attributes", "inventory"}:
+            if resource not in {"attributes", "inventory", "images"}:
                 params["limit"] = limit
             payload, size = self._get(resource, params)
             rows = payload["data"]
             error = None
             nxt: dict[str, Any] | None = None
             try:
-                if variant_ids is not None:
+                if product_ids is not None:
+                    if pos["index"] + 1 < len(product_ids):
+                        nxt = {"index": pos["index"] + 1}
+                elif variant_ids is not None:
                     if len(rows) != 1:
                         error = "inventory_snapshot_response_invalid"
                     elif pos["index"] + 1 < len(variant_ids):

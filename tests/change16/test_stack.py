@@ -570,13 +570,20 @@ def test_terraform_additive_baseline_and_canonical_families():
         "integration_operations",
         "meta_creative_insights_daily",
         "meta_creative_insights_daily_versions",
-    } and len(set(active) - set(old)) == 39 + len(CATALOG_TABLE_NAMES)
+        "meta_period_insights",
+        "meta_period_insights_versions",
+    } and len(set(active) - set(old)) == 41 + len(CATALOG_TABLE_NAMES)
     for name, sha in json.loads(
         Path("tests/fixtures/change16/base_schema_hashes.json").read_text()
     ).items():
         assert hashlib.sha256((root / "schemas" / (name + ".json")).read_bytes()).hexdigest() == sha
     creative = {"meta_creative_insights_daily", "meta_creative_insights_daily_versions"}
-    assert not (META_TABLE_NAMES - META_ACTIVE - creative) & set(active)
+    assert not (
+        META_TABLE_NAMES
+        - META_ACTIVE
+        - creative
+        - {"meta_period_insights", "meta_period_insights_versions"}
+    ) & set(active)
     assert all(active[name]["cluster"] == ["store_id", "account_id", "ad_id"] for name in creative)
     assert all(SCHEMAS[n].fields["generation"] == "INT64" for n in SCHEMAS)
     tf = (root / "change16.tf").read_text()

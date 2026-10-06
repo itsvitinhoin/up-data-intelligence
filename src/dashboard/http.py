@@ -130,6 +130,7 @@ def dispatch(
         "/v1/funnel",
         "/v1/geography",
         "/v1/creatives",
+        "/v1/metaAds",
     }:
         resource, store = path.rsplit("/", 1)[-1], _value(query, "store_id")
     else:
@@ -148,6 +149,7 @@ def dispatch(
         "product",
         "geography",
         "creatives",
+        "metaAds",
     }:
         allowed.update({"from", "to"})
     if resource in {"orders", "customers", "products", "customer_orders"}:
@@ -192,6 +194,10 @@ def dispatch(
         )
     elif resource == "acquisition":
         result = service.acquisition(
+            principal, grant, from_day=_value(query, "from"), to_day=_value(query, "to")
+        )
+    elif resource == "metaAds":
+        result = service.meta_ads(
             principal, grant, from_day=_value(query, "from"), to_day=_value(query, "to")
         )
     elif resource == "creatives":

@@ -13,13 +13,17 @@ export function rankCreatives(
   b2c: boolean,
 ) {
   const value = (row: MarketingCreative) =>
-    kind === "ctr"
-      ? ratio(row.clicks === null ? null : row.clicks * 100, row.impressions)
-      : kind === "cost"
-        ? ratio(row.spend, b2c ? row.purchases : row.leads)
-        : b2c
-          ? row.purchases
-          : row.leads;
+    row.source === "real" && kind !== "results"
+      ? (kind === "ctr" ? row.metaCtr : row.metaCpa) == null
+        ? null
+        : Number(kind === "ctr" ? row.metaCtr : row.metaCpa)
+      : kind === "ctr"
+        ? ratio(row.clicks === null ? null : row.clicks * 100, row.impressions)
+        : kind === "cost"
+          ? ratio(row.spend, b2c ? row.purchases : row.leads)
+          : b2c
+            ? row.purchases
+            : row.leads;
   return rows
     .filter(
       (row) => value(row) !== null && (kind !== "results" || value(row)! > 0),

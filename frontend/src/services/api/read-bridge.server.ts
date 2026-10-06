@@ -58,6 +58,7 @@ export async function handleReadBridge(
       "funnel",
       "geography",
       "creatives",
+      "metaAds",
       "product",
     ].includes(resource);
   const paged =

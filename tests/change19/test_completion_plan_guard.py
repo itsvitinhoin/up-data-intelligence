@@ -147,7 +147,11 @@ def test_destroy_or_replacement_is_rejected():
 
 def test_automatic_enrichment_and_preview_capacity_default_fail_closed():
     text = Path("infra/terraform/dashboard_completion.tf").read_text()
-    assert text.count("default     = false") + text.count("default  = false") == 4
+    assert text.count("default     = false") + text.count("default  = false") == 6
+    image_flag = text.split('variable "dashboard_completion_product_images" {', 1)[1].split("}", 1)[
+        0
+    ]
+    assert "default     = false" in image_flag
     assert "min_instance_count = 0" in text
     assert "invoker_iam_disabled = false" in text
     assert "google_project_iam_member" not in text
@@ -230,3 +234,23 @@ def test_admin_analytics_read_grants_resolve_the_analytics_catalog(table):
     a["dataset_id"] = "up_core"
     with pytest.raises(ValueError, match="UNAPPROVED_TABLE_IAM"):
         check(plan("google_bigquery_table_iam_member", None, a), IMAGE)
+
+
+@pytest.mark.parametrize(
+    "job_name,flag",
+    [
+        ("up-installation-upzero-worker", "UP_INSTALLATION_PRODUCT_IMAGES_ENABLED"),
+        ("up-installation-orchestrator", "UP_INSTALLATION_PRODUCT_IMAGES_ENABLED"),
+        ("up-installation-orchestrator", "UP_META_VERIFIED_PURCHASES_ENABLED"),
+    ],
+)
+def test_new_source_flags_are_scoped_to_installation_jobs(job_name, flag):
+    before, after = job(), job()
+    before["name"] = after["name"] = job_name
+    container = after["template"][0]["template"][0]["containers"][0]
+    container["image"] = IMAGE
+    container["env"].append(dict(name=flag, value="1", value_source=[]))
+    assert check(plan("google_cloud_run_v2_job", before, after, ["update"]), IMAGE)["update"] == 1
+    after["name"] = before["name"] = "up-meta-worker"
+    with pytest.raises(ValueError):
+        check(plan("google_cloud_run_v2_job", before, after, ["update"]), IMAGE)

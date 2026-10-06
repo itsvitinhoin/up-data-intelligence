@@ -6,6 +6,7 @@ from typing import Any
 
 from src.admin.connections import ConnectionService
 from src.admin.history import HistoryService
+from src.connectors.meta.purchase_reporting import load_certificates
 from src.dashboard.repository import BigQueryReadSession, ReadBudget
 from src.product_auth.http import WSGI, create_admin_app, create_read_app
 from src.product_auth.repository import BigQueryAccess
@@ -45,7 +46,15 @@ def compose(kind: str) -> WSGI:
         )
 
     if kind == "read":
+        from src.dashboard.aggregate_cache import AggregateCache
         from src.dashboard.intelligence import IntelligenceDashboardService
+
+        # Only certified aggregate query rows are cached. Authorization, Registry
+        # and HEAD/RECEIPT are read afresh on every request; no PII cache exists.
+        aggregate_cache = AggregateCache()
+        purchase_certificates = load_certificates(
+            enabled=os.environ.get("UP_META_VERIFIED_PURCHASES_ENABLED") == "1"
+        )
 
         def dashboard(cookie: str) -> IntelligenceDashboardService:
             # Stable across replicas, bound to the verified 12h session, never logged/exported.
@@ -58,6 +67,11 @@ def compose(kind: str) -> WSGI:
                 installation_v2=True,
                 catalog_enabled=os.environ.get("UP_PRODUCT_CATALOG_ENABLED") == "1",
                 creatives_enabled=os.environ.get("UP_PRODUCT_CREATIVES_ENABLED") == "1",
+                images_enabled=os.environ.get("UP_PRODUCT_IMAGES_ENABLED") == "1",
+                purchase_certificates=purchase_certificates,
+                aggregate_cache=aggregate_cache
+                if os.environ.get("UP_PRODUCT_CATALOG_ENABLED") == "1"
+                else None,
             )
 
         from src.admin.integration_reads import IntegrationReader
@@ -119,6 +133,9 @@ def compose(kind: str) -> WSGI:
                 ExtensionLedger(transport),
                 lambda key: cloud_lease(os.environ["UP_PRODUCT_LEASE_BUCKET"], key),
                 bytes.fromhex(os.environ["UP_PRODUCT_SUBJECT_KEY"]),
+                purchase_certificates=load_certificates(
+                    enabled=os.environ.get("UP_META_VERIFIED_PURCHASES_ENABLED") == "1"
+                ),
             )
 
         def connections() -> ConnectionService:

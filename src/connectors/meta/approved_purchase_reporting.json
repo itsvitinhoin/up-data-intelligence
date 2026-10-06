@@ -1,0 +1,16 @@
+[
+  {
+    "account": {
+      "store_id": "mx-fashion",
+      "account_id": "959070938247370",
+      "connection_id": "mx-fashion-meta",
+      "api_version": "v26.0",
+      "timezone": "America/Sao_Paulo",
+      "currency": "BRL"
+    },
+    "action_report_time": "impression",
+    "action_attribution_windows": ["7d_click"],
+    "purchase_action_type": "offsite_conversion.fb_pixel_purchase",
+    "evidence": "CHANGE #19.3F: official Graph v26 campaign/day source exhausted for 2026-09-01 through 2026-10-04; selected action 2, matching action_values 6514.69 BRL, spend 3324.19 BRL; same account/window Ads Manager displayed 2 purchases, 6514.69 BRL purchase value, CPA 1662.10 BRL, ROAS 1.96. Overlapping purchase families were compared separately, never summed. Platform reporting only; no UP Zero revenue or influence definition changed."
+  }
+]

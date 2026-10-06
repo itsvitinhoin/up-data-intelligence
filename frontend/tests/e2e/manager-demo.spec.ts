@@ -11,11 +11,14 @@ test("B2C V2, retained V1 and session personalization", async ({ page }) => {
   await mkdir("/tmp/data19c/visuals", { recursive: true });
   for (const [path, name] of [
     ["/b2c", "overview"],
+    ["/b2c/orders", "orders"],
     ["/b2c/customers/overview", "clients-overview"],
     ["/b2c/customers", "clients"],
     ["/b2c/products", "products"],
     ["/b2c/stock", "stock"],
     ["/b2c/performance", "performance"],
+    ["/b2c/performance/funnel", "funnel"],
+    ["/b2c/performance/campaigns", "campaigns"],
     ["/b2c/performance/history", "history"],
   ]) {
     if (path !== "/b2c")

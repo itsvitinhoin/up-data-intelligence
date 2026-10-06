@@ -92,14 +92,44 @@ class FakeReader:
         self.calls.append(query)
         if query.name in self.override:
             return self.override[query.name]
+        if query.name == "overview_details":
+            original_calls = list(self.calls)
+            data = {}
+            for field, model in (
+                ("daily", "store_daily"),
+                ("population", "customer_period"),
+                ("quantities", "order_quantity_summary"),
+                ("leads", "operational_leads"),
+            ):
+                data[field] = self.query(
+                    Query(model, "", query.parameters),
+                    request_id=request_id,
+                    store_id=store_id,
+                    generation=generation,
+                )
+            self.calls = original_calls
+            return [data]
         if query.name == "head":
             return [head(self.policy)]
+        if query.name == "operational_leads":
+            return [
+                dict(
+                    generated=0,
+                    approved=0,
+                    converted=0,
+                    conflicts=0,
+                    invalid_identity=0,
+                    unresolved_approved=0,
+                )
+            ]
         if query.name == "order_quantity_summary":
             return [
                 {
                     "orders": 2,
                     "duplicate_orders": 0,
                     "invalid_identity": 0,
+                    "paid_orders": 1,
+                    "unknown_payment_status": 0,
                     "requested_pieces": 11,
                     "fulfilled_pieces": 7,
                 }
@@ -1049,3 +1079,156 @@ def test_overview_quantity_summary_must_reconcile_with_analytics(setup, field, v
     ]
     with pytest.raises(ReadError, match="order_quantity_summary_not_reconciled"):
         service.overview(PRINCIPAL, GRANT, from_day="2026-09-01", to_day="2026-09-02")
+
+
+def test_overview_bundle_is_one_pinned_aggregate_read(setup):
+    service, reader = setup
+    service.catalog_enabled = True
+    result = service.overview(PRINCIPAL, GRANT, from_day="2026-09-01", to_day="2026-09-02")
+    assert [q.name for q in reader.calls] == ["head", "overview_details"]
+    query = reader.calls[-1]
+    assert query.parameters["snapshot_at"][1] == service.publication.snapshot_at
+    assert query.parameters["store"][1] == GRANT.store_id
+    assert result["metadata"]["generation"] == 4
+    assert result["data"]["requested_revenue"] == "100.25"
+    assert result["data"]["fulfilled_revenue"] == "75.50"
+    assert result["data"]["revenue_paid"] is None
+
+
+@pytest.mark.parametrize("value", [[], [{"daily": []}], [{"daily": "invalid"}]])
+def test_overview_bundle_malformed_envelope_fails_closed(setup, value):
+    service, reader = setup
+    service.catalog_enabled = True
+    reader.override["overview_details"] = value
+    with pytest.raises(ReadError, match="overview_details_invalid"):
+        service.overview(PRINCIPAL, GRANT, from_day="2026-09-01", to_day="2026-09-02")
+
+
+def test_overview_bundle_retains_daily_coverage_and_policy_guards(setup):
+    service, reader = setup
+    service.catalog_enabled = True
+    reader.override["store_daily"] = []
+    with pytest.raises(ReadError, match="analytics_daily_coverage_incomplete"):
+        service.overview(PRINCIPAL, GRANT, from_day="2026-09-01", to_day="2026-09-02")
+    reader.override["store_daily"] = [{"order_date": "2026-09-01", "currency": "USD"}]
+    with pytest.raises(ReadError, match="analytics_policy_mismatch"):
+        service.overview(PRINCIPAL, GRANT, from_day="2026-09-01", to_day="2026-09-02")
+
+
+def test_overview_bundle_sql_is_bounded_and_parameterized():
+    query = build(
+        PROJECT,
+        "overview_details",
+        store="synthetic-store-not-in-sql",
+        policy="synthetic-policy-not-in-sql",
+        snapshot_at="2026-09-30T00:00:00Z",
+        as_of="2026-09-28T03:00:00Z",
+        from_day="2026-09-01",
+        to_day="2026-09-02",
+        timezone="America/Sao_Paulo",
+    )
+    assert "synthetic-store-not-in-sql" not in query.sql
+    assert "synthetic-policy-not-in-sql" not in query.sql
+    assert query.sql.count("FOR SYSTEM_TIME AS OF @snapshot_at") >= 4
+    assert "@from" in query.sql and "@to" in query.sql
+    assert "@store" in query.sql and "@policy" in query.sql
+    for field in ("daily", "population", "quantities", "leads"):
+        assert f"AS {field}" in query.sql
+
+
+def test_paid_order_count_never_becomes_paid_money(setup):
+    svc, reader = setup
+    svc.catalog_enabled = True
+    data = svc.overview(PRINCIPAL, GRANT, from_day="2026-09-01", to_day="2026-09-02")["data"]
+    assert data["orders_paid"] == 1
+    assert data["orders_paid_rate"] == "50"
+    assert data["revenue_paid"] is None
+    assert data["fulfilled_revenue"] == "75.50"
+    reader.override["order_quantity_summary"] = [
+        {
+            "orders": 2,
+            "paid_orders": 1,
+            "unknown_payment_status": 1,
+            "duplicate_orders": 0,
+            "invalid_identity": 0,
+            "requested_pieces": 11,
+            "fulfilled_pieces": 7,
+        }
+    ]
+    assert (
+        svc.overview(PRINCIPAL, GRANT, from_day="2026-09-01", to_day="2026-09-02")["data"][
+            "orders_paid"
+        ]
+        is None
+    )
+    assert (
+        svc.overview(PRINCIPAL, GRANT, from_day="2026-09-01", to_day="2026-09-02")["data"][
+            "orders_paid_rate"
+        ]
+        is None
+    )
+    reader.override["order_quantity_summary"][0]["paid_orders"] = 3
+    with pytest.raises(ReadError, match="order_payment_summary_invalid"):
+        svc.overview(PRINCIPAL, GRANT, from_day="2026-09-01", to_day="2026-09-02")
+
+
+def test_exact_purchase_progression_preserves_fifth_and_sixth_and_null_money(setup):
+    svc, reader = setup
+    svc.catalog_enabled = True
+    reader.override["retention_exact_stages"] = [
+        {
+            "stage": 5,
+            "buyers": 2,
+            "orders": 2,
+            "duplicate_orders": 0,
+            "invalid_identity": 0,
+            "requested": Decimal("20.01"),
+            "mean_days": 3,
+        },
+        {
+            "stage": 6,
+            "buyers": 1,
+            "orders": 1,
+            "duplicate_orders": 0,
+            "invalid_identity": 0,
+            "requested": None,
+            "mean_days": 4,
+        },
+    ]
+    r = svc.retention(PRINCIPAL, GRANT, from_day="2026-09-01", to_day="2026-09-02")
+    data = r["data"]
+    assert len(data["exact_purchase_stages"]) == 6
+    assert data["exact_purchase_stages"][4]["buyers_observed"] == 2
+    assert data["exact_purchase_stages"][5]["buyers_observed"] == 1
+    assert data["exact_purchase_stages"][4]["requested_revenue_observed"] == "20.01"
+    assert data["exact_purchase_stages"][5]["requested_revenue_observed"] is None
+    assert data["exact_purchase_stages"][5]["accumulated_requested_revenue_observed"] is None
+    assert all(s["continuation_observed"] is None for s in data["exact_purchase_stages"])
+    assert r["metadata"]["history_complete"] is False
+    reader.override["retention_exact_stages"].append(reader.override["retention_exact_stages"][0])
+    with pytest.raises(ReadError, match="retention_exact_stages_invalid"):
+        svc.retention(PRINCIPAL, GRANT, from_day="2026-09-01", to_day="2026-09-02")
+
+
+def test_exact_progression_sql_uses_sequence_not_five_plus_bucket():
+    q = build(
+        PROJECT,
+        "retention_exact_stages",
+        store="synthetic-user-input",
+        from_day="2026-09-01",
+        to_day="2026-09-02",
+    )
+    assert "synthetic-user-input" not in q.sql
+    for guard in (
+        "purchase_number BETWEEN 1 AND 6",
+        "order_date>=@from",
+        "order_date<@to",
+        "store_id=@store",
+        "policy_hash=@policy",
+        "FOR SYSTEM_TIME AS OF @snapshot_at",
+        "LAG(order_at)",
+        "COUNT(DISTINCT order_id)",
+        "LIMIT 7",
+    ):
+        assert guard in q.sql
+    assert "purchase_bucket" not in q.sql and "5+" not in q.sql

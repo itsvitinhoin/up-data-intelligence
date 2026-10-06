@@ -9,6 +9,23 @@ from src.utils.data import digest
 CUTOFF = "2026-10-05T03:00:00Z"
 
 
+@pytest.mark.parametrize("assigned", [["unknown"], ["v-other-product"]])
+def test_images_cannot_cross_products_or_guess_variant_identity(assigned):
+    from src.quality.catalog import certify_image_relationships
+
+    variants = [
+        {"store_id": "store", "variant_id": "v", "product_id": "p"},
+        {"store_id": "store", "variant_id": "v-other-product", "product_id": "other"},
+    ]
+    image = {"store_id": "store", "image_id": "i", "product_id": "p", "variant_ids": assigned}
+    with pytest.raises(SafeError, match="catalog_image_variant_relationship_invalid"):
+        certify_image_relationships("store", {"p", "other"}, variants, [image])
+    certify_image_relationships("store", {"p", "other"}, variants, [])
+    certify_image_relationships(
+        "store", {"p", "other"}, variants, [{**image, "variant_ids": ["v"]}]
+    )
+
+
 def evidence():
     filters = {"catalog_as_of": CUTOFF}
     key = digest(["store", "conn", "variants", filters, "incremental"])

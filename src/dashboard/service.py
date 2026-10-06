@@ -10,6 +10,8 @@ from uuid import uuid4
 
 from src.analytics.config import AnalyticsPolicy
 from src.analytics.policy import VERSION as ANALYTICS_VERSION
+from src.connectors.meta.purchase_reporting import PurchaseCertificate
+from src.dashboard.aggregate_cache import AggregateCache, cache_key
 from src.dashboard.contracts import (
     CursorCodec,
     Grant,
@@ -137,11 +139,18 @@ class DashboardService:
         installation_v2: bool = False,
         catalog_enabled: bool = False,
         creatives_enabled: bool = False,
+        images_enabled: bool = False,
+        purchase_certificates: tuple[PurchaseCertificate, ...] = (),
+        aggregate_cache: AggregateCache | None = None,
     ):
         self.project = project
         self.installation_v2 = installation_v2
         self.catalog_enabled = catalog_enabled
         self.creatives_enabled = creatives_enabled
+        self.images_enabled = images_enabled
+        self.purchase_certificates = purchase_certificates
+        self.aggregate_cache = aggregate_cache
+        self.aggregate_workspace: tuple[str, str, str, str] | None = None
         self.policies = dict(policies)
         self.reader_factory = reader_factory
         self.cursors = CursorCodec(cursor_key)
@@ -150,12 +159,34 @@ class DashboardService:
 
     def _query(self, name: str, **values: object) -> list[dict[str, Any]]:
         query = build(self.project, name, **values)
-        return self.reader.query(
+        key = None
+        if self.aggregate_cache is not None and self.aggregate_workspace is not None:
+            tenant, _, store, operation = self.aggregate_workspace
+            if (tenant, store, operation) == (
+                self.grant.tenant_id,
+                self.grant.store_id,
+                self.grant.operation,
+            ) and hasattr(self, "publication"):
+                key = cache_key(
+                    self.project,
+                    self.aggregate_workspace,
+                    self.publication,
+                    query,
+                    (self.policy.history_complete, self.policy.facts_complete),
+                )
+            if key is not None:
+                cached = self.aggregate_cache.get(key)
+                if cached is not None:
+                    return cached
+        rows = self.reader.query(
             query,
             request_id=self.request_id,
             store_id=self.grant.store_id,
             generation=self.publication.generation if hasattr(self, "publication") else None,
         )
+        if key is not None and self.aggregate_cache is not None:
+            self.aggregate_cache.put(key, rows)
+        return rows
 
     def _scope(self, principal: Principal | None, grant: Grant) -> None:
         if principal is None:
@@ -172,7 +203,13 @@ class DashboardService:
         if self.installation_v2:
             from src.installation.publication import resolve_policy
 
-            installation = resolve_policy(self.reader, self.project, grant, self.request_id)
+            installation = resolve_policy(
+                self.reader,
+                self.project,
+                grant,
+                self.request_id,
+                consolidated=self.catalog_enabled,
+            )
             if installation:
                 self.policy, self.publication = installation
                 return
@@ -189,7 +226,12 @@ class DashboardService:
 
         if self.catalog_reader is None:
             self.catalog_reader = CatalogReader(
-                self.project, self.reader, self.grant.store_id, None, self.request_id
+                self.project,
+                self.reader,
+                self.grant.store_id,
+                None,
+                self.request_id,
+                images_enabled=self.images_enabled,
             )
         return self.catalog_reader.variants(identifiers)
 
@@ -197,6 +239,36 @@ class DashboardService:
         if not self.catalog_enabled or self.catalog_reader is None:
             return {}
         return self.catalog_reader.family(product_id)
+
+    def meta_ads(
+        self,
+        principal: Principal | None,
+        grant: Grant,
+        *,
+        from_day: str | None = None,
+        to_day: str | None = None,
+    ) -> dict[str, Any]:
+        self._scope(principal, grant)
+        start, end = self._interval(from_day, to_day)
+        if not self.creatives_enabled:
+            raise ReadError(424, "meta_period_coverage_unavailable")
+        from src.dashboard.meta_period import MetaPeriodReader
+
+        data = MetaPeriodReader(
+            self.project,
+            self.reader,
+            grant.store_id,
+            self.request_id,
+            self.publication.snapshot_at,
+            self.purchase_certificates,
+        ).read(start, end)
+        return self._response(
+            data,
+            limitations=[
+                "meta_reported_not_commercial_attribution",
+                "creative_preview_current_not_historical",
+            ],
+        )
 
     def creatives(
         self,
@@ -213,7 +285,12 @@ class DashboardService:
         from src.dashboard.creatives import CreativeReader
 
         rows = CreativeReader(
-            self.project, self.reader, grant.store_id, self.request_id, self.publication.snapshot_at
+            self.project,
+            self.reader,
+            grant.store_id,
+            self.request_id,
+            self.publication.snapshot_at,
+            purchase_certificates=self.purchase_certificates,
         ).read(start, end)
         return self._response(
             rows,
@@ -268,8 +345,11 @@ class DashboardService:
             "metadata": metadata(self.publication, self.policy, base + (limitations or [])),
         }
 
-    def _daily(self, name: str, start: str, end: str) -> list[dict[str, Any]]:
-        rows = self._rows(name, from_day=start, to_day=end)
+    def _daily(
+        self, name: str, start: str, end: str, rows: list[dict[str, Any]] | None = None
+    ) -> list[dict[str, Any]]:
+        if rows is None:
+            rows = self._rows(name, from_day=start, to_day=end)
         days = (date.fromisoformat(end) - date.fromisoformat(start)).days
         key = "order_date" if name == "store_daily" else "event_date"
         dates = [_date(row[key]) for row in rows]
@@ -289,34 +369,49 @@ class DashboardService:
             raise ReadError(503, "analytics_policy_mismatch")
         return rows
 
-    def _operational_leads(self, start: str, end: str) -> dict[str, Any]:
+    def _operational_leads(
+        self, start: str, end: str, rows: list[dict[str, Any]] | None = None
+    ) -> dict[str, Any]:
         if not self.catalog_enabled:
             return {}
         from src.dashboard.leads import operational_counts
 
-        rows = self._rows(
-            "operational_leads",
-            from_day=start,
-            to_day=end,
-            as_of=self.publication.as_of,
-            timezone=self.policy.reporting_timezone,
-        )
+        if rows is None:
+            rows = self._rows(
+                "operational_leads",
+                from_day=start,
+                to_day=end,
+                as_of=self.publication.as_of,
+                timezone=self.policy.reporting_timezone,
+            )
         if len(rows) != 1:
             raise ReadError(503, "lead_summary_missing_or_duplicate")
         return operational_counts(rows[0], facts_complete=self.policy.facts_complete)
 
-    def overview(
-        self,
-        principal: Principal | None,
-        grant: Grant,
-        *,
-        from_day: str | None = None,
-        to_day: str | None = None,
-    ) -> dict[str, Any]:
-        self._scope(principal, grant)
-        start, end = self._interval(from_day, to_day)
-        rows = self._daily("store_daily", start, end)
-        population = self._rows("customer_period", from_day=start, to_day=end)
+    def _overview_data(self, start: str, end: str) -> dict[str, Any]:
+        """Shared commercial projection. No new scope, reader or publication resolution."""
+        bundle: dict[str, list[dict[str, Any]]] = {}
+        if self.catalog_enabled:
+            combined = self._rows(
+                "overview_details",
+                from_day=start,
+                to_day=end,
+                as_of=self.publication.as_of,
+                timezone=self.policy.reporting_timezone,
+            )
+            if len(combined) != 1 or any(
+                not isinstance(combined[0].get(key), list)
+                or any(not isinstance(row, dict) for row in combined[0][key])
+                for key in ("daily", "population", "quantities", "leads")
+            ):
+                raise ReadError(503, "overview_details_invalid")
+            bundle = combined[0]
+        rows = self._daily("store_daily", start, end, bundle.get("daily"))
+        population = (
+            bundle["population"]
+            if bundle
+            else self._rows("customer_period", from_day=start, to_day=end)
+        )
         if len(population) != 1:
             raise ReadError(503, "invalid_customer_period")
         requested = _sum_money(rows, "revenue_generated")
@@ -330,13 +425,7 @@ class DashboardService:
         )
         quantities: dict[str, Any] = {}
         if self.catalog_enabled:
-            summary = self._rows(
-                "order_quantity_summary",
-                from_day=start,
-                to_day=end,
-                as_of=self.publication.as_of,
-                timezone=self.policy.reporting_timezone,
-            )
+            summary = bundle["quantities"]
             if (
                 len(summary) != 1
                 or summary[0].get("duplicate_orders") != 0
@@ -344,15 +433,30 @@ class DashboardService:
                 or summary[0].get("orders") != _sum_count(rows, "orders_generated")
             ):
                 raise ReadError(503, "order_quantity_summary_not_reconciled")
+            paid = integer(summary[0].get("paid_orders"))
+            unknown_payment = integer(summary[0].get("unknown_payment_status"))
+            if (paid is not None and not 0 <= paid <= summary[0]["orders"]) or (
+                unknown_payment is not None and not 0 <= unknown_payment <= summary[0]["orders"]
+            ):
+                raise ReadError(503, "order_payment_summary_invalid")
             quantities = {
                 "requested_pieces": integer(summary[0].get("requested_pieces")),
                 "fulfilled_pieces": integer(summary[0].get("fulfilled_pieces")),
                 "requested_pieces_per_order": _ratio(
                     summary[0].get("requested_pieces"), summary[0].get("orders")
                 ),
+                "orders_paid": paid if unknown_payment == 0 else None,
+                "orders_paid_rate": (
+                    _ratio(paid * 100 if paid is not None else None, summary[0]["orders"])
+                    if unknown_payment == 0
+                    else None
+                ),
+                "monthly_payments": [
+                    {**row, "month": _date(row["month"])} for row in summary[0].get("monthly", [])
+                ],
             }
-        leads = self._operational_leads(start, end)
-        data = {
+        leads = self._operational_leads(start, end, bundle.get("leads"))
+        return {
             **quantities,
             "retention_ticket_observed": _ratio(
                 population[0].get("recurring_fulfilled"), population[0].get("recurring_orders")
@@ -399,6 +503,19 @@ class DashboardService:
                 for row in rows
             ],
         }
+
+    def overview(
+        self,
+        principal: Principal | None,
+        grant: Grant,
+        *,
+        from_day: str | None = None,
+        to_day: str | None = None,
+    ) -> dict[str, Any]:
+        self._scope(principal, grant)
+        start, end = self._interval(from_day, to_day)
+        data = self._overview_data(start, end)
+        leads = data
         return self._response(
             data,
             limitations=[
@@ -803,6 +920,52 @@ class DashboardService:
                 for row in cohorts
             ],
         }
+        if self.catalog_enabled:
+            exact = self._rows("retention_exact_stages", from_day=start, to_day=end)
+            indexed: dict[int, dict[str, Any]] = {}
+            for row in exact:
+                exact_stage = integer(row.get("stage"))
+                if (
+                    exact_stage is None
+                    or not 1 <= exact_stage <= 6
+                    or exact_stage in indexed
+                    or row.get("duplicate_orders") != 0
+                    or row.get("invalid_identity") != 0
+                    or integer(row.get("orders")) != integer(row.get("buyers"))
+                    or integer(row.get("buyers")) is None
+                    or row["buyers"] < 0
+                ):
+                    raise ReadError(503, "retention_exact_stages_invalid")
+                indexed[exact_stage] = row
+            if len(exact) > 6:
+                raise ReadError(503, "retention_exact_stages_invalid")
+            accumulated = "0"
+            exact_stages = []
+            for stage in range(1, 7):
+                # Missing group is certified absence within this observed period,
+                # never a claim about lifetime history.
+                row = indexed.get(stage, {"buyers": 0, "orders": 0, "requested": "0"})
+                revenue = decimal_string(row.get("requested"))
+                accumulated = (
+                    None
+                    if revenue is None or accumulated is None
+                    else format(Decimal(accumulated) + Decimal(revenue), "f")
+                )
+                exact_stages.append(
+                    {
+                        "stage": stage,
+                        "buyers_observed": row["buyers"],
+                        "share_observed": _ratio(
+                            row["buyers"], indexed.get(1, {}).get("buyers", 0)
+                        ),
+                        "continuation_observed": None,
+                        "requested_revenue_observed": revenue,
+                        "accumulated_requested_revenue_observed": accumulated,
+                        "mean_days_observed": _float(row.get("mean_days")),
+                    }
+                )
+            data["exact_purchase_stages"] = exact_stages
+            data["exact_purchase_stages_basis"] = "observed_purchase_number_in_selected_period"
         return self._response(data, limitations=["first_purchase_is_observed_not_confirmed"])
 
     def products(
@@ -842,6 +1005,7 @@ class DashboardService:
                     "name": row.get("name")
                     or catalog.get(row.get("variant_id") or "", {}).get("name"),
                     "reference": catalog.get(row.get("variant_id") or "", {}).get("reference"),
+                    "image": catalog.get(row.get("variant_id") or "", {}).get("image"),
                     "catalog": catalog.get(row.get("variant_id") or "", {}).get("catalog"),
                     "requested_revenue": decimal_string(row.get("requested")),
                     "fulfilled_revenue": decimal_string(row.get("fulfilled")),

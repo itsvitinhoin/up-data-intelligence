@@ -18,7 +18,7 @@ export const WidgetBindings: Readonly<Record<string, WidgetBinding>> = {
     ["performance"],
     ["meta_spend", "revenue_paid"],
     "D",
-    "PAYMENT_SOURCE_NOT_CERTIFIED · Meta spend existe; receita paga não é receita atendida.",
+    "SOURCE_DOES_NOT_PROVIDE · Meta spend existe; receita paga não é receita atendida.",
   ),
   "acquisition-retention": binding(
     ["acquisition", "retention"],
@@ -30,7 +30,7 @@ export const WidgetBindings: Readonly<Record<string, WidgetBinding>> = {
     ],
   ),
   funnel: binding(
-    ["funnel", "performance", "overview", "acquisition"],
+    ["funnel", "metaAds", "overview", "acquisition"],
     [
       "meta_impressions",
       "meta_clicks",
@@ -62,19 +62,19 @@ export const WidgetBindings: Readonly<Record<string, WidgetBinding>> = {
     ["performance"],
     ["meta_spend", "cac"],
     "C",
-    "REQUIRES_HISTORICAL_BACKFILL · CAC definitivo exige novos clientes lifetime.",
+    "HISTORY_NOT_AVAILABLE_FROM_SOURCE · CAC definitivo exige novos clientes lifetime.",
   ),
   "approved-conversion": binding(
     ["acquisition"],
     ["approved_registrations", "approved_conversion"],
     "A",
-    "REGISTRATION_CUSTOMER_IDENTITY_NOT_CERTIFIED",
+    "IDENTITY_RELATIONSHIP_NOT_PROVABLE",
   ),
   "registration-cohort": binding(
     [],
     [],
     "A",
-    "REGISTRATION_CUSTOMER_IDENTITY_NOT_CERTIFIED · contagens operacionais não são cohort de cadastro.",
+    "IDENTITY_RELATIONSHIP_NOT_PROVABLE · contagens operacionais não são cohort de cadastro.",
   ),
   "repeat-revenue-ticket": binding(
     ["retention"],
@@ -84,7 +84,7 @@ export const WidgetBindings: Readonly<Record<string, WidgetBinding>> = {
     ["retention"],
     ["recurring_customers", "reactivated_customers"],
     "C",
-    "REQUIRES_HISTORICAL_BACKFILL · reativação definitiva exige histórico e definição de inatividade.",
+    "HISTORY_NOT_AVAILABLE_FROM_SOURCE · reativação definitiva exige histórico e cobertura mínima da regra de 90 dias.",
   ),
   "repurchase-cohort": binding(["retention"]),
   "purchase-progression": binding(["retention"]),
@@ -99,7 +99,7 @@ export const WidgetBindings: Readonly<Record<string, WidgetBinding>> = {
     [],
     [],
     "D",
-    "REQUIRES_NEW_CONNECTOR · ERP/WhatsApp não conectados.",
+    "FUTURE_CONNECTOR_REQUIRED · ERP/WhatsApp não conectados.",
   ),
   "retail-overview": binding(
     [],
@@ -120,7 +120,12 @@ export const WidgetBindings: Readonly<Record<string, WidgetBinding>> = {
     "B2C_EXPLICIT_LOCAL_SYNTHETIC_FIXTURE",
   ),
   "retail-funnel": binding([], [], "D", "B2C_EXPLICIT_LOCAL_SYNTHETIC_FIXTURE"),
-  forecast: binding([], [], "A", "FORECAST_BUSINESS_CONTRACT_NOT_CERTIFIED"),
+  forecast: binding(
+    [],
+    [],
+    "A",
+    "SOURCE_DOES_NOT_PROVIDE · projeção futura não pertence às observações certificadas.",
+  ),
 };
 
 /** Reused V1 bodies have certified read resources and on-demand detail boundaries. */
@@ -215,7 +220,7 @@ export const BodyBindings: Readonly<
     ],
   },
   campaigns: {
-    resources: ["campaigns", "creatives"],
+    resources: ["metaAds", "creatives"],
     fields: [
       "campaign_id",
       "campaign_name",

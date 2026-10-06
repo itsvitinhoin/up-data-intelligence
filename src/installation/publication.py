@@ -1,5 +1,6 @@
 """A completed HEAD/RECEIPT is the authority; work status alone grants no visibility."""
 
+import json
 from dataclasses import replace
 from datetime import UTC, date, datetime, time
 from typing import Any
@@ -29,7 +30,14 @@ def policy_for(config: StoreConfig, row: Row, snapshot: str) -> AnalyticsPolicy:
 
 
 def available(
-    reader: Reader, project: str, config: StoreConfig, rows: list[Row], snapshot: str, request: str
+    reader: Reader,
+    project: str,
+    config: StoreConfig,
+    rows: list[Row],
+    snapshot: str,
+    request: str,
+    *,
+    head_evidence: list[Row] | None = None,
 ) -> tuple[AnalyticsPolicy | None, Any]:
     publications = sorted(
         (r for r in rows if r["unit_kind"] == "PUBLISH_ANALYTICS"),
@@ -40,13 +48,21 @@ def available(
         return None, None
     # Hash identifies the commercial contract, not a period/coverage claim.
     probe = policy_for(config, publications[0], snapshot)
-    heads = reader.query(
-        build(
-            project, "head", store=config.store_id, policy=probe.policy_hash, snapshot_at=snapshot
-        ),
-        request_id=request,
-        store_id=config.store_id,
-        generation=None,
+    heads = (
+        reader.query(
+            build(
+                project,
+                "head",
+                store=config.store_id,
+                policy=probe.policy_hash,
+                snapshot_at=snapshot,
+            ),
+            request_id=request,
+            store_id=config.store_id,
+            generation=None,
+        )
+        if head_evidence is None
+        else [h for h in head_evidence if h.get("policy_hash") == probe.policy_hash]
     )
     if not heads:
         if any(r["status"] == "COMPLETE" for r in publications):
@@ -81,9 +97,30 @@ CROSS JOIN (SELECT DISTINCT observation_complete FROM {funnel} FOR SYSTEM_TIME A
             "to": ("DATE", end),
         },
     )
-    flags = reader.query(
-        flags_query, request_id=request, store_id=config.store_id, generation=h.get("generation")
-    )
+    if head_evidence is None:
+        flags = reader.query(
+            flags_query,
+            request_id=request,
+            store_id=config.store_id,
+            generation=h.get("generation"),
+        )
+    else:
+        try:
+            if any(
+                type(h.get(key)) is not int or h[key] < 1
+                for key in ("store_observed_rows", "facts_observed_rows")
+            ) or any(
+                not isinstance(h.get(key), list) or len(h[key]) != 1
+                for key in ("store_flags", "facts_flags")
+            ):
+                raise ValueError
+            store_flags = json.loads(h["store_flags"][0])
+            facts_flags = json.loads(h["facts_flags"][0])
+            if not isinstance(store_flags, dict) or not isinstance(facts_flags, dict):
+                raise ValueError
+            flags = [{**store_flags, **facts_flags}]
+        except (ValueError, TypeError, KeyError):
+            raise ReadError(503, "publication_invalid") from None
     if (
         len(flags) != 1
         or type(flags[0].get("history_complete")) is not bool
@@ -110,42 +147,77 @@ CROSS JOIN (SELECT DISTINCT observation_complete FROM {funnel} FOR SYSTEM_TIME A
 
 
 def resolve_policy(
-    reader: Reader, project: str, grant: Grant, request: str
+    reader: Reader, project: str, grant: Grant, request: str, *, consolidated: bool = False
 ) -> tuple[AnalyticsPolicy, Publication] | None:
     """Optional server composition for V2. Authorization MUST precede this call."""
-    registry = reader.query(
-        build_installation(project, "installation_registry", grant.store_id, None),
+    context = reader.query(
+        build_installation(
+            project,
+            "installation_context" if consolidated else "installation_registry",
+            grant.store_id,
+            None,
+        ),
         request_id=request,
         store_id=grant.store_id,
         generation=None,
     )
+    if consolidated:
+        if len(context) != 1 or any(
+            not isinstance(context[0].get(key), list)
+            or any(not isinstance(row, dict) for row in context[0][key])
+            for key in ("registry", "plans", "units", "heads")
+        ):
+            raise ReadError(503, "installation_metadata_invalid")
+        registry = context[0]["registry"]
+        if len(context[0]["heads"]) > 1000 or any(
+            h.get("store_id") != grant.store_id for h in context[0]["heads"]
+        ):
+            raise ReadError(503, "publication_invalid")
+        for row in registry:
+            row["snapshot_at"] = context[0].get("snapshot_at")
+    else:
+        registry = context
     if len(registry) != 1 or registry[0].get("store_id") != grant.store_id:
         raise ReadError(503, "installation_registry_invalid")
     snapshot = str(registry[0]["snapshot_at"])
-    plans = reader.query(
-        build_installation(project, "installation_plans", grant.store_id, snapshot),
-        request_id=request,
-        store_id=grant.store_id,
-        generation=None,
+    plans = (
+        context[0]["plans"]
+        if consolidated
+        else reader.query(
+            build_installation(project, "installation_plans", grant.store_id, snapshot),
+            request_id=request,
+            store_id=grant.store_id,
+            generation=None,
+        )
     )
     if not plans:
         return None  # Explicit legacy fallback, not a forged policy.
     if len(plans) != 1:
         raise ReadError(503, "installation_metadata_invalid")
-    units = reader.query(
-        build_installation(project, "installation_units", grant.store_id, snapshot),
-        request_id=request,
-        store_id=grant.store_id,
-        generation=None,
+    units = (
+        context[0]["units"]
+        if consolidated
+        else reader.query(
+            build_installation(project, "installation_units", grant.store_id, snapshot),
+            request_id=request,
+            store_id=grant.store_id,
+            generation=None,
+        )
     )
-    if any(
+    if len(units) > 10000 or any(
         r.get("store_id") != grant.store_id or r.get("plan_id") != plans[0]["plan_id"]
         for r in units
     ):
         raise ReadError(503, "installation_metadata_invalid")
     row = {k: v for k, v in registry[0].items() if k != "snapshot_at"}
     policy, publication = available(
-        reader, project, StoreConfig.from_row(row), units, snapshot, request
+        reader,
+        project,
+        StoreConfig.from_row(row),
+        units,
+        snapshot,
+        request,
+        head_evidence=context[0]["heads"] if consolidated else None,
     )
     if policy is None:
         raise ReadError(503, "publication_unavailable")

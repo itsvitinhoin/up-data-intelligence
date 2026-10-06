@@ -1,3 +1,4 @@
+import json
 from copy import deepcopy
 from dataclasses import replace
 
@@ -244,3 +245,128 @@ def test_v2_active_recurring_remains_ready_with_extended_certified_window():
     service._scope(PRINCIPAL, GRANT)
     assert service.policy.report_from == reader.policy.report_from
     assert service.policy.report_to == "2026-10-04"
+
+
+def consolidated_payload(reader):
+    flags = dict(
+        history_complete=reader.policy.history_complete,
+        currency=reader.policy.currency,
+        reporting_timezone=reader.policy.reporting_timezone,
+    )
+    heads = [
+        {
+            **h,
+            "store_observed_rows": 1,
+            "facts_observed_rows": 1,
+            "store_flags": [json.dumps(flags)],
+            "facts_flags": [json.dumps({"facts_complete": reader.policy.facts_complete})],
+        }
+        for h in deepcopy(reader.heads)
+    ]
+    return dict(
+        snapshot_at=NOW,
+        registry=deepcopy(reader.registry),
+        plans=deepcopy(reader.plan),
+        units=deepcopy(reader.units),
+        heads=heads,
+    )
+
+
+def test_consolidated_context_matches_existing_policy_without_caching_authorization():
+    from src.dashboard.installation_queries import build_installation
+    from src.installation.publication import resolve_policy
+
+    original = PlannedReader(True)
+    expected = resolve_policy(original, "up-data-intelligence-dev", GRANT, "synthetic")
+
+    class ConsolidatedReader(PlannedReader):
+        def query(self, query, **kwargs):
+            if query.name == "installation_context":
+                self.calls.append(query)
+                return [consolidated_payload(self)]
+            return super().query(query, **kwargs)
+
+    reader = ConsolidatedReader(True)
+    actual = resolve_policy(
+        reader, "up-data-intelligence-dev", GRANT, "synthetic", consolidated=True
+    )
+    assert actual == expected
+    assert [q.name for q in reader.calls] == ["installation_context"]
+    query = build_installation(
+        "up-data-intelligence-dev", "installation_context", GRANT.store_id, None
+    )
+    assert query.sql.count("FOR SYSTEM_TIME AS OF CURRENT_TIMESTAMP()") == 7
+    assert "LIMIT 2" in query.sql and "LIMIT 10001" in query.sql
+    assert GRANT.store_id not in query.sql
+    assert query.parameters == {"store": ("STRING", GRANT.store_id)}
+
+
+@pytest.mark.parametrize("field,value", [("registry", []), ("plans", []), ("units", "invalid")])
+def test_consolidated_context_fail_closed(field, value):
+    from src.installation.publication import resolve_policy
+
+    class BrokenReader(PlannedReader):
+        def query(self, query, **kwargs):
+            assert query.name == "installation_context"
+            data = consolidated_payload(self)
+            data[field] = value
+            return [data]
+
+    if field == "plans":
+        assert (
+            resolve_policy(
+                BrokenReader(True),
+                "up-data-intelligence-dev",
+                GRANT,
+                "synthetic",
+                consolidated=True,
+            )
+            is None
+        )
+    else:
+        with pytest.raises(ReadError):
+            resolve_policy(
+                BrokenReader(True),
+                "up-data-intelligence-dev",
+                GRANT,
+                "synthetic",
+                consolidated=True,
+            )
+
+
+@pytest.mark.parametrize(
+    "change",
+    ["missing", "duplicate", "foreign", "receipt", "mixed_flags", "no_facts", "unknown_facts"],
+)
+def test_consolidated_publication_evidence_fail_closed(change):
+    from src.installation.publication import resolve_policy
+
+    class BrokenPublication(PlannedReader):
+        def query(self, query, **kwargs):
+            assert query.name == "installation_context"
+            data = consolidated_payload(self)
+            h = data["heads"][0]
+            if change == "missing":
+                data["heads"] = []
+            elif change == "duplicate":
+                data["heads"].append(deepcopy(h))
+            elif change == "foreign":
+                h["store_id"] = "other-store"
+            elif change == "receipt":
+                h["receipt_generation"] += 1
+            elif change == "mixed_flags":
+                h["store_flags"].append('{"history_complete":true}')
+            elif change == "no_facts":
+                h["facts_observed_rows"] = 0
+            elif change == "unknown_facts":
+                h["facts_flags"] = ['{"facts_complete":null}']
+            return [data]
+
+    with pytest.raises(ReadError):
+        resolve_policy(
+            BrokenPublication(True),
+            "up-data-intelligence-dev",
+            GRANT,
+            "synthetic",
+            consolidated=True,
+        )

@@ -8,6 +8,40 @@ from src.domain.models import SafeError
 from src.utils.data import digest, timestamp
 
 
+def certify_image_relationships(
+    store: str,
+    product_ids: set[str],
+    variants: list[dict[str, Any]],
+    images: list[dict[str, Any]],
+) -> None:
+    """Exact certified snapshot membership; an empty gallery is valid evidence."""
+    owners: dict[str, str] = {}
+    for row in variants:
+        identity, product = row.get("variant_id"), row.get("product_id")
+        if (
+            row.get("store_id") != store
+            or not isinstance(identity, str)
+            or identity in owners
+            or product not in product_ids
+        ):
+            raise SafeError("catalog_image_variant_relationship_invalid")
+        owners[identity] = product
+    seen: set[str] = set()
+    for row in images:
+        identity, product = row.get("image_id"), row.get("product_id")
+        assigned = row.get("variant_ids")
+        if (
+            row.get("store_id") != store
+            or not isinstance(identity, str)
+            or identity in seen
+            or product not in product_ids
+            or not isinstance(assigned, list)
+            or any(owners.get(variant) != product for variant in assigned)
+        ):
+            raise SafeError("catalog_image_variant_relationship_invalid")
+        seen.add(identity)
+
+
 def certify_catalog_snapshot(
     store: str,
     connection: str,

@@ -20,7 +20,8 @@ PROJECT = "up-data-intelligence-dev"
 REGION = "southamerica-east1"
 EXTENSIONS = {"installation_extension_plans", "installation_extension_work_units"}
 CREATIVES = {"meta_creative_insights_daily", "meta_creative_insights_daily_versions"}
-NEW_TABLES = TABLE_NAMES | EXTENSIONS | CREATIVES | {"integration_operations"}
+PERIODS = {"meta_period_insights", "meta_period_insights_versions"}
+NEW_TABLES = TABLE_NAMES | EXTENSIONS | CREATIVES | PERIODS | {"integration_operations"}
 META_UPDATES = {
     "meta_live_ads",
     "meta_live_ads_versions",
@@ -82,7 +83,8 @@ def permissions() -> set[tuple[str, str, str]]:
     for principal in ("upzero", "meta", "analytics"):
         add("up-cp-" + principal + "-dev", {"installation_extension_work_units"}, True)
     add("up-cp-upzero-dev", set(TABLE_NAMES), True)
-    add("up-cp-meta-dev", CREATIVES, True)
+    add("up-cp-meta-dev", CREATIVES | PERIODS, True)
+    add("up-product-read-dev", {"meta_period_insights", "catalog_images_versions"})
     add("up-cp-analytics-dev", {"store_runtime_config"}, True)
     return rules
 
@@ -108,7 +110,15 @@ def job_change(before: dict, after: dict, image: str) -> None:
     if len(old) != 1 or len(new) != 1 or new[0].get("image") != image:
         raise ValueError("IMMUTABLE_IMAGE_REQUIRED")
     new[0]["image"] = old[0]["image"]
-    approved = {"UP_INSTALLATION_EXTENSIONS_ENABLED", "UP_INSTALLATION_ENRICHMENT_ENABLED"}
+    approved = {"UP_INSTALLATION_EXTENSIONS_ENABLED"}
+    if before["name"] == "up-installation-orchestrator":
+        approved |= {
+            "UP_INSTALLATION_ENRICHMENT_ENABLED",
+            "UP_META_VERIFIED_PURCHASES_ENABLED",
+            "UP_INSTALLATION_PRODUCT_IMAGES_ENABLED",
+        }
+    if before["name"] == "up-installation-upzero-worker":
+        approved.add("UP_INSTALLATION_PRODUCT_IMAGES_ENABLED")
     for container in (old[0], new[0]):
         env = container.get("env", [])
         if len({e["name"] for e in env}) != len(env):

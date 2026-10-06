@@ -6,7 +6,9 @@ export type HistoryPlan = {
   purpose:
     | "HISTORY_EXTENSION"
     | "CATALOG_SNAPSHOT"
+    | "CATALOG_IMAGES"
     | "META_CREATIVE_COVERAGE"
+    | "META_PERIOD_REPORT"
     | "META_SOURCE_ADDITION";
   provider: "upzero" | "meta";
   status: "RUNNING" | "PARTIAL" | "COMPLETE" | "BLOCKED" | "OUTCOME_UNKNOWN";
@@ -136,7 +138,9 @@ export function parseHistoryPlan(value: unknown): HistoryPlan {
     purpose: choice(r.purpose, [
       "HISTORY_EXTENSION",
       "CATALOG_SNAPSHOT",
+      "CATALOG_IMAGES",
       "META_CREATIVE_COVERAGE",
+      "META_PERIOD_REPORT",
       "META_SOURCE_ADDITION",
     ] as const),
     provider: choice(r.provider, ["upzero", "meta"] as const),

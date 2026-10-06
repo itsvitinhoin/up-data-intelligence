@@ -8,6 +8,7 @@ from typing import Any
 
 from src.admin.contracts import AdminError, Principal, authorize, exact, identity
 from src.analytics.cloud.transport import scalar
+from src.connectors.meta.purchase_reporting import PurchaseCertificate, selected_reporting
 from src.control_plane.model import StoreConfig, Window
 from src.control_plane.preflight import Prerequisites
 from src.dashboard.queries import Query
@@ -29,8 +30,11 @@ class HistoryService:
         lease: Callable[[str], AbstractContextManager[None]],
         subject_key: bytes,
         clock: Callable[[], str] = now,
+        *,
+        purchase_certificates: tuple[PurchaseCertificate, ...] = (),
     ):
         self.ledger, self.lease, self.subject_key, self.clock = ledger, lease, subject_key, clock
+        self.purchase_certificates = purchase_certificates
 
     def publication(self, config: StoreConfig) -> Row:
         ledger = self.ledger
@@ -115,6 +119,8 @@ class HistoryService:
                 if account
                 else None
             )
+            if account and report and purpose in {"META_CREATIVE_COVERAGE", "META_PERIOD_REPORT"}:
+                report = selected_reporting(account, report, self.purchase_certificates)
             plan, units = ExtensionPlanner().calculate(
                 config,
                 sources[0],

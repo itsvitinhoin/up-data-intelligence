@@ -28,7 +28,10 @@ export function managerMetrics(
     if (value !== null && binding.multiplier)
       value = scaleDecimal(value, binding.multiplier);
     return {
-      label: definition.label,
+      label:
+        id === "total_media_spend" && value !== null
+          ? "Investimento disponível em Ads (Meta)"
+          : definition.label,
       value,
       format: definition.format,
       hint: binding.reason,

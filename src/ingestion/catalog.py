@@ -6,7 +6,7 @@ from typing import Any
 
 from src.domain.models import SafeError
 from src.ingestion.engine import Engine
-from src.quality.catalog import certify_catalog_snapshot
+from src.quality.catalog import certify_catalog_snapshot, certify_image_relationships
 from src.utils.data import digest, timestamp
 
 
@@ -48,7 +48,13 @@ class CatalogSnapshot:
         return rows
 
     def advance(
-        self, cutoff: str, *, page_budget: int = 20, soft_time_budget_seconds: float = 600
+        self,
+        cutoff: str,
+        *,
+        page_budget: int = 20,
+        soft_time_budget_seconds: float = 600,
+        include_images: bool = False,
+        images_only: bool = False,
     ) -> dict[str, Any]:
         cutoff = timestamp(cutoff)
         if (
@@ -57,11 +63,16 @@ class CatalogSnapshot:
             or not 0 < soft_time_budget_seconds <= 600
         ):
             raise SafeError("invalid_slice_budget")
+        if images_only and not include_images:
+            raise SafeError("catalog_images_contract_invalid")
         started, remaining = self.clock(), page_budget
         records = pages = 0
         proofs = []
         variant_run: dict[str, Any] = {}
-        for resource in ("products", "variants", "attributes", "inventory"):
+        product_run: dict[str, Any] = {}
+        for resource in ("products", "variants", "attributes", "inventory") + (
+            ("images",) if include_images else ()
+        ):
             filters: dict[str, Any] = {"catalog_as_of": cutoff}
             if resource == "products":
                 filters.update(limit=200, include_inactive=True)
@@ -73,7 +84,15 @@ class CatalogSnapshot:
                 filters["variant_ids"] = sorted(
                     row["entity_id"] for row in self.membership("variants", variant_run)
                 )
+            elif resource == "images":
+                # Official endpoint once per exact certified product, including
+                # empty galleries. Resume the same logical catalog work unit.
+                filters["product_ids"] = sorted(
+                    row["entity_id"] for row in self.membership("products", product_run)
+                )
             checkpoint, before = self.evidence(resource, filters)
+            if images_only and resource != "images" and checkpoint.get("status") != "complete":
+                raise SafeError("catalog_images_base_not_certified")
             old_pages = before.get("pages", 0)
             time_left = soft_time_budget_seconds - (self.clock() - started)
             if checkpoint.get("status") != "complete":
@@ -116,6 +135,29 @@ class CatalogSnapshot:
             proofs.append(proof)
             if resource == "variants":
                 variant_run = current
+            elif resource == "products":
+                product_run = current
+            elif resource == "images":
+                versions = {}
+                for name, run in (("variants", variant_run), ("images", current)):
+                    membership = self.membership(name, run)
+                    keys = [r["entity_version_id"] for r in membership]
+                    rows = (
+                        self.engine.repo.read(
+                            "catalog_" + name + "_versions", self.engine.cfg.store_id, keys
+                        )
+                        if keys
+                        else []
+                    )
+                    if len(rows) != len(keys) or {r["version_id"] for r in rows} != set(keys):
+                        raise SafeError("catalog_snapshot_membership_mismatch")
+                    versions[name] = rows
+                certify_image_relationships(
+                    self.engine.cfg.store_id,
+                    set(filters["product_ids"]),
+                    versions["variants"],
+                    versions["images"],
+                )
         return {
             "complete": True,
             "yielded": False,

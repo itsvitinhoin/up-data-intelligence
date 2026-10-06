@@ -15,6 +15,16 @@ variable "dashboard_completion_health_enrichment" {
   type        = bool
   default     = false
 }
+variable "dashboard_completion_product_images" {
+  description = "Official image ingestion/read after review of additive image tables and scoped IAM."
+  type        = bool
+  default     = false
+}
+variable "dashboard_completion_verified_meta_purchases" {
+  description = "Use reviewed account-specific purchase reporting only in creative enrichment and Preview."
+  type        = bool
+  default     = false
+}
 locals {
   completion_catalog_reads = toset([
     "catalog_observations", "catalog_products_versions", "catalog_variants_versions",
@@ -22,6 +32,9 @@ locals {
   ])
   completion_extensions = toset(["installation_extension_plans", "installation_extension_work_units"])
   completion_read_permissions = merge(
+    { for table in var.dashboard_completion_product_images ? toset(["catalog_images_versions"]) : toset([]) : "product-read/${table}" => {
+      table = table, member = "serviceAccount:${local.product_enabled ? google_service_account.product["read"].email : "disabled"}", write = false
+    } },
     { for table in setunion(local.completion_catalog_reads, toset(["meta_account_bindings", "meta_live_ads", "meta_creative_insights_daily", "analytics_events", "meta_live_insights_daily"])) : "product-read/${table}" => {
       table = table, member = "serviceAccount:${local.product_enabled ? google_service_account.product["read"].email : "disabled"}", write = false
     } },
@@ -40,6 +53,14 @@ locals {
       table = table, member = "serviceAccount:${var.data_health_image != null ? google_service_account.data_health[0].email : "disabled"}", write = false
     } }
   )
+  completion_meta_period_permissions = var.dashboard_completion_verified_meta_purchases ? merge(
+    { for table in ["meta_period_insights", "meta_period_insights_versions"] : "meta-period/${table}" => {
+      table = table, member = "serviceAccount:${google_service_account.control_plane["meta"].email}", write = true
+    } },
+    { "product-read/meta_period_insights" = {
+      table = "meta_period_insights", member = "serviceAccount:${local.product_enabled ? google_service_account.product["read"].email : "disabled"}", write = false
+    } }
+  ) : {}
   completion_write_permissions = merge(
     { for table in setunion(local.completion_extensions, toset(["integration_operations"])) : "admin/${table}" => {
       table = table, member = "serviceAccount:${local.product_enabled ? google_service_account.product["admin"].email : "disabled"}", write = true
@@ -54,7 +75,7 @@ locals {
       table = "store_runtime_config", member = "serviceAccount:${google_service_account.control_plane["analytics"].email}", write = true
     } }
   )
-  completion_permissions = var.dashboard_completion_enabled ? merge(local.completion_read_permissions, local.completion_write_permissions) : {}
+  completion_permissions = var.dashboard_completion_enabled ? merge(local.completion_read_permissions, local.completion_write_permissions, local.completion_meta_period_permissions) : {}
 }
 resource "google_bigquery_table_iam_member" "dashboard_completion" {
   for_each   = local.completion_permissions
@@ -122,9 +143,11 @@ resource "google_cloud_run_v2_service" "completion_preview_api" {
       resources { limits = { cpu = "1", memory = "1Gi" } }
       dynamic "env" {
         for_each = merge({
-          UP_PRODUCT_PROJECT = var.project_id, UP_PRODUCT_LOCATION = var.region
+          UP_PRODUCT_PROJECT                 = var.project_id, UP_PRODUCT_LOCATION = var.region
+          UP_META_VERIFIED_PURCHASES_ENABLED = var.dashboard_completion_verified_meta_purchases ? "1" : "0"
           }, each.key == "read" ? {
           UP_PRODUCT_CATALOG_ENABLED = "1", UP_PRODUCT_CREATIVES_ENABLED = "1"
+          UP_PRODUCT_IMAGES_ENABLED  = var.dashboard_completion_product_images ? "1" : "0"
           } : {
           UP_INSTALLATION_EXTENSIONS_ENABLED = "1",
           UP_PRODUCT_PROJECT_NUMBER          = tostring(data.google_project.control_plane.number),

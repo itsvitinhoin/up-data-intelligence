@@ -1,3 +1,4 @@
+import { metaPeriodData } from "./meta-period";
 import { creative } from "./creatives";
 import type { Page } from "@playwright/test";
 import * as data from "./restoration";
@@ -30,6 +31,7 @@ export async function restorationResources(page: Page, preview = false) {
     ].includes(path);
     const responses: Record<string, unknown> = {
       overview: data.overview,
+      metaAds: metaPeriodData(),
       orders: [data.order],
       customers: [data.customer],
       products: [data.product],

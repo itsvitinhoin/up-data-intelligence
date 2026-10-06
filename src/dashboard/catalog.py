@@ -22,7 +22,7 @@ def table(project: str, dataset: str, name: str) -> str:
     allowed = {
         "up_ops": {"store_runtime_config", "sync_checkpoints", "sync_runs"},
         "up_core": {"source_connections", "catalog_observations"}
-        | {"catalog_" + resource + "_versions" for resource in RESOURCES},
+        | {"catalog_" + resource + "_versions" for resource in (*RESOURCES, "images")},
     }
     if not re.fullmatch(r"[a-z][a-z0-9-]{4,62}", project) or name not in allowed.get(
         dataset, set()
@@ -33,7 +33,14 @@ def table(project: str, dataset: str, name: str) -> str:
 
 class CatalogReader:
     def __init__(
-        self, project: str, reader: Reader, store: str, connection: str | None, request_id: str
+        self,
+        project: str,
+        reader: Reader,
+        store: str,
+        connection: str | None,
+        request_id: str,
+        *,
+        images_enabled: bool = False,
     ):
         self.project, self.reader, self.store, self.connection, self.request_id = (
             project,
@@ -44,6 +51,7 @@ class CatalogReader:
         )
         self.proof: dict[str, Any] | None = None
         self.resolved = False
+        self.images_enabled = images_enabled
 
     def rows(
         self, name: str, sql: str, parameters: dict[str, tuple[str, object]]
@@ -238,4 +246,8 @@ SELECT c.catalog_as_of,TO_JSON_STRING(c) checkpoint,TO_JSON_STRING(r) run,
                 "sale_price": decimal_string(row.get("price")),
                 "catalog": {k: proof[k] for k in ("basis", "snapshot_as_of", "evidence_hash")},
             }
+        if self.images_enabled:
+            from src.dashboard.catalog_images import attach_images
+
+            attach_images(self, result)
         return result
